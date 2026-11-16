@@ -1,6 +1,6 @@
 /* @harness-waechter – Fitness-Function, im geschützten test/harness/ (factory#608, Regel-Verfall 2/4 von factory#517). */
 import { describe, it, expect } from "vitest";
-import { readFileSync, readdirSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
@@ -31,12 +31,18 @@ const lib = libModul as unknown as {
   streichText: (k: Kand, o: { fenster: { von: string; bis: string }; heute: string; plan: { aktion: string; pfad: string; zeilen?: string[] } }) => { titel: string; commit: string; body: string };
   hatWiderspruch: (labels: string[], teile: { vertraut: boolean; text: string }[]) => boolean;
   checksGruen: (c: unknown) => boolean;
+  fettTitel: (z: string) => string | null;
+  NACHWEIS_ZEILEN: string[];
+  auditKommentar: (z: string) => string;
   fristAbgelaufen: (angelegt: string, jetzt: Date) => boolean;
   mergeEntscheidung: (o: { labels: string[]; teile: { vertraut: boolean; text: string }[]; checks: unknown; angelegt: string; jetzt: Date }) => { merge: boolean; grund: string };
 };
 type Kand = { id: string; ziel: string; ablauf: string; laeufe: number; faenge: number };
 const skript = skriptModul as unknown as {
   waechterPfade: () => string[];
+  pflichtChecks: (nr: number, gh: (a: string[]) => string) => unknown;
+  fremdtextTeile: (nr: number, gh: (a: string[]) => string) => { vertraut: boolean; text: string }[];
+  streichAnlegen: (k: Kand, o: { fenster: { von: string; bis: string }; heute: string }, io: { git: (a: string[]) => string; gh: (a: string[]) => string; wurzel: string }) => string;
   zielExistiert: (z: string) => boolean;
   parseArgs: (a: string[]) => { fehler?: string };
   ausfuehren: (a: Record<string, unknown>, d?: Record<string, unknown>) => { exitCode: number; text: string };
@@ -519,9 +525,133 @@ describe("Regel-Verfall: Streich-PR und Widerspruchsfrist (factory#610)", () => 
     });
 
     it("das Skript ruft den Streich-Merge nicht aus einem Workflow auf (kein GITHUB_TOKEN-Lauf, der keine CI startet)", () => {
-      const workflows = readdirSync(join(WURZEL, ".github", "workflows")).map((n) => lies2(join(".github", "workflows", n)));
+      const workflows = readdirSync(join(WURZEL, ".github", "workflows")).map((n) => lies(join(".github", "workflows", n)));
       expect(workflows.filter((t) => t.includes("regel-verfall.mjs"))).toEqual([]);
     });
   });
+  describe("Review Runde 1: Nachweis, Streich-Grenzfälle, Verdrahtung", () => {
+    it("die Commit-Zeilen eines Streich-PRs gelten für beide Nachweis-Gates (Review- und Abnahme-Override mit Begründung)", () => {
+      const t = lib.streichText({ id: "verfall-x", ziel: ROUTINE, ablauf: "2026-01-31", laeufe: 1, faenge: 0 }, { fenster: { von: "a", bis: "b" }, heute: "2026-02-15", plan: { aktion: "loeschen", pfad: ROUTINE } });
+      const nachricht = [t.commit, ...(t as unknown as { nachweis: string[] }).nachweis].join("\n\n");
+      expect(lib.NACHWEIS_ZEILEN).toHaveLength(2);
+      for (const schluessel of ["SIH-Review-Override", "SIH-Abnahme-Override"]) {
+        expect(nachricht, schluessel).toMatch(new RegExp(`^${schluessel}: #\\d+ \\S.+`, "m"));
+      }
+    });
+
+    it("fettTitel ist die eine Erkennung: eingerückt, ohne Schlusszeichen, nicht gierig, kein Fließtext", () => {
+      expect(lib.fettTitel("  - **Zwei (x).** b")).toBe("Zwei (x)");
+      expect(lib.fettTitel("- **A:** x **B**")).toBe("A");
+      expect(lib.fettTitel("Satz - **kein Punkt**")).toBeNull();
+    });
+
+    it("Streich-Plan: ein gleich eingerückter, nicht fetter Listenpunkt nach der Regel bleibt; eine eingerückte fette Unterregel bleibt als eigene Regel; die Regel am Dateiende", () => {
+      const p1 = lib.streichPlan("AGENTS.md#zwei", "- **Zwei:** b\n- Nachbar\n");
+      expect(p1.neuerText).toBe("- Nachbar\n");
+      const p2 = lib.streichPlan("AGENTS.md#zwei", "- **Zwei:** b\n  - **Unter:** x\n  weiter\n");
+      expect(p2.zeilen).toEqual(["- **Zwei:** b"]);
+      const p3 = lib.streichPlan("AGENTS.md#zwei", "- **Eins:** a\n- **Zwei:** b");
+      expect(p3.neuerText).toBe("- **Eins:** a");
+    });
+
+    it("Streich-Plan: ein eingerückter Titel wird gefunden, der Titel mit Schlusszeichen ebenso, und nicht gefunden unterscheidet sich von mehrdeutig im Grund", () => {
+      expect(lib.streichPlan("AGENTS.md#zwei", "  - **Zwei.** b\n").aktion).toBe("entfernen");
+      expect(lib.streichPlan("AGENTS.md#zwei", "- **Eins:** a\n").grund).toContain("nicht gefunden");
+      expect(lib.streichPlan("AGENTS.md#zwei", "- **Zwei:** a\n- **Zwei:** b\n").grund).toContain("mehrdeutig");
+      expect(lib.streichPlan("AGENTS.md#zwei", undefined).grund).toBe("Datei nicht lesbar");
+    });
+
+    it("Streich-Plan: Abschnitt vor einer höherrangigen Überschrift und letzter Abschnitt der Datei", () => {
+      expect(lib.streichPlan("docs/x.md#b", "# A\n## B\nb\n# X\nx\n").neuerText).toBe("# A\n# X\nx\n");
+      expect(lib.streichPlan("docs/x.md#b", "# A\n## B\nb").neuerText).toBe("# A");
+    });
+
+    it("Streich-Plan: doppelte Leerzeilen um die gestrichene Regel werden zu einer", () => {
+      expect(lib.streichPlan("AGENTS.md#zwei", "a\n\n- **Zwei:** b\n\nc\n").neuerText).toBe("a\n\nc\n");
+    });
+
+    it("registerGestrichen markiert nur Verfall-Zeilen und prüft nur gegen sie", () => {
+      const fremd = { id: "verfall-routine", art: "umstellung" };
+      expect(() => lib.registerGestrichen({ zeilen: [fremd] }, "verfall-routine", "2026-02-15")).toThrow();
+      const r = lib.registerGestrichen({ zeilen: [fremd, zeile("verfall-routine", ROUTINE)] }, "verfall-routine", "2026-02-15");
+      expect(r.zeilen[0].gestrichen).toBeUndefined();
+      expect(r.zeilen[1].gestrichen).toBe("2026-02-15");
+    });
+
+    it("die Liste der Streich-PRs ist auf offene PRs mit dem Streich-Label begrenzt (sonst mergte --faellige-mergen jeden PR)", () => {
+      const gh: string[][] = [];
+      skript.ausfuehren({ faelligeMergen: true }, { bezieher: false, gh: (a: string[]) => (gh.push(a), "[]") });
+      const liste = gh.find((a) => a[1] === "list") as string[];
+      expect(liste.slice(liste.indexOf("--label"), liste.indexOf("--label") + 2)).toEqual(["--label", lib.STREICH_LABEL]);
+      expect(liste.slice(liste.indexOf("--state"), liste.indexOf("--state") + 2)).toEqual(["--state", "open"]);
+    });
+
+    it("ein Fehler beim Merge oder beim Lesen ist Exit 1, und nach dem Merge steht der Audit-Kommentar", () => {
+      const aufrufe: string[][] = [];
+      const liste = JSON.stringify([{ number: 7, createdAt: "2026-02-01T00:00:00Z", labels: [{ name: lib.STREICH_LABEL }], body: "- **Rohwerte:** id `verfall-routine`, ziel `test/harness/bash-parser.test.ts`, ablauf" }]);
+      const d = { bezieher: false, jetzt: () => new Date("2026-03-01T00:00:00Z"), fremdtext: () => [], checks: () => [{ bucket: "pass" }] };
+      const ok = skript.ausfuehren({ faelligeMergen: true }, { ...d, gh: (a: string[]) => (aufrufe.push(a), a[1] === "list" ? liste : "") });
+      expect(ok.exitCode).toBe(0);
+      const kommentar = aufrufe.find((a) => a[1] === "comment") as string[];
+      expect(kommentar[kommentar.indexOf("--body") + 1]).toContain("🛡️ Leitplanken-Änderung selbst gemergt");
+      expect(kommentar[kommentar.indexOf("--body") + 1]).toContain(ROUTINE);
+      const fehler = skript.ausfuehren({ faelligeMergen: true }, { ...d, gh: (a: string[]) => { if (a[1] === "merge") throw new Error("nicht mergbar"); return a[1] === "list" ? liste : ""; } });
+      expect(fehler.exitCode).toBe(1);
+      expect(fehler.text).toContain("nicht gemergt");
+      expect(skript.ausfuehren({ faelligeMergen: true }, { ...d, fremdtext: () => { throw new Error("x"); }, gh: (a: string[]) => (a[1] === "list" ? liste : "") }).exitCode).toBe(1);
+    });
+
+    it("pflichtChecks liest die JSON-Ausgabe auch aus dem Fehler (gh pr checks endet bei rot oder offen mit Exit ≠ 0), Müll ist null", () => {
+      const aus = JSON.stringify([{ name: "verify", bucket: "pending" }]);
+      expect(skript.pflichtChecks(3, () => aus)).toEqual([{ name: "verify", bucket: "pending" }]);
+      expect(skript.pflichtChecks(3, () => { throw Object.assign(new Error("exit 8"), { stdout: aus }); })).toEqual([{ name: "verify", bucket: "pending" }]);
+      expect(skript.pflichtChecks(3, () => { throw new Error("kein stdout"); })).toBeNull();
+      expect(skript.pflichtChecks(3, () => "kein json")).toBeNull();
+    });
+
+    it("fremdtextTeile ordnet jedem Beitrag die Vertrauensprüfung des Fremdtext-Gates zu (Owner und vertraute Bots ja, Fremde nein)", () => {
+      const nutzer = (login: string, type = "User") => ({ login, type });
+      const gh = (a: string[]) => {
+        if (a[1] === "repos/{owner}/{repo}") return JSON.stringify({ owner: { login: "ich" } });
+        if (a.some((x) => x.includes("/issues/"))) return JSON.stringify([[{ user: nutzer("ich"), body: "vom Owner" }, { user: nutzer("fremd"), body: "von Fremden" }]]);
+        if (a.some((x) => x.includes("/reviews"))) return JSON.stringify([[{ user: nutzer("github-actions[bot]", "Bot"), body: "" }]]);
+        return JSON.stringify([[]]);
+      };
+      expect(skript.fremdtextTeile(9, gh)).toEqual([{ vertraut: true, text: "vom Owner" }, { vertraut: false, text: "von Fremden" }, { vertraut: true, text: "" }]);
+      expect(() => skript.fremdtextTeile(9, () => JSON.stringify({}))).toThrow();
+    });
+
+    it("streichAnlegen: Worktree von origin/main, Datei gelöscht, Registerzeile gestrichen, Commit mit Nachweis-Zeilen, Push, PR mit Label, Aufräumen auch bei Abbruch", () => {
+      const befehle: string[][] = [];
+      let zustand = { geloescht: false, register: "" };
+      const git = (a: string[]) => {
+        befehle.push(a);
+        if (a[2] === "worktree" && a[3] === "add") {
+          mkdirSync(join(a[6], ".github"), { recursive: true });
+          mkdirSync(join(a[6], "test", "harness"), { recursive: true });
+          writeFileSync(join(a[6], ROUTINE), "x");
+          writeFileSync(join(a[6], ".github", "aenderungsregister.json"), JSON.stringify({ version: 1, zeilen: [zeile("verfall-routine", ROUTINE)] }));
+        }
+        if (a[2] === "commit") {
+          const wurzel = a[1];
+          zustand = { geloescht: !existsSync(join(wurzel, ROUTINE)), register: readFileSync(join(wurzel, ".github", "aenderungsregister.json"), "utf8") };
+        }
+        return "";
+      };
+      const ghAufrufe: string[][] = [];
+      const gh = (a: string[]) => (ghAufrufe.push(a), a[1] === "create" && a[0] === "pr" ? "https://pr/9\n" : "");
+      const url = skript.streichAnlegen({ id: "verfall-routine", ziel: ROUTINE, ablauf: "2026-01-31", laeufe: 2, faenge: 0 }, { fenster: { von: "2026-01-17", bis: "2026-02-15" }, heute: "2026-02-15" }, { git, gh, wurzel: "/x" });
+      expect(url).toBe("https://pr/9");
+      expect(zustand.geloescht).toBe(true);
+      expect(zustand.register).toContain('"gestrichen": "2026-02-15"');
+      expect(befehle.find((a) => a[2] === "worktree" && a[3] === "add")?.slice(4, 5)).toEqual(["-b"]);
+      expect(befehle.find((a) => a[2] === "worktree" && a[3] === "add")?.at(-1)).toBe("origin/main");
+      const commit = befehle.find((a) => a[2] === "commit") as string[];
+      expect(commit.filter((x) => x.startsWith("SIH-"))).toHaveLength(2);
+      expect(befehle.some((a) => a[2] === "push")).toBe(true);
+      const pr = ghAufrufe.find((a) => a[0] === "pr") as string[];
+      expect(pr[pr.indexOf("--label") + 1]).toBe(lib.STREICH_LABEL);
+      expect(befehle.some((a) => a[2] === "worktree" && a[3] === "remove")).toBe(true);
+    });
+  });
 });
-const lies2 = (p: string) => readFileSync(join(WURZEL, p), "utf8");

@@ -29,10 +29,11 @@ import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
 import { istBezieher } from "./sync-stand-lib.mjs";
 import { istDatum, leseMesspunkte, pruefeRegister } from "./aenderungsregister-lib.mjs";
 import { ghText } from "./gh-cli.mjs";
-import { flach, issueKommentare, istVertraut } from "./fremdtext-lib.mjs";
+import { istVertraut, prBeitraege } from "./fremdtext-lib.mjs";
 import {
   STREICH_LABEL,
   ankerAus,
+  auditKommentar,
   fehlendeZeilen,
   kandidaten,
   mergeEntscheidung,
@@ -129,20 +130,18 @@ const git = (args) => execFileSync("git", args, { encoding: "utf8", stdio: ["ign
 const ghStandard = (args) => ghText(args, { timeout: 60_000 });
 
 /** IO: Beiträge eines PR (Kommentare, Reviews, Review-Kommentare) mit der Vertrauensprüfung des Fremdtext-Gates (`fremdtext-lib.mjs`, dieselbe Liste wie `fremdtext.mjs`); jeder Fehler wirft (fail-closed: dann kein Merge). */
-const fremdtextTeile = (nr) => {
-  const json = (args) => JSON.parse(ghStandard(args));
-  const liste = (pfad) => flach(json(["api", "--paginate", "--slurp", pfad]));
+export const fremdtextTeile = (nr, gh = ghStandard) => {
+  const json = (args) => JSON.parse(gh(args));
   const owner = json(["api", "repos/{owner}/{repo}"]).owner?.login;
   if (!owner) throw new Error("Repo-Owner nicht ermittelbar");
-  const beitraege = [...issueKommentare(nr, json), ...liste(`repos/{owner}/{repo}/pulls/${nr}/reviews?per_page=100`), ...liste(`repos/{owner}/{repo}/pulls/${nr}/comments?per_page=100`)];
-  return beitraege.map((b) => ({ vertraut: istVertraut(b.user, owner), text: b.body ?? "" }));
+  return prBeitraege(nr, json).map((b) => ({ vertraut: istVertraut(b.user, owner), text: b.body ?? "" }));
 };
 
 /** IO: Required Checks eines PR (`gh pr checks` endet bei rot oder offen mit Exit ≠ 0, die JSON-Ausgabe steht dann in `stdout` des Fehlers); nicht lesbar ist `null`. */
-const pflichtChecks = (nr) => {
+export const pflichtChecks = (nr, gh = ghStandard) => {
   let roh;
   try {
-    roh = ghStandard(["pr", "checks", String(nr), "--required", "--json", "name,bucket"]);
+    roh = gh(["pr", "checks", String(nr), "--required", "--json", "name,bucket"]);
   } catch (e) {
     roh = e?.stdout;
   }
@@ -154,13 +153,14 @@ const pflichtChecks = (nr) => {
 };
 
 /** IO: Streich-PR für einen Kandidaten in einem frischen Worktree von `origin/main` (Haupt-Checkout bleibt unberührt); Rückgabe: PR-URL oder „übersprungen: <Grund>“. */
-function streichAnlegen(k, { fenster, heute }) {
+export function streichAnlegen(k, { fenster, heute }, io = { git, gh: ghStandard, wurzel: WURZEL }) {
+  const { git, gh } = io;
   const tmp = mkdtempSync(join(tmpdir(), "regel-verfall-"));
   const wt = join(tmp, "wt");
   const branch = streichBranch(k.id);
   try {
-    git(["-C", WURZEL, "fetch", "origin", "main"]);
-    git(["-C", WURZEL, "worktree", "add", "-b", branch, wt, "origin/main"]);
+    git(["-C", io.wurzel, "fetch", "origin", "main"]);
+    git(["-C", io.wurzel, "worktree", "add", "-b", branch, wt, "origin/main"]);
     const datei = join(wt, k.ziel.split("#")[0]);
     const plan = streichPlan(k.ziel, existsSync(datei) ? readFileSync(datei, "utf8") : undefined);
     if (plan.aktion === "keine") return `übersprungen: ${plan.grund}`;
@@ -170,18 +170,18 @@ function streichAnlegen(k, { fenster, heute }) {
     writeFileSync(registerDatei, `${JSON.stringify(registerGestrichen(JSON.parse(readFileSync(registerDatei, "utf8")), k.id, heute), null, 2)}\n`);
     const text = streichText(k, { fenster, heute, plan });
     git(["-C", wt, "add", "-A"]);
-    git(["-C", wt, "commit", "-m", text.commit, "-m", "SIH-Review-Override: #517 mechanische Streichung des Standard-Verfalls, die Widerspruchsfrist von 14 Tagen ersetzt den Lens-Review"]);
+    git(["-C", wt, "commit", "-m", text.commit, ...text.nachweis.flatMap((z) => ["-m", z])]);
     git(["-C", wt, "push", "-u", "origin", branch]);
     try {
-      ghStandard(["label", "create", STREICH_LABEL, "--description", "Streich-PR des Regel-Verfalls (factory#517)", "--color", "ededed"]);
+      gh(["label", "create", STREICH_LABEL, "--description", "Streich-PR des Regel-Verfalls (factory#517)", "--color", "ededed"]);
     } catch {
       // Label existiert schon.
     }
-    return ghStandard(["pr", "create", "--base", "main", "--head", branch, "--title", text.titel, "--body", text.body, "--label", STREICH_LABEL]).trim();
+    return gh(["pr", "create", "--base", "main", "--head", branch, "--title", text.titel, "--body", text.body, "--label", STREICH_LABEL]).trim();
   } finally {
     try {
-      git(["-C", WURZEL, "worktree", "remove", "--force", wt]);
-      git(["-C", WURZEL, "branch", "-D", branch]);
+      git(["-C", io.wurzel, "worktree", "remove", "--force", wt]);
+      git(["-C", io.wurzel, "branch", "-D", branch]);
     } catch {
       // schon weg
     }
@@ -212,14 +212,20 @@ function streichPrModus(args, register, d, heute) {
   return { exitCode: fehler > 0 ? 1 : 0, text: `Streich-PRs: ${plan.neu.length} neu, ${plan.uebersprungen.length} übersprungen${zeilen.map((z) => `\n${z}`).join("")}` };
 }
 
+/** Das Ziel steht im Body des Streich-PRs (`ziel \`<ziel>\`` in den Rohwerten); ohne Treffer „unbekannt“. */
+const zielAusBody = (body) => /ziel `([^`]+)`/.exec(String(body ?? ""))?.[1] ?? "unbekannt";
+
 /** Modus `--faellige-mergen`: mergt jeden offenen Streich-PR, bei dem Frist, Widerspruchsfreiheit und grüne Required Checks gelten; jede Unklarheit ist kein Merge. */
 function faelligeMergenModus(args, d) {
   const zeilen = [];
   let fehler = 0;
-  for (const pr of offeneStreichPRs(d, "number,createdAt,labels")) {
+  for (const pr of offeneStreichPRs(d, "number,createdAt,labels,body")) {
     try {
       const ent = mergeEntscheidung({ labels: pr.labels.map((l) => l.name), teile: d.fremdtext(pr.number), checks: d.checks(pr.number), angelegt: pr.createdAt, jetzt: d.jetzt() });
-      if (ent.merge && !args.trocken) d.gh(["pr", "merge", String(pr.number), "--squash", "--delete-branch"]);
+      if (ent.merge && !args.trocken) {
+        d.gh(["pr", "merge", String(pr.number), "--squash", "--delete-branch"]);
+        d.gh(["pr", "comment", String(pr.number), "--body", auditKommentar(zielAusBody(pr.body))]);
+      }
       zeilen.push(`- #${pr.number}: ${ent.merge ? (args.trocken ? "Trocken, würde mergen" : "gemergt") : `nicht gemergt (${ent.grund})`}`);
     } catch (err) {
       fehler += 1;

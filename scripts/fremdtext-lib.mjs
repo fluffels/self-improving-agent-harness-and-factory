@@ -32,6 +32,20 @@ export function issueKommentare(nr, json, repo = "{owner}/{repo}") {
   return flach(seiten);
 }
 
+/**
+ * Alle Beiträge eines PRs (Kommentare, Reviews, Review-Kommentare) als `[{art, user, body, html_url, created_at}]`, paginiert; `json` wie bei `issueKommentare`.
+ * Gemeinsam für `fremdtext.mjs` und den Widerspruchs-Check des Regel-Verfalls (factory#610).
+ */
+export function prBeitraege(nr, json) {
+  const liste = (pfad) => flach(json(["api", "--paginate", "--slurp", pfad]));
+  const mitArt = (art, l) => l.map((b) => ({ art, user: b.user, body: b.body, html_url: b.html_url, created_at: b.created_at }));
+  return [
+    ...mitArt("Kommentar", issueKommentare(nr, json)),
+    ...mitArt("Review", liste(`repos/{owner}/{repo}/pulls/${nr}/reviews?per_page=100`)),
+    ...mitArt("Review-Kommentar", liste(`repos/{owner}/{repo}/pulls/${nr}/comments?per_page=100`)),
+  ];
+}
+
 const labelName = (l) => (typeof l === "string" ? l : l?.name);
 
 /**

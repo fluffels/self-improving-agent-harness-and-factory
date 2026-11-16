@@ -57,12 +57,22 @@ export const istSicherheitsAusnahme = (ziel, ausnahmen = SICHERHEITS_AUSNAHMEN) 
 /** Pur: Anker des Titels einer fett markierten Regel (derselbe Slug wie bei Überschriften; GitHub erzeugt für Listenpunkte keinen, der Anker ist eine Konvention dieses Manifests). */
 export const ankerVon = (text) => slugify(text);
 
+const FETT_ZEILE = /^\s*- \*\*(.+?)\*\*/;
+
+/** Pur: Titel einer fett markierten Regelzeile (`- **Titel** …`, auch eingerückt) ohne Schlusszeichen `:` und `.`, sonst `null`. Die eine Erkennung für Generator, Bremse und Streich-Plan. */
+export const fettTitel = (zeile) => {
+  const m = FETT_ZEILE.exec(zeile);
+  return m ? m[1].trim().replace(/[:.]+$/, "") : null;
+};
+
 /** Pur: Titel jeder fett markierten Regel (Listenpunkt `- **Titel** …`, auch eingerückt) in `AGENTS.md`, ohne Schlusszeichen `:` und `.`. */
 export const fettRegeln = (agentsText) =>
-  [...String(agentsText).matchAll(/^\s*- \*\*(.+?)\*\*/gm)].map((m) => {
-    const titel = m[1].trim().replace(/[:.]+$/, "");
-    return { titel, anker: ankerVon(titel) };
-  });
+  String(agentsText)
+    .split("\n")
+    .flatMap((z) => {
+      const titel = fettTitel(z);
+      return titel === null ? [] : [{ titel, anker: ankerVon(titel) }];
+    });
 
 /** Pur: alle Anker einer Markdown-Datei (Überschriften, GitHub-Slugs inkl. -1/-2) und, bei `AGENTS.md`, der fett markierten Regeln. */
 export const ankerAus = (text, mitFettRegeln = false) => {
@@ -188,18 +198,16 @@ export const streichBranch = (id) => `verfall/streich-${id}`;
 
 const ZEILEN = (text) => String(text).split("\n");
 const EINZUG = (zeile) => zeile.length - zeile.trimStart().length;
-const FETT_ZEILE = /^\s*- \*\*(.+?)\*\*/;
-
 /** Pur: Zeilenbereich `[von, bis)` der Regel mit dem Anker in `AGENTS.md` (Listenpunkt samt tiefer eingerückter Folgezeilen) oder `{ grund }`. */
 const regelBereich = (zeilen, anker) => {
   const treffer = zeilen.flatMap((z, i) => {
-    const m = FETT_ZEILE.exec(z);
-    return m && ankerVon(m[1].trim().replace(/[:.]+$/, "")) === anker ? [i] : [];
+    const titel = fettTitel(z);
+    return titel !== null && ankerVon(titel) === anker ? [i] : [];
   });
   if (treffer.length !== 1) return { grund: treffer.length === 0 ? `Regel ${anker} nicht gefunden` : `Regel ${anker} mehrdeutig (${treffer.length} Treffer)` };
   const von = treffer[0];
   let bis = von + 1;
-  while (bis < zeilen.length && zeilen[bis].trim() !== "" && EINZUG(zeilen[bis]) > EINZUG(zeilen[von]) && !FETT_ZEILE.test(zeilen[bis])) bis += 1;
+  while (bis < zeilen.length && zeilen[bis].trim() !== "" && EINZUG(zeilen[bis]) > EINZUG(zeilen[von]) && fettTitel(zeilen[bis]) === null) bis += 1;
   return { von, bis };
 };
 
@@ -250,6 +258,19 @@ export const planeStreichPRs = (kandidatenListe, offene, { ausnahmen = SICHERHEI
   return aus;
 };
 
+/**
+ * Pur: die Nachweis-Zeilen der Streich-Commits. Ein Streich-PR ist kein Ticketlauf (kein Planer, keine Lens, keine Abnahme); die Widerspruchsfrist ersetzt den Review.
+ * Beide Override-Zeilen tragen die Pflicht-Begründung (`#<nr> <warum>`), das Abnahme-Gate verlangt sonst eine Abnahme-Zeile und der PR bliebe dauerhaft rot.
+ */
+export const NACHWEIS_ZEILEN = [
+  "SIH-Review-Override: #517 mechanische Streichung des Standard-Verfalls, die Widerspruchsfrist von 14 Tagen ersetzt den Lens-Review",
+  "SIH-Abnahme-Override: #517 mechanische Streichung des Standard-Verfalls ohne Ticket und ohne Kriterien",
+];
+
+/** Pur: Audit-Kommentar nach dem Merge (AGENTS.md § Human-in-the-Loop-Checkpoints; ein Streich-PR trifft Wächter-Tests und Regeln, also Leitplanken). */
+export const auditKommentar = (ziel) =>
+  `🛡️ Leitplanken-Änderung selbst gemergt\n\n- **Was:** \`${ziel}\` gestrichen (Standard-Verfall, ADR 0027 Fortschreibung factory#517).\n- **Warum:** kein Fang im Fenster von ${VERFALL_TAGE} Tagen, Widerspruchsfrist von ${FRIST_TAGE} Tagen ohne Widerspruch, Required Checks grün.\n- **Reverten:** Revert dieses PRs.`;
+
 /** Pur: Titel, Commit-Nachricht und Body des Streich-PRs (Fangquote, Fenster, Rohwerte, Widerspruch, Umkehr). */
 export const streichText = (k, { fenster, heute, plan }) => {
   const frist = plusTage(heute, FRIST_TAGE);
@@ -262,9 +283,10 @@ export const streichText = (k, { fenster, heute, plan }) => {
     `- **Rohwerte:** id \`${k.id}\`, ziel \`${k.ziel}\`, ablauf ${k.ablauf}, laeufe ${k.laeufe}, faenge ${k.faenge}`,
     `- **Änderung (mechanisch):** ${was}; Registerzeile \`${k.id}\` bekommt \`gestrichen: ${heute}\``,
     `- **Widerspruchsfrist:** bis ${frist} (${FRIST_TAGE} Tage ab Anlage). Widerspruch: Label \`${WIDERSPRUCH_LABEL}\` oder ein Kommentar einer vertrauten Person; dann mergt \`--faellige-mergen\` nie.`,
-    "- **Umkehr:** Revert dieses PRs.",
+    "- **Umkehr:** Revert dieses PRs. Auf einem Streich-PR nicht kommentieren, außer um zu widersprechen: jeder Kommentar einer vertrauten Person (auch des eigenen Kontos) zählt als Widerspruch.",
+    "- **Hinweis:** Verweise anderer Dateien auf das Gestrichene (Anker, `durch`) macht das Gate rot; dann ist der PR zu schließen oder die Verweise sind im PR nachzuziehen.",
   ].join("\n");
-  return { titel: `Regel-Verfall: ${k.ziel} streichen`, commit: `Regel-Verfall: ${k.ziel} streichen (${k.id})`, body };
+  return { titel: `Regel-Verfall: ${k.ziel} streichen`, nachweis: NACHWEIS_ZEILEN, commit: `Regel-Verfall: ${k.ziel} streichen (${k.id})`, body };
 };
 
 /** Pur: Widerspruch = Label `status:widerspruch` oder ein nicht leerer Beitrag (Kommentar, Review) einer vertrauten Person (`teile`: `{ vertraut, text }` je Beitrag, ohne den PR-Body). */
