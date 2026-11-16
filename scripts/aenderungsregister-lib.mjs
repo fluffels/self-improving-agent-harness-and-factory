@@ -120,6 +120,26 @@ const pruefePruefTermin = (z, p) => {
   return istText(z.pruefTerminGrund) ? [] : [`${p}pruefTermin: ${z.pruefTermin} weicht vom Standard ${standard} (Datum + 28 Tage) ab, ohne pruefTerminGrund`];
 };
 
+const pruefeSkalare = (z, p) => {
+  const f = [];
+  if (z.id !== undefined && !(typeof z.id === "string" && /^[a-z0-9-]+$/.test(z.id))) f.push(`${p}id: nur [a-z0-9-] erwartet`);
+  if (z.datum !== undefined && !istDatum(z.datum)) f.push(`${p}datum: Datum JJJJ-MM-TT erwartet`);
+  for (const feld of ["aenderung", "wirkung", "rueckfall"]) if (z[feld] !== undefined && !istText(z[feld])) f.push(`${p}${feld}: nicht leerer Text erwartet`);
+  if (z.pruefTerminGrund !== undefined && !istText(z.pruefTerminGrund)) f.push(`${p}pruefTerminGrund: nicht leerer Text erwartet`);
+  return f;
+};
+
+const pruefeObjekte = (z, p) => {
+  const f = [];
+  if (z.messgroesse !== undefined) f.push(...pruefeMessgroesse(z, p));
+  if (z.basis !== undefined) f.push(...pruefeBasis(z.basis, p));
+  if (z.toleranz !== undefined) f.push(...pruefeToleranz(z.toleranz, p));
+  if (z.pruefTermin !== undefined) f.push(...pruefePruefTermin(z, p));
+  if (z.mindestdaten !== undefined) f.push(...pruefeMindestdaten(z.mindestdaten, p));
+  if (z.adr !== undefined) f.push(...pruefeAdr(z.adr, p));
+  return f;
+};
+
 const pruefeZeile = (z, i) => {
   const p = `Zeile ${i + 1}${istText(z?.id) ? ` (${z.id})` : ""}: `;
   if (!istObjekt(z)) return [`${p}Objekt erwartet`];
@@ -127,17 +147,7 @@ const pruefeZeile = (z, i) => {
   for (const feld of PFLICHTFELDER) if (z[feld] === undefined) f.push(`${p}Pflichtfeld ${feld} fehlt`);
   const unbekannt = Object.keys(z).filter((k) => !PFLICHTFELDER.includes(k) && !OPTIONALE_FELDER.includes(k));
   if (unbekannt.length > 0) f.push(`${p}unbekannte Felder ${unbekannt.join(", ")}`);
-  if (z.id !== undefined && !(typeof z.id === "string" && /^[a-z0-9-]+$/.test(z.id))) f.push(`${p}id: nur [a-z0-9-] erwartet`);
-  if (z.datum !== undefined && !istDatum(z.datum)) f.push(`${p}datum: Datum JJJJ-MM-TT erwartet`);
-  for (const feld of ["aenderung", "wirkung", "rueckfall"]) if (z[feld] !== undefined && !istText(z[feld])) f.push(`${p}${feld}: nicht leerer Text erwartet`);
-  if (z.messgroesse !== undefined) f.push(...pruefeMessgroesse(z, p));
-  if (z.basis !== undefined) f.push(...pruefeBasis(z.basis, p));
-  if (z.toleranz !== undefined) f.push(...pruefeToleranz(z.toleranz, p));
-  if (z.pruefTermin !== undefined) f.push(...pruefePruefTermin(z, p));
-  if (z.pruefTerminGrund !== undefined && !istText(z.pruefTerminGrund)) f.push(`${p}pruefTerminGrund: nicht leerer Text erwartet`);
-  if (z.mindestdaten !== undefined) f.push(...pruefeMindestdaten(z.mindestdaten, p));
-  if (z.adr !== undefined) f.push(...pruefeAdr(z.adr, p));
-  return f;
+  return [...f, ...pruefeSkalare(z, p), ...pruefeObjekte(z, p)];
 };
 
 /** Pur: Schema des Registers (Liste der Zeilen). Doppelte Ids sind rot. */

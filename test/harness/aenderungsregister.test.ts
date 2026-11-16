@@ -4,10 +4,24 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
-import * as lib from "../../scripts/aenderungsregister-lib.mjs";
+import * as libModul from "../../scripts/aenderungsregister-lib.mjs";
 
 const WURZEL = join(__dirname, "..", "..");
 type Zeile = Record<string, unknown>;
+type Ledger = { datum: string; pr: string; text: string };
+type Katalog = Record<string, { quelle: string; art: string; parameter?: string }>;
+const lib = libModul as unknown as {
+  QUELLEN: string[];
+  ARTEN: string[];
+  PARAMETER: Record<string, string[]>;
+  MESSGROESSEN: Katalog;
+  PFLICHTFELDER: string[];
+  standardPruefTermin: (datum: string) => string;
+  pruefeRegister: (zeilen: unknown) => string[];
+  ledgerZeilen: (text: string) => Ledger[];
+  pruefeAdrVerweise: (zeilen: Zeile[], ledger: Ledger[]) => string[];
+  pruefeLedgerIds: (ledger: Ledger[], ids: string[], einfuehrung?: string) => string[];
+};
 
 const basis = (): Zeile => ({
   id: "beispiel-1",
@@ -24,7 +38,7 @@ const basis = (): Zeile => ({
   adr: { datum: "2026-11-16", pr: "factory#1" },
 });
 const mit = (aenderung: Zeile): Zeile => ({ ...basis(), ...aenderung });
-const fehler = (z: Zeile | Zeile[]): string[] => lib.pruefeRegister(Array.isArray(z) ? z : [z]) as string[];
+const fehler = (z: Zeile | Zeile[]): string[] => lib.pruefeRegister(Array.isArray(z) ? z : [z]);
 
 describe("Schema des Änderungsregisters", () => {
   it("eine gültige Basiszeile hat keine Fehler (Gegenbeweis)", () => {
@@ -46,7 +60,7 @@ describe("Schema des Änderungsregisters", () => {
     expect(fehler(mit({ toleranz: { ...t, schwelle: "zwei" } })).join("\n")).toMatch(/schwelle/);
   });
 
-  it.each(lib.PFLICHTFELDER as string[])("fehlendes Pflichtfeld %s ist rot", (feld) => {
+  it.each(lib.PFLICHTFELDER)("fehlendes Pflichtfeld %s ist rot", (feld) => {
     const z = basis();
     delete z[feld];
     expect(fehler(z).join("\n")).toContain(`Pflichtfeld ${feld} fehlt`);
@@ -110,7 +124,7 @@ const ADR = `# ADR
 `;
 
 describe("Ledger in ADR 0027", () => {
-  const ledger = lib.ledgerZeilen(ADR) as { datum: string; pr: string; text: string }[];
+  const ledger = lib.ledgerZeilen(ADR);
 
   it("ledgerZeilen liest nur die Tabelle unter ## Gelockert; PR ist die vorletzte Zelle", () => {
     expect(ledger.map((l) => [l.datum, l.pr])).toEqual([["2026-11-16", "factory#1"], ["2026-11-17", "factory#2"]]);
@@ -118,24 +132,24 @@ describe("Ledger in ADR 0027", () => {
 
   it("adr auf eine nicht existierende Ledger-Zeile ist rot, auf eine existierende grün", () => {
     expect(lib.pruefeAdrVerweise([basis()], ledger)).toEqual([]);
-    expect((lib.pruefeAdrVerweise([mit({ adr: { datum: "2026-11-16", pr: "factory#9" } })], ledger) as string[]).join("\n")).toMatch(/zeigt auf keine Ledger-Zeile/);
+    expect(lib.pruefeAdrVerweise([mit({ adr: { datum: "2026-11-16", pr: "factory#9" } })], ledger).join("\n")).toMatch(/zeigt auf keine Ledger-Zeile/);
   });
 
   it("Ledger-Zeile ab EINFUEHRUNG ohne Register-Id ist rot, mit unbekannter Id rot, davor ohne Id grün", () => {
     expect(lib.pruefeLedgerIds(ledger, ["beispiel-1"], "2026-11-17")).toEqual([]);
-    expect((lib.pruefeLedgerIds(ledger, ["beispiel-1"], "2026-11-16") as string[]).join("\n")).toMatch(/fehlt `Register: <id>`/);
-    expect((lib.pruefeLedgerIds(ledger, ["andere"], "2026-11-17") as string[]).join("\n")).toMatch(/steht nicht im Änderungsregister/);
+    expect(lib.pruefeLedgerIds(ledger, ["beispiel-1"], "2026-11-16").join("\n")).toMatch(/fehlt `Register: <id>`/);
+    expect(lib.pruefeLedgerIds(ledger, ["andere"], "2026-11-17").join("\n")).toMatch(/steht nicht im Änderungsregister/);
   });
 });
 
 describe("Messgrößen-Katalog", () => {
-  const eintraege = Object.entries(lib.MESSGROESSEN as Record<string, { quelle: string; art: string; parameter?: string }>);
+  const eintraege = Object.entries(lib.MESSGROESSEN);
 
   it("jede Quelle und Art ist bekannt, jeder Parameter hat eine Liste", () => {
     for (const [, e] of eintraege) {
       expect(lib.QUELLEN).toContain(e.quelle);
       expect(lib.ARTEN).toContain(e.art);
-      if (e.parameter) expect(lib.PARAMETER[e.parameter]).toBeInstanceOf(Array);
+      expect(e.parameter === undefined || Array.isArray(lib.PARAMETER[e.parameter])).toBe(true);
     }
   });
 
@@ -146,7 +160,7 @@ describe("Messgrößen-Katalog", () => {
 
 describe("Realdaten: Register und ADR 0027", () => {
   const register = JSON.parse(readFileSync(join(WURZEL, ".github/aenderungsregister.json"), "utf8")) as { version: number; zeilen: Zeile[] };
-  const ledger = lib.ledgerZeilen(readFileSync(join(WURZEL, "docs/adr/0027-regeln-lockern.md"), "utf8")) as unknown[];
+  const ledger = lib.ledgerZeilen(readFileSync(join(WURZEL, "docs/adr/0027-regeln-lockern.md"), "utf8"));
 
   it("das Register hat mindestens eine Zeile und ist schemagültig", () => {
     expect(register.version).toBe(1);
@@ -157,6 +171,6 @@ describe("Realdaten: Register und ADR 0027", () => {
   it("jede Registerzeile zeigt auf eine Ledger-Zeile, jede neue Ledger-Zeile nennt eine Register-Id", () => {
     expect(ledger.length).toBeGreaterThan(10);
     expect(lib.pruefeAdrVerweise(register.zeilen, ledger)).toEqual([]);
-    expect(lib.pruefeLedgerIds(ledger, register.zeilen.map((z) => z.id))).toEqual([]);
+    expect(lib.pruefeLedgerIds(ledger, register.zeilen.map((z) => String(z.id)))).toEqual([]);
   });
 });
