@@ -23,4 +23,4 @@ Entscheidung: Proben werden vorab bewertet und Modellwechsel folgen der Anbieter
 
 ## Re-Evaluierung
 
-Prüftermin 2027-01-15 (Punkt (15) von `regeln-verfall-2027-03`, Termin des Sammeleintrags 2027-03-01). Auslöser für Verschärfung: ein Modellwechsel nach Empfehlung zieht Nacharbeit (Revert oder `Folge #` binnen 14 Tagen) nach sich, oder ein Probe-Ticket lief ohne Vorab-Bewertung.
+Prüftermin 2027-03-01 (Punkt (15) von `regeln-verfall-2027-03`; der frühere eigene Termin 2027-01-15 entfiel mit der Faltung, factory#573). Auslöser für Verschärfung: ein Modellwechsel nach Empfehlung zieht Nacharbeit (Revert oder `Folge #` binnen 14 Tagen) nach sich, oder ein Probe-Ticket lief ohne Vorab-Bewertung.

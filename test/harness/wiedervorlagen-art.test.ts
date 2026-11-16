@@ -76,6 +76,13 @@ describe("echte Fabrik-Datei", () => {
     expect(liste.length).toBeGreaterThan(5);
   });
 
+  it("die Liste der Arten stimmt mit der Regel in AGENTS.md überein (unabhängige Quelle)", () => {
+    const agents = readFileSync("AGENTS.md", "utf8");
+    const zeile = agents.split("\n").find((l) => l.includes("Umstellung oder neue Regel → Registerzeile")) ?? "";
+    const genannt = [...zeile.matchAll(/`([a-z-]+)`/g)].map((m) => m[1]).filter((w) => w !== "art");
+    expect(genannt).toEqual(WIEDERVORLAGE_ARTEN);
+  });
+
   it("jeder Eintrag trägt art aus der Liste (Ausnahme benannt)", () => {
     expect(artFehler(liste, AUSNAHME_OHNE_ART)).toEqual([]);
   });

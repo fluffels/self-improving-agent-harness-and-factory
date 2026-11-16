@@ -61,7 +61,7 @@
       "id": "planer-medium-547",
       "datum": "2026-11-15",
       "aenderung": "Der Planer-Effort sinkt von xhigh auf medium (Frontmatter des Planers; Codex-Planer bleibt high).",
-      "wirkung": "Die Kosten je Planer-Lauf sinken auf höchstens 1,38 $ im Ø (Ziel aus factory#112, Schnitt 2026-10-28T07:09:38Z, geschätzte Basis), ohne dass Pläne schlechter werden.",
+      "wirkung": "Die Kosten je Planer-Lauf sinken gegen das Basisfenster; Richtwert aus factory#112 ist Ø 1,38 $ (Schnitt 2026-10-28T07:09:38Z, geschätzte Basis), ohne dass Pläne schlechter werden.",
       "messgroesse": "kosten-je-ticket-rolle",
       "parameter": "planer",
       "basis": {
@@ -75,7 +75,6 @@
         "einheit": "prozentpunkte"
       },
       "rueckfall": "Steigt die Nacharbeit-Quote um mehr als 20 Prozentpunkte bei mindestens 5 PRs mit abgelaufenem Fenster (Ledger-Trigger: PRs mit Nacharbeit über B mal n plus 1): Revert per PR zurück auf xhigh.",
-      "pruefTerminGrund": "Prüftermin laut Ledger-Zeile (2026-12-13).",
       "pruefTermin": "2026-12-13",
       "mindestdaten": {
         "n": 5,
