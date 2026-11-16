@@ -368,7 +368,7 @@ describe("RISIKO-, SWEEP- und KOMBI-Zeile (factory#529, vorher ein eigenes Skrip
     const skript = fileURLToPath(new URL("../scripts/risikostufe.mjs", import.meta.url));
     const aus = execFileSync("node", [skript, "--pfade", "docs/x.md"], { encoding: "utf8" }).trim().split("\n");
     expect(aus.map((z) => z.split(":")[0])).toEqual(["RISIKOSTUFE", "RISIKO", "SWEEP", "KOMBI"]);
-    expect(execFileSync("node", [skript, "--pfade", "src/auth/x.ts"], { encoding: "utf8" })).toMatch(/\nRISIKO: hoch — src\/auth\/x\.ts trifft \*auth\* \(Standardliste\)/);
+    expect(execFileSync("node", [skript, "--pfade", "src/auth/x.ts"], { encoding: "utf8" })).toMatch(/\nRISIKO: hoch — src\/auth\/x\.ts trifft \*auth\* \((?:Standardliste|Projekt-Config)\)/); // Quelle hängt davon ab, ob die Config des Repos einen Block risiko trägt
     const fehler = spawnSync("node", [skript, "--unbekannt"], { encoding: "utf8" });
     expect(fehler.status).toBe(2);
     expect(fehler.stderr).toMatch(/Aufruf: node scripts\/risikostufe\.mjs/);

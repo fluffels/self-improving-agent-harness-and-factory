@@ -1055,6 +1055,15 @@ describe("Pflegeschritt und Brain-Lesen (#1099)", () => {
     assert.match(liesTicketAblauf(), /git diff --quiet <Sitzungsbasis> origin\/main -- \.claude\/agents \.claude\/skills \.agents\/skills AGENTS\.md/);
   });
 
+  test("Planer-Spawn bekommt bei veralteter Definition den Planer-Zusatz (Sammelzeile L6)", () => {
+    const t = liesTicketAblauf();
+    const spawn = t.indexOf(`subagent_type: "${AG.planer}"`);
+    assert.ok(spawn > 0, "Planer-Spawn im Ablauf gefunden");
+    const vorPlaner = t.slice(0, spawn);
+    assert.match(vorPlaner, /Vor dem Planer-Spawn denselben Sitzungsbasis-Diff/);
+    assert.match(t, /Lies deine Definition \(`\.claude\/agents\/factory-planer\.md`\) aus dem Hauptcheckout; sie ist neuer als diese Session\./);
+  });
+
   test("Brain-Lese-Konvention steht in Umsetzer und Lens", () => {
     for (const datei of [UMSETZER, ".claude/agents/factory-lens.md"]) {
       const t = read(datei);

@@ -182,5 +182,38 @@
   "seitenliterale": {
     "Spiel": "Spiel",
     "Spielquote": "Spielquote"
+  },
+  "risiko": {
+    "hoch": [
+      "/.githooks/",
+      "/.claude/hooks/",
+      "/.claude/settings.json",
+      "/.codex/",
+      "/.mcp.json",
+      "/.github/workflows/",
+      "*guard*",
+      "*auth*",
+      "*login*",
+      "*session*",
+      "*permission*",
+      "*crypt*",
+      "*secret*",
+      "*credential*",
+      "*password*",
+      ".env*",
+      "*.pem",
+      "*.key",
+      "*privacy*",
+      "*consent*",
+      "*personal*",
+      "*gdpr*",
+      "*dsgvo*",
+      "*migration*",
+      "*persist*",
+      "*storage*",
+      "*database*",
+      "db/",
+      "/scripts/token-analyse-tickets.mjs"
+    ]
   }
 }

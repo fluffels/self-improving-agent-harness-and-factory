@@ -1,7 +1,7 @@
 // Kein Shebang, kein Direktaufruf: Lib der Gate-Skripte (#1579, Konvention #1398: Einstiegsskripte importieren nicht voneinander,
 // gemeinsamer Code steht in einer Lib; der Glob /scripts/check-*.mjs hält sie als Gate-Code geschützt).
 /**
- * Gemeinsame Grundlagen der Gates: die Vergleichs-Basis des Slices (`resolveBase`, für check:diffsize, check:diffcoverage, check:lockfile,
+ * Gemeinsame Grundlagen der Gates: die Vergleichs-Basis des Slices (`resolveBase`, für check:diffsize, check:diffcoverage, check:lockfile, check:dokupflicht,
  * den Review-Nachweis und verify-lauf), die Liste der prüfbaren Repo-Dateien (`listTrackedFiles`, `isCheckable`, für check:internalrefs und
  * check:steuerbytes), das Markdown-Sammeln des Repos (`collectMarkdown`, für check:docdrift und check:contextsize) und die Prüfung der
  * Struktur-Ordner (`strukturOrdnerBefunde`, für check:size, check:docmap und check:anysuppress).
