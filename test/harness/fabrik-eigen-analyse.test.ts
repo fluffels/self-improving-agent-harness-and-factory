@@ -6,6 +6,7 @@
  * (c) Jedes Einstiegsskript sperrt im Bezieher: `art: "skript"` (Sperre nach dem Arbeitsverzeichnis) läuft in einem Fixture mit `.factory/sync-stand.json` und endet mit Exit ≠ 0 und einer Meldung;
  *     `art: "skript-wurzel"` (Sperre nach dem Repo des Skripts) wird in-process mit einer Bezieher-Wurzel aufgerufen und bricht mit Code ≠ 0 ab; beide statisch über `istBezieher(`.
  *     Jede Datei der Liste mit `istDirektaufruf(` muss als Einstieg eingetragen sein. Grenze: berechnete Pfade bleiben unentdeckt.
+ * Skill und Agenten (`art: "skill"`, `"agent"`, factory#576): kein Einstieg, also keine Prüfung (c); sie suchen mit `kennung` statt dem Basisnamen (`SKILL`, `teil-1` träfen jede Datei). Die Sperre im Bezieher liegt in Teil 0 (Exit 4) und `pruefen`; Grenze: ein Bezieher könnte den Skill von Hand kopieren.
  * Spätere Kinder von factory#518 erweitern die Liste (neue Zeile; ein Einstiegsskript verlangt (c)).
  */
 import { describe, it, expect } from "vitest";
@@ -21,13 +22,19 @@ const WURZEL = join(__dirname, "..", "..");
 const { wirdVerteilt } = besitzModul as unknown as { wirdVerteilt: (e: { ring: string }) => boolean };
 
 /** `skript`: sperrt auch nach dem Arbeitsverzeichnis (Lauf im Bezieher-Fixture bricht ab); `skript-wurzel`: sperrt nach dem Repo des Skripts (in-process mit Bezieher-Wurzel und statisch über `istBezieher(` belegt); `lib`, `daten`: kein Einstieg. */
-type Art = "skript" | "skript-wurzel" | "lib" | "daten";
-const FABRIK_EIGEN: { pfad: string; art: Art }[] = [
+type Art = "skript" | "skript-wurzel" | "lib" | "daten" | "skill" | "agent";
+type Eintrag = { pfad: string; art: Art; kennung?: string };
+const SKILL_KENNUNG = "skills/token-analyse/";
+const FABRIK_EIGEN: Eintrag[] = [
   { pfad: "scripts/aenderungsregister.mjs", art: "skript" },
   { pfad: "scripts/aenderungsregister-lib.mjs", art: "lib" },
   { pfad: ".github/aenderungsregister.json", art: "daten" },
   { pfad: "scripts/token-analyse-freigabe.mjs", art: "skript-wurzel" },
   { pfad: "scripts/token-analyse-freigabe-lib.mjs", art: "lib" },
+  ...["SKILL", "teil-1", "teil-2", "teil-3", "teil-4", "teil-5", "teil-6"].map((n): Eintrag => ({ pfad: `.agents/skills/token-analyse/${n}.md`, art: "skill", kennung: SKILL_KENNUNG })),
+  { pfad: ".claude/skills/token-analyse/SKILL.md", art: "skill", kennung: SKILL_KENNUNG },
+  { pfad: ".claude/agents/analyse-recherche.md", art: "agent", kennung: "analyse-recherche" },
+  { pfad: ".claude/agents/analyse-extern.md", art: "agent", kennung: "analyse-extern" },
 ];
 
 /** Pur: Einträge des Manifests, die einen Pfad der Liste treffen (gleicher Pfad oder Verzeichnis-Präfix). */
@@ -35,9 +42,9 @@ const treffer = (eintraege: { pfad: string }[], liste: { pfad: string }[]) =>
   eintraege.filter((e) => liste.some((f) => f.pfad === e.pfad || f.pfad.startsWith(e.pfad.endsWith("/") ? e.pfad : `${e.pfad}/`)));
 
 /** Pur: verteilte Dateien (Pfad → Text), die den Dateinamen einer Datei der Liste nennen, mit oder ohne Endung. */
-const nennungen = (dateien: Record<string, string>, liste: { pfad: string }[]) =>
+const nennungen = (dateien: Record<string, string>, liste: { pfad: string; kennung?: string }[]) =>
   Object.entries(dateien).flatMap(([pfad, text]) =>
-    liste.filter((f) => text.includes(basename(f.pfad).replace(/\.[^.]+$/, ""))).map((f) => `${pfad} nennt ${f.pfad}`),
+    liste.filter((f) => text.includes(f.kennung ?? basename(f.pfad).replace(/\.[^.]+$/, ""))).map((f) => `${pfad} nennt ${f.pfad}`),
   );
 
 describe("Fabrik-eigene Analyse-Dateien (factory#518)", () => {
@@ -67,6 +74,12 @@ describe("Fabrik-eigene Analyse-Dateien (factory#518)", () => {
     expect(nennungen({ "docs/x.md": "nichts dergleichen" }, FABRIK_EIGEN)).toHaveLength(0);
     expect(nennungen({ ".githooks/x": "# node scripts/token-analyse-freigabe.mjs" }, FABRIK_EIGEN)).toHaveLength(1); // Datei ohne Endung
     expect(nennungen({ "docs/x.md": "siehe `token-analyse-freigabe`" }, FABRIK_EIGEN)).toHaveLength(1); // Nennung ohne Endung
+  });
+
+  it("(b) Selbsttest: Skill und Agenten werden über die Kennung erkannt, der Basisname SKILL allein nicht", () => {
+    expect(nennungen({ "docs/x.md": "siehe .agents/skills/token-analyse/SKILL.md" }, FABRIK_EIGEN)).not.toHaveLength(0);
+    expect(nennungen({ "docs/x.md": "ein Agent analyse-extern" }, FABRIK_EIGEN)).toHaveLength(1);
+    expect(nennungen({ ".claude/skills/x/SKILL.md": "# SKILL teil-1" }, FABRIK_EIGEN)).toHaveLength(0);
   });
 
   it("(c) jedes Einstiegsskript der Liste sperrt den Lauf im Bezieher", () => {

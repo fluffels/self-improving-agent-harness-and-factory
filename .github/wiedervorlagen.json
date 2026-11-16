@@ -82,5 +82,11 @@
     "faellig": "2027-05-12",
     "titel": "Git-Host-Bindung neu prüfen (factory#248, ADR 0032)",
     "text": "Auslöser prüfen: steht der Tag v1.0.0, oder kam über die Meldestelle ein Bedarf an einem anderen Git-Host? Erfüllt: neu entscheiden mit docs/git-host.md als Startpunkt (anbinden mit Folgetickets oder bewusst nicht, ADR 0032 fortschreiben). Nicht erfüllt: faellig verschieben oder den Eintrag löschen. Wächter `test/harness/git-host-liste.test.ts` (ADR 0027): echte Funde (rote Läufe durch eine neue echte GitHub-Bindung)? Ohne Fund und Beleg lockern, sonst „bleibt“ vermerken."
+  },
+  {
+    "id": "token-analyse-budget-576",
+    "faellig": "2026-12-16",
+    "titel": "Budget der Token-Analyse nach dem ersten echten Lauf setzen (factory#518, factory#576)",
+    "text": "Das Budget `BUDGET_USD` in `.agents/skills/token-analyse/SKILL.md` ist ein konservativer Startwert (Lücke: Basis fehlt: die Analyse vom 2026-11-15 war in Langfuse nicht eindeutig auffindbar). Nach dem ersten echten Lauf aus dessen Langfuse-Kosten setzen (Summe der Session samt Subagenten mal 1,25, auf ganze 5 Dollar aufgerundet), Quellzeile ergänzen und diese Wiedervorlage löschen. Gab es bis dahin keinen Lauf: faellig verschieben."
   }
 ]

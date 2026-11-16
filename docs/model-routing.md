@@ -25,7 +25,24 @@ Gültige Effort-Stufen: `low`, `medium`, `high`, `xhigh`, `max`. Bei Sonnet 5+ u
 | PR + Merge, Festgefahren, Cleanup | `sonnet` | `medium` | im Umsetzer |
 | Explore / Recherche | `haiku` | `low` | Agent `Explore` (Projekt-Override des eingebauten Explore, Frontmatter); `low` wirkt, weil `haiku` auf der Anthropic-API auf Haiku 5.5 auflöst und Haiku 5.5 Effort unterstützt (Effort-Tabelle der Claude-Code-Modell-Doku, 2026-10-08); auf Cloud-Providern mit Haiku 4.5 wirkt es nicht (§2) |
 
-Platzhalter in spitzen Klammern: die Namen aus `.factory/projekt.json` (Tabelle im Kern-Block der AGENTS.md). Rollen eines Projekts, die nicht zum Kern gehören, stehen in einer eigenen Tabelle „Projekt-Phase“ (die letzte Zelle nennt `Subagent <name>`, Alias und Effort prüft der Kern-Test generisch gegen `.claude/agents/<name>.md`; ohne Zeilen gibt es nichts zu prüfen). Alias und Effort eines Projekt-Agenten (Agentendatei, die nicht im Besitz-Manifest steht) prüft im Bezieher der Doctor-Punkt `Modell-Routing` (factory#150); der Kern-Test des Factory-Repos prüft dort Matrix, Explore, Hauptchat-Modell, Pins, Namen und die Alias-Liste dieser Seite (alle Agenten des Factory-Repos sind Besitz-Agenten).
+Platzhalter in spitzen Klammern: die Namen aus `.factory/projekt.json` (Tabelle im Kern-Block der AGENTS.md). Rollen eines Projekts, die nicht zum Kern gehören, stehen in einer eigenen Tabelle „Projekt-Phase“ (die letzte Zelle nennt `Subagent <name>`, Alias und Effort prüft der Kern-Test generisch gegen `.claude/agents/<name>.md`; ohne Zeilen gibt es nichts zu prüfen). Alias und Effort eines Projekt-Agenten (Agentendatei, die nicht im Besitz-Manifest steht) prüft im Bezieher der Doctor-Punkt `Modell-Routing` (factory#150); der Kern-Test des Factory-Repos prüft dort Matrix, Explore, Hauptchat-Modell, Pins, Namen und die Alias-Liste dieser Seite (die Besitz-Agenten des Factory-Repos; die zwei Fabrik-eigenen Agenten `analyse-recherche` und `analyse-extern` stehen nicht im Besitz, ihre Teilregel (a) prüft der Doctor-Punkt).
+
+### Token-Analyse (factory#518)
+
+Modell und Effort je Teil des Skills [`token-analyse`](../.agents/skills/token-analyse/SKILL.md) (Fabrik-eigen, nur Aliase; der Wächter `test/harness/token-analyse-skill.test.ts` prüft gegen `MODELL_ALIASE`, das Frontmatter der zwei Fabrik-eigenen Agenten und die Spawn-Zeilen im Skill). Teil 0 ist ein Skript ohne Modell.
+
+| Teil | Alias | Effort | Ausführung |
+|---|---|---|---|
+| 1 Kosten und Tokens aus Transkripten | `sonnet` | `medium` | Agent `Explore`, je Spawn |
+| 2 Langfuse-Abgleich | `sonnet` | `medium` | Agent `general-purpose` (nur dieser Typ hat das Langfuse-MCP), je Spawn |
+| 3 Regel- und Kontext-Inventar | `opus` | `medium` | Agent `Explore`, je Spawn |
+| 4 Externer Blick ohne ADRs | `opus` | `high` | Agent `analyse-extern` (Frontmatter) |
+| 5 Webrecherche | `sonnet` | `medium` | Agent `analyse-recherche` (Frontmatter) |
+| 6 Bezieher-Stichprobe | `sonnet` | `medium` | Agent `Explore`, je Spawn |
+
+**Begründung:** Zählen, Abgleichen, Suchen und Stichproben (1, 2, 5, 6) sind Fleißarbeit mit klarer Vorgabe: `sonnet` `medium`. Das Inventar (3) bewertet Regelwirkung und braucht `opus`, `medium` als Hauptknopf (Anbieter-Empfehlung wie bei Planer und Lens). Der externe Blick (4) hat keinen Kontext und soll Auffälliges selbst erkennen: `opus` `high`. Der Lauf hält ein Budget (`BUDGET_USD` im Skill); der Startwert ist ein konservativer Platzhalter (Lücke: Basis fehlt), die Wiedervorlage `token-analyse-budget-576` setzt ihn nach dem ersten echten Lauf.
+
+**Grenzen:** Die Analyse läuft nur unter Claude Code; Codex-Läufe zählen über Langfuse und Transkripte mit (`test/codex-setup.test.ts` spiegelt die Agenten nicht). `analyse-extern` hat keinen Lese-Hook: Lesen per absolutem Pfad ist nicht sperrbar, der Bericht listet die Lesepfade. **Erfassungsprobe, kein Messlauf** (Langfuse-Erfassung der zwei neuen Agenten): siehe PR von factory#576.
 
 ### Rollen je Risikostufe (factory#528)
 

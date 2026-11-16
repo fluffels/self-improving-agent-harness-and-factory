@@ -70,5 +70,45 @@
   "scripts/aenderungsregister.mjs": {
     "art": "projekt",
     "grund": "Fabrik-eigene Wirkungsprüfung des Änderungsregisters (factory#572), nicht im Besitz-Manifest"
+  },
+  ".agents/skills/token-analyse/SKILL.md": {
+    "art": "projekt",
+    "grund": "Fabrik-eigene Token-Analyse (factory#518), nicht im Besitz-Manifest"
+  },
+  ".agents/skills/token-analyse/teil-1.md": {
+    "art": "projekt",
+    "grund": "Fabrik-eigene Token-Analyse (factory#518), nicht im Besitz-Manifest"
+  },
+  ".agents/skills/token-analyse/teil-2.md": {
+    "art": "projekt",
+    "grund": "Fabrik-eigene Token-Analyse (factory#518), nicht im Besitz-Manifest"
+  },
+  ".agents/skills/token-analyse/teil-3.md": {
+    "art": "projekt",
+    "grund": "Fabrik-eigene Token-Analyse (factory#518), nicht im Besitz-Manifest"
+  },
+  ".agents/skills/token-analyse/teil-4.md": {
+    "art": "projekt",
+    "grund": "Fabrik-eigene Token-Analyse (factory#518), nicht im Besitz-Manifest"
+  },
+  ".agents/skills/token-analyse/teil-5.md": {
+    "art": "projekt",
+    "grund": "Fabrik-eigene Token-Analyse (factory#518), nicht im Besitz-Manifest"
+  },
+  ".agents/skills/token-analyse/teil-6.md": {
+    "art": "projekt",
+    "grund": "Fabrik-eigene Token-Analyse (factory#518), nicht im Besitz-Manifest"
+  },
+  ".claude/skills/token-analyse/SKILL.md": {
+    "art": "projekt",
+    "grund": "Fabrik-eigene Token-Analyse (factory#518), nicht im Besitz-Manifest"
+  },
+  ".claude/agents/analyse-recherche.md": {
+    "art": "projekt",
+    "grund": "Fabrik-eigene Token-Analyse (factory#518), nicht im Besitz-Manifest"
+  },
+  ".claude/agents/analyse-extern.md": {
+    "art": "projekt",
+    "grund": "Fabrik-eigene Token-Analyse (factory#518), nicht im Besitz-Manifest"
   }
 }
