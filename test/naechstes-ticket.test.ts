@@ -452,6 +452,7 @@ describe("Datumssperre (factory#629)", () => {
     expect(N.datumssperreZeilen(null as unknown as string)).toEqual([]);
     expect(N.datumssperreZeilen("Ein Issue mit der Zeile `Frühestens: 2026-11-30` im Text")).toEqual([]);
     expect(N.datumssperreZeilen(ZEILE)).toEqual(["2026-11-30"]);
+    expect(N.datumssperreZeilen("* Frühestens: 2026-11-30")).toEqual(["2026-11-30"]);
     expect(N.datumssperreZeilen("x\r\n- frühestens: 2026-11-30 \r\ny")).toEqual(["2026-11-30"]);
     expect(N.datumssperreZeilen("Frühestens: morgen")).toEqual(["morgen"]);
   });
@@ -1046,6 +1047,11 @@ describe("--maengel: freie vertraute Tickets mit Spezifikations-Mangel in Board-
     expect(zeilen[2]).toMatch(/^#2\tT2: /);
     expect(r.out).not.toContain("GEHEIM");
     expect(r.out).not.toContain("#4");
+  });
+  test("Datumssperre (factory#629) berührt die Mängelliste nicht: Ticket mit Mangel und künftiger Sperre erscheint", () => {
+    const r = lauf([roh(3, { body: `${OHNE_NEGATIV}\nFrühestens: 2099-01-01` })]);
+    expect(r.out.split("\n")[0]).toBe("1 Tickets mit Mangel");
+    expect(r.out).toMatch(/^#3\t/m);
   });
   test("ohne Mangel: Exit 0 und `0 Tickets mit Mangel`", () => {
     const r = lauf([item(1)]);

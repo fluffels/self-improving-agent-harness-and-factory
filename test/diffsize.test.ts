@@ -770,6 +770,28 @@ describe("Sammel-Override (factory#358): Override nur für eine einzelne Zeile e
     assert.equal(lauf("").sammelOverride, null, "kein Override");
   });
 
+  test("checkDiffSize ohne PR-Ereignis (L8): Titel über die Branch-Nummer, Lader wirft → Hinweis statt Absturz", () => {
+    const OVER = ["1\t1\ta", "1\t1\tb", "1\t1\tc"].join("\n");
+    const branch = `${projektConfig().praefixe.branch}9-slug`;
+    const git: RunGit = (a) => {
+      if (a[0] === "merge-base" && a[2] === "origin/main") return "BASE\n";
+      if (a[0] === "merge-base") throw new Error("keine Basis");
+      if (a[0] === "rev-parse") return `${branch}\n`;
+      if (a[0] === "diff") return OVER;
+      if (a[0] === "log") return `chore: x\n\n${OVERRIDE_KEY}: #317 L1 bis L7 breit\n`;
+      throw new Error("unerwartet: " + a.join(" "));
+    };
+    const lauf = (ladeTitel: (nr: number) => string) =>
+      checkDiffSizeRoh({ zeilen: ZEILEN, runGit: git, env: { FACTORY_DIFFSIZE_MAX_FILES: "2", FACTORY_DIFFSIZE_MAX_LINES: "2" }, ladeTitel } as never);
+    const sammel = lauf(() => SAMMEL);
+    assert.equal(typeof sammel.sammelOverride, "string", "Sammelticket-Titel + Mehrfach-Override rot");
+    assert.equal(lauf(() => "Normales Ticket").sammelOverride, null, "kein Sammelticket grün");
+    const wirft = lauf(() => {
+      throw new Error("gh weg");
+    });
+    assert.match(String((wirft as { sammelOverrideHinweis?: string }).sammelOverrideHinweis), /nicht prüfbar/);
+  });
+
   test("checkDiffSize: Override über das Sammelticket → sammelOverride gesetzt, sonst null", () => {
     const OV = `chore: x\n\n${OVERRIDE_KEY}: #317 L1 bis L7 breit\n`;
     const OVER = ["1\t1\ta", "1\t1\tb", "1\t1\tc"].join("\n");

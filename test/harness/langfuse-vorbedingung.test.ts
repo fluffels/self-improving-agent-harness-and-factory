@@ -178,6 +178,11 @@ describe("main", () => {
       expect(text).toContain("Datenschutz: LANGFUSE_BASE_URL zeigt auf cloud.langfuse.com (nicht lokal, ADR 0019)");
       expect(text).not.toMatch(/pfad|geheim/);
     });
+    test("nicht lokal und Langfuse ausgefallen: Hinweis steht auch im Standardmodus, Exit 1", async () => {
+      const r = await mit([], fern, antwort(500));
+      expect(r.code).toBe(1);
+      expect(r.err.join("\n")).toContain("Datenschutz: LANGFUSE_BASE_URL zeigt auf cloud.langfuse.com");
+    });
     test("lokal: kein Datenschutz-Hinweis", async () => {
       expect((await mit([], {}, antwort(200))).err.join("\n")).not.toContain("Datenschutz");
     });
