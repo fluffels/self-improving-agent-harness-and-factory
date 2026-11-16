@@ -21,7 +21,7 @@ Das ist selbst ein **Architekturziel** („eine KI ändert das billig **und** si
 
 | Kennzahl | Wert | Zählregel |
 |---|---|---|
-| Prüfschritte in `verify` | 15 | eigene Schritte der Kette `verify` in package.json, verschachtelte Ketten aufgelöst, je Schritt einmal |
+| Prüfschritte in `verify` | 16 | eigene Schritte der Kette `verify` in package.json, verschachtelte Ketten aufgelöst, je Schritt einmal |
 | Skripte | ≥ 240 | Dateien `.mjs`/`.cjs` unter `scripts/` (rekursiv), ab 10 auf Zehner abgerundet |
 | Wächter-Tests | ≥ 150 | `*.test.ts` unter `test/harness/` (rekursiv) mit dem Marker `@harness-waechter` im Kopf, ab 10 auf Zehner abgerundet |
 | CI-Workflows | 20 | `*.yml`/`*.yaml` direkt unter `.github/workflows/` |
@@ -131,6 +131,7 @@ Jedes Gate prüft **eine** Fehlklasse. Für jedes gilt: WAS es prüft · WARUM e
 | `npm run check:factorydrift` | `verify` | Factory-Besitz (`.factory/besitz.json`) stimmt mit dem Sync-Stand überein, ein Projekt ändert ihn nicht still (die Besitz-Prüfung entfällt ohne Sync-Stand; die Projektwert-Stellen prüft es immer gegen die Config) |
 | `npm run check:steuerbytes` | `verify` | keine Steuerbytes (NUL) in Textdateien |
 | `npm run check:lockfile` | `verify` | Lockfile passt zur `package.json` |
+| `npm run check:dokupflicht` | `verify` | Verhaltens-Änderungen (Skripte, Agenten, Skills, Kern-Block der AGENTS.md) tragen Doku (docs/ oder README); die README verweist auf die Referenzseiten |
 | `npm run check:diffsize` | `verify` | Slice-Größe (Dateien und Zeilen gegen die Merge-Base) |
 | `npm test` | `verify` | Verhalten der Skripte und Harness-Wächter, inkl. Negativ- und Grenzfälle (Vitest) |
 | `node scripts/check-review-nachweis.mjs` | CI | Review-Nachweis (Plan- und Review-Zeile) im PR |
@@ -206,6 +207,11 @@ Jedes Gate prüft **eine** Fehlklasse. Für jedes gilt: WAS es prüft · WARUM e
 - **Druckventil:** Ausgenommen sind Slices, deren Commits alle von `dependabot[bot]` stammen (Merge-Commits zählen nicht; Lockfile-only-Updates), und das Druckventil `<praefixe.commitZeile>Lockfile-Override: #<nr> warum` (Pflicht-Begründung, stale-Meldung wie bei den anderen Slice-Gates, Mechanik `scripts/slice-override.mjs`).
 - **Grenze:** eine Änderung nur im `scripts`-Block von `package.json` maskiert den Drift, verglichen wird die Datei. Ohne auflösbare Basis kein Urteil.
 - **Absicherung:** Optionale Peer-Einträge (quellprojekt#1638): Dependabots Lockfile-Erzeugung verliert Einträge, die nur wegen einer optionalen Peer-Kante existieren (`peer` + `optional`), und `npm ci` bricht dann mit „Missing: … from lock file“ ab (Fall aus dem Quellprojekt: `fdir` unter `likec4` → `picomatch`; dieses Repo führt `likec4` nicht, `fdir` und `picomatch` stehen nur transitiv im Lockfile). Dort ist `picomatch` bewusst direkte devDependency (Wurzel-Platzierung macht die Kante gültig, Dependabot und `npm install` erzeugen dann denselben Baum); steht wieder so ein Eintrag im Lockfile, ist die Abhilfe: das Paket als direkte devDependency führen.
+
+### Doku-Pflicht-Gate (`npm run check:dokupflicht`, factory#604)
+- **WAS:** Ein Diff gegen die Merge-Basis auf `scripts/`, Agenten, Skills oder den Kern-Block der AGENTS.md ohne Änderung unter `docs/` oder an der README ist rot; dazu prüft es immer den Stand der README (Verweise auf `docs/referenz/befehle.md` und `docs/referenz/anlaufstellen.md`, soweit die Seiten existieren; die H2-Abschnitte aus `dokuPflicht.readmeAbschnitte` der Projekt-Config).
+- **Druckventil:** `<praefixe.commitZeile>Doku-Override: #<nr> warum` (Pflicht-Begründung, stale-Meldung wie bei den anderen Slice-Gates).
+- **Grenze:** prüft nur, dass Doku mitläuft, nicht ob sie passt (Doku-Lens, `check:docdrift`); ohne auflösbare Basis kein Urteil. Fangquote und Prüftermin: Registerzeile `verfall-doku-pflicht-604`.
 
 ### Interne Bezüge (`npm run check:internalrefs`, quellprojekt#990)
 - **WAS:** `npm run check:internalrefs` (`scripts/check-internalrefs.mjs`) hält Arbeitgeber- und Kundenbezüge und den Klarnamen der Maintainerin aus dem öffentlichen Repo (Regel in AGENTS.md). Geprüft werden die getrackten Dateien und die Commit-Messages des Branches (`origin/main..HEAD`); PR-Titel und -Text prüft `.github/workflows/internalrefs-pr-text.yml` per `--text` über stdin. Läuft in `npm run verify`.
@@ -594,7 +600,7 @@ flowchart LR
   subgraph bitte["Bitte: lokal, umgehbar"]
     regeln["AGENTS.md: Regeln<br/>und Konventionen"]
     hooks["Claude-Code-Hooks:<br/>Worktree-Guard, gh-Guard"]
-    verify["npm run verify<br/>15 Gates"]
+    verify["npm run verify<br/>16 Gates"]
     prepush["pre-push-Hook"]
   end
   subgraph mauer["Mauer: Server, nicht umgehbar"]

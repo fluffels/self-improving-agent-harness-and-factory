@@ -15,6 +15,8 @@
  * Anlaufstellen-Seite (nur wenn die Zielseite im Repo existiert, damit kein Bezieher nach dem Sync rot wird) und trägt die H2-Abschnitte
  * aus `dokuPflicht.readmeAbschnitte` der Projekt-Config (ohne den Schlüssel keine Abschnittsprüfung).
  *
+ * Verfall (ADR 0027): Prüftermin laut Registerzeile `verfall-doku-pflicht-604` in `.github/aenderungsregister.json` (Fangquote).
+ *
  * Grenze (bewusst): die Pflicht prüft nur, DASS Doku mitläuft, nicht ob sie zur Änderung passt; das tun Review-Lens und `check:docdrift`.
  * Ein reiner Refactor in `scripts/` braucht darum eine Doku-Zeile oder den Override; die Fangquote steht im Änderungsregister.
  */
@@ -25,13 +27,14 @@ import { fileURLToPath } from "node:url";
 import { resolveBase } from "./check-basis.mjs";
 import { blockSpanne } from "./besitz-lib.mjs";
 import { istDirektaufruf } from "./direktaufruf.mjs";
+import { QUELL_VERZEICHNIS, ZEIGER_WURZEL } from "./skill-pfade.mjs";
 import { ladeProjektConfig } from "./projekt-config-lib.mjs";
 import { commitZeilenAus, meldeUngueltigeOverrides, sliceOverride, staleOverrideHinweis, versetzteOverrideHinweis } from "./slice-override.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 
 /** Pfad-Präfixe, deren Änderung Verhalten ändert (die AGENTS.md zählt nur mit geändertem Kern-Block, siehe `bewerte`). */
-export const VERHALTENS_PRAEFIXE = ["scripts/", ".claude/agents/", ".claude/skills/", ".agents/skills/"];
+export const VERHALTENS_PRAEFIXE = ["scripts/", ".claude/agents/", `${ZEIGER_WURZEL}/`, `${QUELL_VERZEICHNIS}/`];
 
 /** Seiten, auf die die README verweisen muss (sofern sie im Repo existieren). */
 export const README_VERWEISE = ["docs/referenz/befehle.md", "docs/referenz/anlaufstellen.md"];

@@ -17,6 +17,7 @@
       "check:factorydrift": "Factory-Besitz (`.factory/besitz.json`) stimmt mit dem Sync-Stand überein, ein Projekt ändert ihn nicht still (die Besitz-Prüfung entfällt ohne Sync-Stand; die Projektwert-Stellen prüft es immer gegen die Config)",
       "check:steuerbytes": "keine Steuerbytes (NUL) in Textdateien",
       "check:lockfile": "Lockfile passt zur `package.json`",
+      "check:dokupflicht": "Verhaltens-Änderungen (Skripte, Agenten, Skills, Kern-Block der AGENTS.md) tragen Doku (docs/ oder README); die README verweist auf die Referenzseiten",
       "check:diffsize": "Slice-Größe (Dateien und Zeilen gegen die Merge-Base)",
       "test": "Verhalten der Skripte und Harness-Wächter, inkl. Negativ- und Grenzfälle (Vitest)"
     },
