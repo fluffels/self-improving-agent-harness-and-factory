@@ -85,6 +85,8 @@ const pflegeMarker = (brainMetrics as { pflegeMarker: (ev: { tool: string; input
 import * as checkDocDrift from "../../scripts/check-docdrift.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as checkBasis from "../../scripts/check-basis.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import { ROLLEN_JE_STUFE } from "../../scripts/risikostufe-lib.mjs";
 import { liesMitProjektwerten, liesTicketAblauf, TICKET_ABLAUF } from "../support/ticket-ablauf";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import { ROLLEN_PFADE } from "../../scripts/projekt-config-lib.mjs";
@@ -142,21 +144,30 @@ type TtlZeile = { rolle: string; ttl: string; netto: number };
 
 /** Die Tabelle unter `TTL_ABSCHNITT`: je Rolle TTL und Netto in $. Fehlt der Abschnitt oder die Spalten, ist die Liste leer (fail-closed: kein Schlüssel erlaubt). */
 function ttlZeilenAusDoku(md: string): TtlZeile[] {
-  const start = md.indexOf(`\n${TTL_ABSCHNITT}`);
+  return tabelleUnterAbschnitt(md, TTL_ABSCHNITT, ["Rolle", "Netto $", "TTL"]).map(([rolle = "", netto = "", ttl = ""]) => ({
+    rolle,
+    ttl,
+    netto: Number(netto.replace("−", "-").replace(",", ".")),
+  }));
+}
+
+/** Zellenzeilen (ohne Kopf und Trennzeile, Backticks entfernt) der ersten Tabelle unter `abschnitt`, geordnet nach `spalten`. Fehlt der Abschnitt oder eine Spalte, ist die Liste leer (fail-closed). */
+function tabelleUnterAbschnitt(md: string, abschnitt: string, spalten: string[]): string[][] {
+  const start = md.indexOf(`\n${abschnitt}`);
   if (start < 0) return [];
-  const rest = md.slice(start + 1 + TTL_ABSCHNITT.length);
+  const rest = md.slice(start + 1 + abschnitt.length);
   const ende = rest.search(/\n#{1,6} /);
   const zellen = (ende < 0 ? rest : rest.slice(0, ende))
     .split("\n")
     .filter((l) => l.trim().startsWith("|"))
     .map((l) => l.trim().replace(/^\||\|$/g, "").split("|").map((z) => z.trim().replace(/`/g, "")));
   const kopf = zellen[0] ?? [];
-  const [iRolle, iNetto, iTtl] = ["Rolle", "Netto $", "TTL"].map((n) => kopf.indexOf(n));
-  if (iRolle < 0 || iNetto < 0 || iTtl < 0) return [];
+  const idx = spalten.map((n) => kopf.indexOf(n));
+  if (idx.some((i) => i < 0)) return [];
   return zellen
     .slice(1)
     .filter((z) => !/^:?-+:?$/.test(z[0] ?? ""))
-    .map((z) => ({ rolle: z[iRolle] ?? "", ttl: z[iTtl] ?? "", netto: Number((z[iNetto] ?? "").replace("−", "-").replace(",", ".")) }));
+    .map((z) => idx.map((i) => z[i] ?? ""));
 }
 
 /** Pfade aller Schlüssel, die nach Cache-TTL heißen (`cache.?ttl`, ohne Groß-/Kleinschreibung), samt Wert; verschachtelt gesucht. */
@@ -1112,5 +1123,95 @@ describe("Cache-TTL je Subagent-Rolle (factory#312)", () => {
     assert.deepEqual(ttlZeilenAusDoku(ohne("| Name | Netto $ | TTL |")), []);
     assert.deepEqual(ttlZeilenAusDoku(ohne("| Rolle | Betrag | TTL |")), []);
     assert.deepEqual(ttlZeilenAusDoku(ohne("| Rolle | Netto $ | Dauer |")), []);
+  });
+});
+
+// factory#528: Phasenmatrix je Risikostufe (Teil 4/5 des Epics factory#511).
+const STUFEN_ABSCHNITT = "### Rollen je Risikostufe (factory#528)";
+type StufenZeile = { stufe: string; rolle: string; alias: string; effort: string; ziel: string };
+type StufenAgent = { name?: string; model?: string; effort?: string };
+/** Rollen, die in Stufe 0 nie laufen dürfen, unabhängig davon, was die Konstante erlaubt (harte Sperrliste). */
+const STUFE0_VERBOTEN = ["planer", "lens", "holdout-szenario", "holdout-abnahme"];
+
+/** Die Tabelle unter `STUFEN_ABSCHNITT`; fehlt Abschnitt oder Spalte, ist die Liste leer (fail-closed: der Prüfer meldet das). */
+function stufenZeilenAusDoku(md: string): StufenZeile[] {
+  return tabelleUnterAbschnitt(md, STUFEN_ABSCHNITT, ["Stufe", "Rolle", "Alias", "Effort", "Ziel"]).map(([stufe = "", rolle = "", alias = "", effort = "", ziel = ""]) => ({ stufe, rolle, alias, effort, ziel }));
+}
+
+/** Befunde der Stufen-Matrix: Alias und Effort je Zeile gegen das Frontmatter des Ziels, Rollen je Stufe gegen die Konstante, Stufe 0 ohne Planer, Lens und Holdout. */
+function pruefeStufenMatrix(zeilen: StufenZeile[], agenten: StufenAgent[], rollenJeStufe: Record<string, readonly string[]>): string[] {
+  if (zeilen.length === 0) return ["Tabelle „Rollen je Risikostufe“ fehlt oder hat keine Zeilen"];
+  const befunde: string[] = [];
+  for (const z of zeilen) {
+    const agent = agenten.find((a) => a.name === z.ziel);
+    if (!agent) befunde.push(`Stufe ${z.stufe} ${z.rolle}: Ziel ${z.ziel} ist kein Agent`);
+    else {
+      if (agent.model !== z.alias) befunde.push(`Stufe ${z.stufe} ${z.rolle}: Alias ${z.alias} ≠ Frontmatter ${agent.model}`);
+      if (agent.effort !== z.effort) befunde.push(`Stufe ${z.stufe} ${z.rolle}: Effort ${z.effort} ≠ Frontmatter ${agent.effort}`);
+    }
+    if (z.stufe === "0" && STUFE0_VERBOTEN.includes(z.rolle)) befunde.push(`Stufe 0 darf keine Rolle ${z.rolle} haben`);
+  }
+  for (const [stufe, rollen] of Object.entries(rollenJeStufe)) {
+    const inTabelle = zeilen.filter((z) => z.stufe === stufe).map((z) => z.rolle);
+    for (const r of rollen) if (!inTabelle.includes(r)) befunde.push(`Stufe ${stufe}: Rolle ${r} startet, steht aber nicht in der Tabelle`);
+    for (const r of inTabelle) if (!rollen.includes(r)) befunde.push(`Stufe ${stufe}: Rolle ${r} steht in der Tabelle, startet aber nicht`);
+  }
+  return befunde;
+}
+
+describe("Phasenmatrix je Risikostufe (factory#528)", () => {
+  const agenten = (): StufenAgent[] =>
+    readdirSync(`${REPO_ROOT}.claude/agents`).filter((f) => f.endsWith(".md")).map((f) => frontmatter(read(`.claude/agents/${f}`)));
+  const rollen = ROLLEN_JE_STUFE as Record<string, readonly string[]>;
+  const zeilen = (): StufenZeile[] => stufenZeilenAusDoku(liesMitProjektwerten(ROUTING_SSOT));
+  const basis: StufenZeile[] = [
+    { stufe: "0", rolle: "umsetzer", alias: "sonnet", effort: "medium", ziel: AG.umsetzer },
+    { stufe: "1", rolle: "umsetzer", alias: "sonnet", effort: "medium", ziel: AG.umsetzer },
+    { stufe: "1", rolle: "lens", alias: "opus", effort: "medium", ziel: AG.lens },
+  ];
+  const ag: StufenAgent[] = [
+    { name: AG.umsetzer, model: "sonnet", effort: "medium" },
+    { name: AG.lens, model: "opus", effort: "medium" },
+    { name: AG.planer, model: "opus", effort: "medium" },
+  ];
+  const konst = { 0: ["umsetzer"], 1: ["umsetzer", "lens"] };
+  const mit = (z: Partial<StufenZeile>, i: number): StufenZeile[] => basis.map((b, k) => (k === i ? { ...b, ...z } : b));
+
+  test("die echte Tabelle deckt Stufe 0, 1 und 2 ab und stimmt mit Frontmatter und Konstante überein", () => {
+    assert.deepEqual(pruefeStufenMatrix(zeilen(), agenten(), rollen), []);
+    assert.deepEqual([...new Set(zeilen().map((z) => z.stufe))], ["0", "1", "2"]);
+    assert.ok(zeilen().length >= 8);
+  });
+  test("Basisfall ohne Befund", () => {
+    assert.deepEqual(pruefeStufenMatrix(basis, ag, konst), []);
+  });
+  test("falscher Alias wird rot", () => {
+    assert.match(pruefeStufenMatrix(mit({ alias: "sonnet" }, 2), ag, konst).join("\n"), /Alias sonnet ≠ Frontmatter opus/);
+  });
+  test("falscher Effort wird rot", () => {
+    assert.match(pruefeStufenMatrix(mit({ effort: "high" }, 0), ag, konst).join("\n"), /Effort high ≠ Frontmatter medium/);
+  });
+  test("eine Rolle, die eine Stufe startet, aber in der Tabelle fehlt, wird rot", () => {
+    assert.match(pruefeStufenMatrix(basis.slice(0, 2), ag, konst).join("\n"), /Stufe 1: Rolle lens startet, steht aber nicht in der Tabelle/);
+  });
+  test("eine Tabellenrolle ohne Start in der Konstante wird rot", () => {
+    assert.match(pruefeStufenMatrix(basis, ag, { 0: ["umsetzer"], 1: ["umsetzer"] }).join("\n"), /Rolle lens steht in der Tabelle, startet aber nicht/);
+  });
+  test.each([
+    ["planer", AG.planer],
+    ["lens", AG.lens],
+    ["holdout-szenario", "holdout-szenario"],
+    ["holdout-abnahme", "holdout-abnahme"],
+  ])("Stufe 0 mit Rolle %s wird rot, auch wenn die Konstante sie erlaubt", (rolle, ziel) => {
+    const agentenPlus = [...ag, { name: ziel, model: "opus", effort: "medium" }];
+    const z = [...basis, { stufe: "0", rolle, alias: "opus", effort: "medium", ziel }];
+    const befunde = pruefeStufenMatrix(z, agentenPlus, { ...konst, 0: ["umsetzer", rolle] });
+    assert.match(befunde.join("\n"), new RegExp(`Stufe 0 darf keine Rolle ${rolle} haben`));
+  });
+  test("unbekanntes Ziel und fehlende Tabelle sind Befunde, nicht grün", () => {
+    assert.match(pruefeStufenMatrix(mit({ ziel: "gibt-es-nicht" }, 0), ag, konst).join("\n"), /kein Agent/);
+    assert.match(pruefeStufenMatrix([], ag, konst).join("\n"), /fehlt/);
+    assert.deepEqual(stufenZeilenAusDoku("# nichts"), []);
+    assert.deepEqual(stufenZeilenAusDoku(`\n${STUFEN_ABSCHNITT}\n| Stufe | Rolle |\n|---|---|\n| 0 | umsetzer |`), [], "fehlende Spalten: leer");
   });
 });

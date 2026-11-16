@@ -50,5 +50,13 @@
   ".github/wiedervorlagen.json": {
     "art": "projekt",
     "grund": "Wiedervorlagen dieses Repos (Daten des Projekts)"
+  },
+  ".github/aenderungsregister.json": {
+    "art": "projekt",
+    "grund": "Änderungsregister dieses Repos (Daten der Fabrik, factory#571)"
+  },
+  "scripts/aenderungsregister-lib.mjs": {
+    "art": "projekt",
+    "grund": "Fabrik-eigene Register-Logik (factory#571), nicht im Besitz-Manifest"
   }
 }
