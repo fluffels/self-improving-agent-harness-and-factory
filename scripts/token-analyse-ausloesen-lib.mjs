@@ -44,7 +44,7 @@ export function taktEintrag(faellig) {
     art: TAKT_ART,
     faellig,
     titel: `${MARKER} monatlich (factory#518)`,
-    text: "Analyse per Skill `token-analyse` durchführen (Vorgabe: `.agents/skills/token-analyse/SKILL.md`). Vorher `node scripts/token-analyse-ausloesen.mjs --anlass monatlich` (dedupliziert gegen ein schon offenes Analyse-Ticket), am Schluss des Skills `node scripts/token-analyse-ausloesen.mjs --fortschreiben`: das löscht diesen Eintrag und schreibt den nächsten (Lauf plus ein Monat).",
+    text: "Analyse per Skill `token-analyse` durchführen. Vorher `node scripts/token-analyse-ausloesen.mjs --anlass monatlich` (dedupliziert gegen ein schon offenes Analyse-Ticket), am Schluss des Skills `node scripts/token-analyse-ausloesen.mjs --fortschreiben`: das löscht diesen Eintrag und schreibt den nächsten (Lauf plus ein Monat).",
   };
 }
 
@@ -93,7 +93,7 @@ export function planeAusloesung({ offene, anlass, heute, eintraege, grund }) {
     "",
     `Token-Analyse ausgelöst am ${heute} (Anlass: ${anlass})${grund ? `: ${grund}` : ""}.`,
     "",
-    "Ablauf: Skill `token-analyse` (`.agents/skills/token-analyse/SKILL.md`), am Schluss `node scripts/token-analyse-ausloesen.mjs --fortschreiben`, dann dieses Ticket schließen.",
+    "Ablauf: Skill `token-analyse`, am Schluss `node scripts/token-analyse-ausloesen.mjs --fortschreiben`, dann dieses Ticket schließen.",
   );
   return {
     art: "anlegen",

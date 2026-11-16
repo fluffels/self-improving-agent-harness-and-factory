@@ -66,6 +66,6 @@
     "art": "analyse-takt",
     "faellig": "2026-12-15",
     "titel": "💸 Token-Analyse monatlich (factory#518)",
-    "text": "Analyse per Skill `token-analyse` durchführen (Vorgabe: `.agents/skills/token-analyse/SKILL.md`). Vorher `node scripts/token-analyse-ausloesen.mjs --anlass monatlich` (dedupliziert gegen ein schon offenes Analyse-Ticket), am Schluss des Skills `node scripts/token-analyse-ausloesen.mjs --fortschreiben`: das löscht diesen Eintrag und schreibt den nächsten (Lauf plus ein Monat)."
+    "text": "Analyse per Skill `token-analyse` durchführen. Vorher `node scripts/token-analyse-ausloesen.mjs --anlass monatlich` (dedupliziert gegen ein schon offenes Analyse-Ticket), am Schluss des Skills `node scripts/token-analyse-ausloesen.mjs --fortschreiben`: das löscht diesen Eintrag und schreibt den nächsten (Lauf plus ein Monat)."
   }
 ]
