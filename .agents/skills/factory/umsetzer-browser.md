@@ -20,7 +20,7 @@ Projektwerte aus `.factory/projekt.json` (generiert von `node scripts/projektwer
 | `labels.forum` | `forum` |
 | `labels.dependabotInbox` | `area:harness` |
 | `labels.entscheidung` | `status:entscheidung-noetig` |
-| `skills.abschluss` | `brain-input` |
+| `skills.abschluss` | — |
 <!-- factory:projektwerte:end -->
 
 **Browser (Schritt 2):** Sicht- oder bedienbare Änderungen prüfst du im Browser (Screenshots ohne `filename` oder mit `.playwright-mcp/<praefixe.worktree><nr>-<name>.png`, nie mit blankem Dateinamen: der landet im Hauptcheckout-Root, nicht im Worktree), über die Playwright-MCP-Tools aus deiner Whitelist ([FAQ](../../../docs/agent-harness-faq.md#wie-verifiziere-ich-im-browser)); Zustand zuerst über den Dev-Helfer des Projekts (Projekt-Block › Im Browser verifizieren), Screenshot nur für die Optik. Eine im Plan vorgesehene Browser-Prüfung ist Pflicht (bei Content-Daten wie Quests und Dialogen bis zum Ziel durchlaufen, nicht nur springen); ihr Beleg (Zustands-Auszug des Dev-Helfers, Screenshot-Pfad) geht im Lens-Auftrag mit. Fehlen die Tools in deiner Session (Server nicht geladen), `abgebrochen` melden statt die Prüfung auszulassen.

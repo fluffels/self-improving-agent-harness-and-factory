@@ -20,7 +20,7 @@ Projektwerte aus `.factory/projekt.json` (generiert von `node scripts/projektwer
 | `labels.forum` | `forum` |
 | `labels.dependabotInbox` | `area:harness` |
 | `labels.entscheidung` | `status:entscheidung-noetig` |
-| `skills.abschluss` | `brain-input` |
+| `skills.abschluss` | — |
 <!-- factory:projektwerte:end -->
 
 **Merge von `main` (Schritt 5):** Verschärft der Diff ein Gate oder Schema (Pflichtfeld, strengere Regel), merge direkt vor dem Auto-Merge `origin/main` ein und fahre das betroffene Gate erneut: ein parallel gemergter PR kann einen Verstoß gegen die Verschärfung mitbringen, den die CI auf dem alten Stand nicht sah (quellprojekt#1449). Nach jedem solchen Merge einmal `node scripts/gate-befehl.mjs verifyKompakt` voll, nicht nur den roten Check: Wächter mit Baseline je Datei reagieren auf parallel Gemergtes.

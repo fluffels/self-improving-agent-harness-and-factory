@@ -44,7 +44,7 @@
     "ticketSkill": "sih-ticket"
   },
   "skills": {
-    "abschluss": "brain-input"
+    "abschluss": null
   },
   "module": ["codeql", "scorecard", "secret-scan", "dependency-review", "zizmor", "codescanning-inbox", "audit-einordnung", "dependabot-inbox"],
   "codeql": {

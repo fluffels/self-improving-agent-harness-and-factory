@@ -115,7 +115,7 @@ export function projektwissenImAblauf(ablauf: string, abschlussSkill: string | n
   for (const m of ablauf.matchAll(ANKER_RE)) {
     if (/-\d{3,}(?!\d)/.test(m[1].replace(ISO_DATUM, ""))) out.push(`Ticketnummer im Linkanker #${m[1]}`);
   }
-  if (typeof abschlussSkill === "string" && abschlussSkill !== "" && ablauf.includes(abschlussSkill)) out.push(`Literal des Abschluss-Skills '${abschlussSkill}' (Platzhalter <skills.abschluss> nutzen)`);
+  if (typeof abschlussSkill === "string" && abschlussSkill !== "" && ablauf.includes(abschlussSkill)) out.push(`Literal des Abschluss-Skills '${abschlussSkill}' (keinen Skill-Namen im Ablauf nennen, nur <wirksamer Name>, factory#569)`);
   return out;
 }
 
@@ -221,7 +221,7 @@ describe("Ticket-Ablauf: das echte Repo", () => {
     assert.ok(cfg.skills !== undefined && "abschluss" in cfg.skills, "skills.abschluss fehlt in .factory/projekt.json");
     const abschluss = cfg.skills.abschluss ?? null;
     const ablauf = leereProjektwerte(lies(TICKET_ABLAUF));
-    assert.ok(ablauf.includes("<skills.abschluss>"), "der Ablauf nutzt den Platzhalter <skills.abschluss>");
+    assert.ok(!ablauf.includes("<skills.abschluss>"), "der Ablauf nennt den Abschluss-Skill nur als <wirksamer Name> (factory#569), nicht als Platzhalter <skills.abschluss>");
     assert.deepEqual(projektwissenImAblauf(ablauf, abschluss), []);
   });
   test("beide Ticket-Skills verweisen auf den gemeinsamen Ablauf", () => {

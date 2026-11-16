@@ -20,7 +20,7 @@ Projektwerte aus `.factory/projekt.json` (generiert von `node scripts/projektwer
 | `labels.forum` | `forum` |
 | `labels.dependabotInbox` | `area:harness` |
 | `labels.entscheidung` | `status:entscheidung-noetig` |
-| `skills.abschluss` | `brain-input` |
+| `skills.abschluss` | — |
 <!-- factory:projektwerte:end -->
 
 Nach dem Cap fährt der Umsetzer **Zusatzpässe ohne Rückfrage** (Nachweis `zusatzpass=<n>:<ursache>`), höchstens 3 (Worktree `-lens-r4-` bis `-lens-r6-`), nur bei steigender Evidenz: der Vorpass meldet einen **belegten** `❌ blockierend`-Fund einer **neuen Blocker-Klasse** (Brille plus Prüfpunkt; neu = in keinem früheren Pass blockiert) und die Blockerzahl sinkt. `🔶 sollte` und Hinweise rechtfertigen nie einen Zusatzpass. **Belegt** heißt Repro oder Beleg an Test oder Doku; Architektur- und Requirement-Blocker sind nie belegt.
