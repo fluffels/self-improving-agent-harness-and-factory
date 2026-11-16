@@ -1,8 +1,7 @@
 // Kein Shebang, kein Direktaufruf-Guard: pure Lib der Fabrik-eigenen Token-Analyse (factory#518, Teil 5/9).
 /**
- * Freigabeliste, Allowlist lesender Befehle, Ablage-Prüfung und Analyse-Schnappschuss. Pur: kein Dateizugriff, kein Prozess.
- * Pfade, die eine Prüfung braucht, löst der Aufrufer vorab per realpath auf (`real` ist injizierbar, Standard Identität).
- * Meldungen nennen nie einen Verzeichnisnamen aus der Freigabeliste, nur `Bezieher <k>` (bezieherLabel).
+ * Freigabeliste, Allowlist lesender Befehle, Ablage-Prüfung und Analyse-Schnappschuss. Pur: kein Dateizugriff, kein Prozess; der Aufrufer löst
+ * Pfade vorab per realpath auf (`real` ist injizierbar). Meldungen nennen nie einen Namen aus der Liste, nur `Bezieher <k>`.
  */
 import { isAbsolute, relative, resolve } from "node:path";
 

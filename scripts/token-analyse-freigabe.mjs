@@ -1,13 +1,9 @@
 /**
  * Freigabe, Ablage und Datenschutz-Grenzen der Token-Analyse (factory#518, Teil 5/9). Fabrik-eigen, nicht im Besitz, nie in einem Bezieher.
- *
- *   node scripts/token-analyse-freigabe.mjs pruefen
- *   node scripts/token-analyse-freigabe.mjs ablegen --eingabe <kennzahlen.json>
- *
- * `FACTORY_ANALYSE_FREIGABE`: Datei außerhalb des Repos, ein absoluter Pfad je Bezieher-Checkout (nur lokal, nie committet).
- * `FACTORY_ANALYSE_ABLAGE`: Ordner außerhalb von Repo, Worktrees und Bezieher-Checkouts für die Analyse-Schnappschüsse.
- * Gelesen wird nur aus Checkouts, die Git-Checkouts sind und dem angemeldeten Konto gehören (`gh api user`, die einzige Netzabfrage),
- * nur über die Allowlist der Lib; die Ausgabe nennt nur `Bezieher <k>`. Exit: 0 gut oder Teil 6 entfällt mit Hinweis, 1 Abbruch, 2 Aufruf oder Bezieher.
+ *   node scripts/token-analyse-freigabe.mjs pruefen | ablegen --eingabe <kennzahlen.json>
+ * `FACTORY_ANALYSE_FREIGABE`: Datei außerhalb des Repos, ein absoluter Pfad je Bezieher-Checkout. `FACTORY_ANALYSE_ABLAGE`: Ordner außerhalb von
+ * Repo, Worktrees und Bezieher-Checkouts. Gelesen wird nur aus Checkouts des angemeldeten Kontos (`gh api user`) über die Allowlist der Lib;
+ * die Ausgabe nennt nur `Bezieher <k>`. Exit: 0 gut oder Teil 6 entfällt mit Hinweis, 1 Abbruch, 2 Aufruf oder Bezieher.
  */
 import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, statSync, writeFileSync } from "node:fs";

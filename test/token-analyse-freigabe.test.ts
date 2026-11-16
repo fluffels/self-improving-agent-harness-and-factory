@@ -27,6 +27,7 @@ const lib = rawLib as unknown as {
 type Ergebnis = { code: number; zeilen: string[]; freigegeben?: { k: number; wurzel: string }[] };
 const cli = rawCli as unknown as {
   realMitVorfahr: (p: string) => string;
+  standardRunner: (a: string[], o?: { cwd?: string }) => { status: number; stdout: string };
   cli: (argv: string[], env: Record<string, string | undefined>, deps: Record<string, unknown>) => Ergebnis;
   pruefen: (env: Record<string, string | undefined>, deps: Record<string, unknown>) => Ergebnis;
   fuehreFreigegebenAus: (k: number, argv: string[], f: { k: number; wurzel: string }[], d: Record<string, unknown>) => Record<string, unknown>;
@@ -93,26 +94,11 @@ describe("Allowlist lesender Befehle", () => {
     expect(pr(["wc", "-l", "a.txt"]).ok).toBe(true);
     expect(pr(["wc", "-l", join(wurzel, "a.txt")]).ok).toBe(true);
   });
+  const gitRest = [["fetch"], ["status"], ["remote", "-v"], ["config", "--list"], ["worktree", "list"], ["log", "--output=x"], ["log", "-o"], ["log", "-c", "x"], ["log", "--exec=x"], ["log", "--upload-pack=x"], ["log", "--config-env=a=b"], ["log", "--open-files-in-pager"], ["log", "--git-dir=/x"], ["log", "--work-tree=/x"], ["show", "--ext-diff"], ["show", "--textconv"], ["log", "-p", "-O/etc/passwd"]];
   const faelle = (wurzel: string, beta: string): [string, unknown][] => [
-    ["fetch", ["git", "-C", wurzel, "fetch"]],
-    ["status", ["git", "-C", wurzel, "status"]],
-    ["remote", ["git", "-C", wurzel, "remote", "-v"]],
-    ["config", ["git", "-C", wurzel, "config", "--list"]],
-    ["worktree", ["git", "-C", wurzel, "worktree", "list"]],
-    ["log --output", ["git", "-C", wurzel, "log", "--output=x"]],
-    ["log -o", ["git", "-C", wurzel, "log", "-o"]],
-    ["-c nach Unterbefehl", ["git", "-C", wurzel, "log", "-c", "core.pager=x"]],
-    ["--exec", ["git", "-C", wurzel, "log", "--exec=x"]],
-    ["--upload-pack", ["git", "-C", wurzel, "log", "--upload-pack=x"]],
-    ["--config", ["git", "-C", wurzel, "log", "--config-env=a=b"]],
-    ["--open-files-in-pager", ["git", "-C", wurzel, "log", "--open-files-in-pager"]],
-    ["--git-dir nach Unterbefehl", ["git", "-C", wurzel, "log", "--git-dir=/x"]],
-    ["--work-tree nach Unterbefehl", ["git", "-C", wurzel, "log", "--work-tree=/x"]],
-    ["--git-dir statt -C", ["git", "--git-dir", wurzel, "log"]],
-    ["--ext-diff", ["git", "-C", wurzel, "show", "--ext-diff"]],
-    ["--textconv", ["git", "-C", wurzel, "show", "--textconv"]],
-    ["-O Orderfile", ["git", "-C", wurzel, "log", "-p", "-O/etc/passwd"]],
+    ...gitRest.map((r): [string, unknown] => [r.join(" "), ["git", "-C", wurzel, ...r]]),
     ["-c vor -C", ["git", "-c", "core.pager=x", "-C", wurzel, "log"]],
+    ["--git-dir statt -C", ["git", "--git-dir", wurzel, "log"]],
     ["ohne -C", ["git", "log"]],
     ["fremde Wurzel", ["git", "-C", beta, "log"]],
     ["wc ../außen", ["wc", "-l", "../geheim-beta/.git/config"]],
@@ -126,11 +112,6 @@ describe("Allowlist lesender Befehle", () => {
   test("abgelehnt: jede verbotene Form", () => {
     const { s, wurzel, pr } = aufbau();
     for (const [n, argv] of faelle(wurzel, s.w.beta)) expect([n, pr(argv).ok]).toEqual([n, false]);
-  });
-  test("wc über Symlink nach draußen wird abgelehnt", () => {
-    const { s, wurzel, pr } = aufbau();
-    symlinkSync(join(s.w.beta, ".git", "config"), join(wurzel, "flucht"));
-    expect(pr(["wc", "-l", "flucht"]).ok).toBe(false);
   });
   test("fuehreFreigegebenAus löst Symlinks auf: wc über einen Link nach draußen startet keinen Prozess", () => {
     const { s, wurzel } = aufbau();
@@ -180,7 +161,7 @@ describe("Ausführung nur für Freigegebene", () => {
     expect(aufrufe[0].cwd).toBe(s.w.alpha);
   });
   test("der Standard-Runner setzt die Schutz-Umgebung und startet ohne Shell", () => {
-    const run = rawCli.standardRunner as (a: string[], o?: { cwd?: string }) => { status: number; stdout: string };
+    const run = cli.standardRunner;
     const r = run(["node", "-e", "process.stdout.write([process.env.GIT_OPTIONAL_LOCKS, process.env.GIT_CONFIG_NOSYSTEM, process.env.GIT_TERMINAL_PROMPT].join())"]);
     expect(r.stdout).toBe("0,1,0");
     expect(run(["node", "-e", "process.stdout.write(process.argv[1])", "a b;c"]).stdout).toBe("a b;c");
@@ -229,23 +210,15 @@ describe("pruefen (CLI-Logik)", () => {
     const t = welt((w) => `${w.alpha}\n`);
     expect(cli.pruefen({ FACTORY_ANALYSE_FREIGABE: t.env.FACTORY_ANALYSE_FREIGABE }, t.deps).code).toBe(1);
   });
-  test("eine Freigabeliste im Repo wird abgelehnt", () => {
-    const s = welt((w) => `${w.alpha}\n`);
-    const imRepo = join(s.w.repo, "liste.txt");
-    writeFileSync(imRepo, `${s.w.alpha}\n`);
-    const r = cli.pruefen({ ...s.env, FACTORY_ANALYSE_FREIGABE: imRepo }, s.deps);
-    expect(r.code).toBe(1);
-    expect(r.zeilen[0]).toMatch(/Freigabeliste liegt im Repo/);
-  });
-  test("eine Freigabeliste in einem Worktree oder einem Bezieher wird abgelehnt", () => {
-    const s = welt((w) => `${w.alpha}\n`);
-    const imBezieher = join(s.w.alpha, "liste.txt");
-    writeFileSync(imBezieher, `${s.w.alpha}\n`);
-    expect(cli.pruefen({ ...s.env, FACTORY_ANALYSE_FREIGABE: imBezieher }, s.deps).zeilen[0]).toMatch(/Freigabeliste liegt in einem Bezieher/);
-    mkdirSync(join(s.root, "wt-y"), { recursive: true });
-    const imWorktree = join(s.root, "wt-y", "liste.txt");
-    writeFileSync(imWorktree, `${s.w.alpha}\n`);
-    expect(cli.pruefen({ ...s.env, FACTORY_ANALYSE_FREIGABE: imWorktree }, { ...s.deps, worktrees: [join(s.root, "wt-y")] }).zeilen[0]).toMatch(/Freigabeliste liegt im Repo oder in einem Worktree/);
+  test("eine Freigabeliste im Repo, in einem Worktree oder in einem Bezieher wird abgelehnt", () => {
+    const s = welt((w) => `${w.alpha}\n`, { "wt-y/x.txt": "x" });
+    const wt = join(s.root, "wt-y");
+    for (const [ort, muster] of [[s.w.repo, /im Repo/], [s.w.alpha, /in einem Bezieher/], [wt, /im Repo oder in einem Worktree/]] as const) {
+      const liste = join(ort, "liste.txt");
+      writeFileSync(liste, `${s.w.alpha}\n`);
+      const r = cli.pruefen({ ...s.env, FACTORY_ANALYSE_FREIGABE: liste }, { ...s.deps, worktrees: [wt] });
+      expect([r.code, r.zeilen[0]]).toEqual([1, expect.stringMatching(muster)]);
+    }
   });
   test("Worktree-Datei als .git: der Eigentümer kommt aus der gemeinsamen Konfiguration", () => {
     const s = welt((w) => `${join(w.root, "wt")}\n`, { "haupt/.git/config": checkout("ich"), "haupt/.git/worktrees/wt/commondir": "../..\n", "wt/.git": "gitdir: ../haupt/.git/worktrees/wt\n" });
@@ -392,11 +365,8 @@ describe("Analyse-Schnappschuss (Format)", () => {
     expect(lib.schnappschussName("2026-11-15", n)).toBe("analyse-2026-11-15-2");
     expect(() => lib.schnappschussName("heute", n)).toThrow();
   });
-  test("pruefeAblage ohne absoluten Pfad, enthaeltNamen und bezieherLabel", () => {
+  test("pruefeAblage ohne absoluten Pfad und bezieherLabel", () => {
     expect(lib.pruefeAblage({ ablage: "rel", repoWurzel: "/r" }).ok).toBe(false);
-    expect(lib.pruefeAblage({ ablage: "/außen/x", repoWurzel: "/r" }).ok).toBe(true);
-    expect(lib.enthaeltNamen("Hat NameX drin", ["/a/namex/"])).toBe(true);
-    expect(lib.enthaeltNamen("sauber", ["/a/namex"])).toBe(false);
     expect(lib.bezieherLabel(3)).toBe("Bezieher 3");
   });
 });

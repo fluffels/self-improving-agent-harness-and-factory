@@ -1,8 +1,7 @@
 /**
  * @harness-waechter
- * Wächter: die Skripte der Token-Analyse (factory#518) sind Fabrik-eigen. (a) Das Besitz-Manifest trifft keinen ihrer Pfade, (b) keine
- * verteilte Datei nennt oder importiert sie, (c) jedes Einstiegsskript sperrt den Lauf in einem Bezieher (`istBezieher`).
- * Neue Kinder von factory#518 tragen ihre Pfade in `FABRIK_EIGEN` ein. Grenze: ein Verweis über einen berechneten Pfad bleibt unentdeckt.
+ * Wächter: die Skripte der Token-Analyse (factory#518) sind Fabrik-eigen: (a) das Besitz-Manifest trifft keinen Pfad der Liste `FABRIK_EIGEN`,
+ * (b) keine verteilte Datei nennt sie, (c) jedes Einstiegsskript sperrt den Lauf im Bezieher (`istBezieher`). Grenze: berechnete Pfade bleiben unentdeckt.
  */
 import { describe, expect, test } from "vitest";
 import { existsSync, readFileSync, statSync } from "node:fs";
