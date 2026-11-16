@@ -122,9 +122,10 @@ describe("pruefeReadme", () => {
   it("ein H3 oder Fließtext ersetzt den H2 nicht", () => {
     expect(m.pruefeReadme({ readme: `${gut}\n### Lizenz\nLizenz\n`, seitenVorhanden: alle, abschnitte: ["Lizenz"] })).toHaveLength(1);
   });
-  it("ohne README: nur ein Befund, wenn etwas verlangt wird", () => {
+  it("ohne README: nur ein Befund, wenn Abschnitte konfiguriert sind (ein Bezieher ohne README bleibt grün)", () => {
     expect(m.pruefeReadme({ readme: null, seitenVorhanden: () => false })).toEqual([]);
-    expect(m.pruefeReadme({ readme: null, seitenVorhanden: alle })).toEqual(["README.md fehlt"]);
+    expect(m.pruefeReadme({ readme: null, seitenVorhanden: alle })).toEqual([]);
+    expect(m.pruefeReadme({ readme: null, seitenVorhanden: alle, abschnitte: ["Status"] })).toEqual(["README.md fehlt"]);
   });
 });
 
@@ -185,6 +186,7 @@ describe("checkReadme gegen die Platte", () => {
   it("README ohne Zielseiten und ohne Liste: nichts; ohne README: nichts", () => {
     mitReadme("# T\n", [], (w) => expect(m.checkReadme({ rootDir: w })).toEqual([]));
     mitReadme(null, [], (w) => expect(m.checkReadme({ rootDir: w })).toEqual([]));
+    mitReadme(null, ["docs/referenz/befehle.md"], (w) => expect(m.checkReadme({ rootDir: w })).toEqual([]));
   });
 });
 
@@ -225,7 +227,7 @@ describe("laufe: Exit-Code und Meldungen", () => {
   it("README-Befund macht den Lauf rot, auch ohne Slice-Problem", () => {
     const r = lauf(["docs/x.md"], "", { ...FREMD, dokuPflicht: { readmeAbschnitte: ["Gibtsnicht"] } });
     expect(r.code).toBe(1);
-    expect(r.text).toContain("README.md");
+    expect(r.text).toContain("README.md fehlt");
   });
 });
 

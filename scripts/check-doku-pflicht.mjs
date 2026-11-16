@@ -70,11 +70,11 @@ const h2Aus = (text) => [...text.replace(/\r/g, "").matchAll(/^##[ \t]+(.+?)[ \t
 
 /**
  * README-Befunde (Textliste, leer = ok). `seitenVorhanden(pfad)` sagt, ob die Verweis-Zielseite im Repo liegt (nur dann ist der Verweis Pflicht),
- * `abschnitte` sind die konfigurierten H2-Überschriften. Ohne README (`readme === null`) gilt: Befund nur, wenn etwas verlangt wird. Pur.
+ * `abschnitte` sind die konfigurierten H2-Überschriften. Ohne README (`readme === null`, etwa im Bezieher) gilt: Befund nur, wenn Abschnitte konfiguriert sind; die Verweise setzen eine README voraus. Pur.
  */
 export function pruefeReadme({ readme, seitenVorhanden, abschnitte = [] }) {
   const verlangt = [...README_VERWEISE.filter((s) => seitenVorhanden(s)).map((s) => ({ art: "verweis", wert: s })), ...abschnitte.map((a) => ({ art: "abschnitt", wert: a }))];
-  if (readme === null) return verlangt.length > 0 ? ["README.md fehlt"] : [];
+  if (readme === null) return abschnitte.length > 0 ? ["README.md fehlt"] : [];
   const h2 = h2Aus(readme);
   const befunde = [];
   for (const v of verlangt) {
