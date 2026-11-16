@@ -1050,7 +1050,7 @@ describe("--maengel: freie vertraute Tickets mit Spezifikations-Mangel in Board-
   });
   test("Datumssperre (factory#629) berührt die Mängelliste nicht: Ticket mit Mangel und künftiger Sperre erscheint", () => {
     const r = lauf([roh(3, { body: `${OHNE_NEGATIV}\nFrühestens: 2099-01-01` })]);
-    expect(r.out.split("\n")[0]).toBe("1 Tickets mit Mangel");
+    expect(r.out.split("\n")[0]).toBe("1 Ticket mit Mangel");
     expect(r.out).toMatch(/^#3\t/m);
   });
   test("ohne Mangel: Exit 0 und `0 Tickets mit Mangel`", () => {
