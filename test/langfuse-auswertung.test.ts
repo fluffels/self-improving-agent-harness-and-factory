@@ -3,6 +3,7 @@ import { spawnSync } from "node:child_process";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { isAbsolute, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, test } from "vitest";
 import { importHuelle } from "./support/import-huelle";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
@@ -40,7 +41,7 @@ const L = libRaw as unknown as {
   EFFORT_STUFEN: string[];
   ROW_LIMIT: number;
   quelleVon: (t: string | null, n: string | null) => string;
-  rezept: (o: { von: string; bis: string; rollen?: string[]; efforts?: string[]; codexRollen?: string[]; projektFilter?: unknown }) => { art: string; name: string; abfrage: Abfr & { fromTimestamp: string; toTimestamp: string } }[];
+  rezept: (o: { von: string; bis: string; rollen?: string[]; efforts?: string[]; codexRollen?: string[]; projektFilter?: unknown; repoTags?: string[] }) => { art: string; name: string; abfrage: Abfr & { fromTimestamp: string; toTimestamp: string } }[];
   leseExport: (j: unknown, pfad: string) => unknown;
   betrag: (p: { cost: number; count: number; ohnePreis?: number; modelle?: string[] }) => string;
   bericht: (e: unknown[]) => Bericht;
@@ -52,6 +53,10 @@ const C = cliRaw as unknown as {
   auswerten: (a: unknown, d?: Record<string, unknown>) => { exitCode: number; text: string };
 };
 const agentenNamen = (agentenRoh as unknown as { agentenNamen: (ordner: string, deps?: unknown) => string[] }).agentenNamen;
+
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as configRoh from "../scripts/projekt-config-lib.mjs";
+const { ladeProjektConfig: ladeConfigRoh, repoName: repoNameRoh } = configRoh as unknown as { ladeProjektConfig: (o: { rootDir: string }) => unknown; repoName: (c: unknown) => string };
 
 const VON = "2026-11-01T00:00:00Z";
 const BIS = "2026-11-04T00:00:00Z";
@@ -82,7 +87,11 @@ const leerVon = (zeilen: ReturnType<typeof g>[], claude = { count: 0, tokens: 0 
   return { ...exp("leer", rows), abfrage: { view: "observations", filters: [FILTER], dimensions: [{ field: "providedModelName" }], fromTimestamp: VON, toTimestamp: BIS } };
 };
 const leerOk = leerVon(gesamtRows, { count: 42, tokens: 0 });
-const basis = [gesamt, tageVoll, latenzOk, leerOk];
+/** Export `repo` (factory#523): ein Export je Repo-Tag mit `name` und dem Filter tags any of [<tag>, project:<tag>]. */
+const repoEx = (tag: string, data: unknown[], filters: unknown[] = [FILTER]) => ({ ...exp("repo", data, [...filters, { column: "tags", operator: "any of", type: "arrayOptions", value: [tag, `project:${tag}`] }]), name: `repo ${tag}` });
+const repoA = repoEx("repoA", [g(...R1, 10, 5, 3), g(...R2, 20, 10, 3)]);
+const repoB = repoEx("repoB", [g(...R3, 4, 2, 7)]);
+const basis = [gesamt, tageVoll, latenzOk, leerOk, repoA, repoB];
 const alleRollen = [meta("agent_type", "Plan", [g(...R1, 10, 5, 3), g(...R2, 20, 10, 3)]), meta("agent_role", "main", [g(...R3, 4, 2, 7)])];
 const alleEfforts = [meta("effort", "high", [g(...R1, 10, 5, 3), g(...R2, 20, 10, 3)]), meta("reasoning_effort", "high", [g(...R3, 4, 2, 7)])];
 const unzZeile = (t: Tab) => t.zeilen[t.zeilen.length - 1];
@@ -109,7 +118,8 @@ describe("unzugeordnet (AK7)", () => {
   test("steht mit 0, wenn alles zugeordnet ist (Gesamtzeile und jede Tabelle)", () => {
     const b = rep(...basis, ...alleRollen, ...alleEfforts);
     expect(b.unzugeordnet).toEqual({ count: 0, cost: 0 });
-    for (const t of [b.rolle, b.effort, b.repo, b.modell]) expect(unzZeile(t)).toMatchObject({ name: "unzugeordnet", count: 0, cost: 0 });
+    for (const t of [b.rolle, b.effort, b.modell]) expect(unzZeile(t)).toMatchObject({ name: "unzugeordnet", count: 0, cost: 0 });
+    expect(b.repo.zeilen.map((z) => z.name)).toEqual(["repoA", "repoB"]); // ohne Rest keine Zeile „ohne Repo-Tag“
     expect(L.renderMarkdown(b)).toContain("unzugeordnet: 0 Calls (0.00 $) ohne Rolle oder ohne Modell.");
   });
   test("ohne agent_type-Zelle geht der Rest nach unzugeordnet", () => {
@@ -138,10 +148,10 @@ describe("unzugeordnet (AK7)", () => {
     expect(b.unzugeordnet).toEqual({ count: 5, cost: 2 });
     expect(b.rolle.zeilen.find((z) => z.name === "Explore")).toMatchObject({ count: 5 });
   });
-  test("Repo default oder leer ist unzugeordnet", () => {
+  test("das Repo kommt nie aus environment: ohne Repo-Export steht alles unter „ohne Repo-Tag“, auch bei environment gleich Repo-Name", () => {
     const b = rep(exp("gesamt", [g(...R1, 1, 1), g("Abgleich", "Call", "claude-opus-5-5", "default", 2, 2), g("Abgleich", "Call", "claude-opus-5-5", "", 3, 3), g("Abgleich", "Call", "claude-opus-5-5", null, 4, 4)]), tageVoll);
-    expect(b.repo.zeilen.map((z) => z.name)).toEqual(["repoA", "unzugeordnet"]);
-    expect(unzZeile(b.repo)).toMatchObject({ count: 9, cost: 9 });
+    expect(b.repo.zeilen.map((z) => z.name)).toEqual(["ohne Repo-Tag"]);
+    expect(unzZeile(b.repo)).toMatchObject({ count: 10, cost: 10 });
   });
 });
 
@@ -477,7 +487,7 @@ describe("Randfälle", () => {
     expect(rep(...basis, meta("agent_type", "Plan", [g(...R1, 11, 5, 3)])).luecken.join("\n")).toMatch(/1 Zeile\(n\) mit Rest unter 0/);
   });
   test("Kosten je Quelle addieren sich über Zeilen derselben Tabellenzeile", () => {
-    const b = rep(exp("gesamt", [g(...R1, 1, 1), g("Claude Code Turn", "Subagent LLM Call", "claude-sonnet-5-5", "repoA", 2, 2)]), tageVoll);
+    const b = rep(exp("gesamt", [g(...R1, 1, 1), g("Claude Code Turn", "Subagent LLM Call", "claude-sonnet-5-5", "repoA", 2, 2)]), tageVoll, repoEx("repoA", [g(...R1, 1, 1, 3), g("Claude Code Turn", "Subagent LLM Call", "claude-sonnet-5-5", "repoA", 2, 2, 3)]));
     expect(b.repo.zeilen.find((z) => z.name === "repoA")?.quellen.live).toBe(3);
   });
   test("Sortierung: Kosten absteigend, bei Gleichstand nach Name (unabhängig von der Zeilenfolge)", () => {
@@ -494,7 +504,7 @@ describe("Randfälle", () => {
 
 describe("Funde Runde 1", () => {
   test("ein Rest ohne Calls und mit positivem Rundungsrauschen ist keine Lücke", () => {
-    const b = rep(exp("gesamt", [g(...R1, 10, 5.0000000000001)]), tageVoll, exp("latenz", [g(...R1, 10, 5.0000000000001, 0)]), meta("agent_type", "Plan", [g(...R1, 10, 5, 3)]), meta("effort", "high", [g(...R1, 10, 5, 3)]), leerVon([g(...R1, 10, 5)]));
+    const b = rep(exp("gesamt", [g(...R1, 10, 5.0000000000001)]), tageVoll, exp("latenz", [g(...R1, 10, 5.0000000000001, 0)]), meta("agent_type", "Plan", [g(...R1, 10, 5, 3)]), meta("effort", "high", [g(...R1, 10, 5, 3)]), repoEx("repoA", [g(...R1, 10, 5, 3)]), leerVon([g(...R1, 10, 5)]));
     expect(b.luecken).toEqual([]);
     expect(b.unzugeordnet.count).toBe(0);
   });
@@ -537,7 +547,7 @@ describe("Funde Runde 1", () => {
   test("fehlende Schlüssel (nicht nur null oder leer) für Modell und Umgebung sind unzugeordnet", () => {
     const b = rep(exp("gesamt", [{ traceName: "Abgleich", name: "Call", count_count: 2, sum_totalCost: 1 }]), tageVoll);
     expect(b.modell.zeilen[0]).toMatchObject({ name: "unzugeordnet", count: 2 });
-    expect(b.repo.zeilen[0]).toMatchObject({ name: "unzugeordnet", count: 2 });
+    expect(b.repo.zeilen[0]).toMatchObject({ name: "ohne Repo-Tag", count: 2 });
   });
   test("ein null-Eintrag in den Filtern wirft keinen TypeError", () => {
     const so = { column: "metadata", key: "agent_type", operator: "=", value: "Plan", type: "stringObject" };
@@ -557,14 +567,104 @@ describe("Funde Runde 1", () => {
       if (!a.timeDimension) return [z];
       return ["2026-11-01", "2026-11-02", "2026-11-03"].map((t) => ({ ...z, time_dimension: t }));
     };
-    const rez = L.rezept({ von: VON, bis: BIS });
+    const rez = L.rezept({ von: VON, bis: BIS, repoTags: ["repoA"] });
     const nimm = (art: string, key?: string, wert?: string) => rez.find((r) => r.art === art && (key === undefined || (r.abfrage.filters?.[1]?.key === key && r.abfrage.filters[1].value === wert)));
-    const wahl = [nimm("gesamt"), nimm("tage"), nimm("latenz"), nimm("leer"), nimm("metadaten", "agent_type", "hauptchat"), nimm("metadaten", "effort", "high")];
+    const wahl = [nimm("gesamt"), nimm("tage"), nimm("latenz"), nimm("leer"), nimm("metadaten", "agent_type", "hauptchat"), nimm("metadaten", "effort", "high"), nimm("repo")];
     const b = L.bericht(wahl.map((r) => lese({ art: r?.art, abfrage: r?.abfrage, data: r ? zeilen(r.abfrage) : [] })));
     expect(nimm("tage")?.abfrage.dimensions).toEqual([]);
     expect(b.luecken).toEqual([]);
     expect(b.unzugeordnet).toEqual({ count: 0, cost: 0 });
     expect(b.rolle.zeilen[0]).toMatchObject({ name: "hauptchat", count: 10 });
+    expect(b.repo.zeilen.map((z) => z.name)).toEqual(["repoA"]);
+  });
+});
+
+describe("Repo-Tag (factory#523)", () => {
+  const ohneTag = ["Claude Code Turn", "LLM Call", "claude-haiku-5", "repoA"] as const; // environment gleich Repo-Name, aber ohne Repo-Tag
+  test("Rezept: je Repo-Tag ein Export mit tags-Filter [Tag, project:Tag], Basis- und Leer-Filter, Dimensionen und Metriken; ohne repoTags keiner", () => {
+    expect(L.rezept({ von: VON, bis: BIS }).some((r) => r.art === "repo")).toBe(false);
+    const r = L.rezept({ von: VON, bis: BIS, repoTags: ["a", "b"] }).filter((x) => x.art === "repo");
+    expect(r.map((x) => x.name)).toEqual(["repo a", "repo b"]);
+    const f = r[0]?.abfrage.filters as unknown as { column: string; value: unknown }[];
+    expect(f.at(-1)).toEqual({ column: "tags", operator: "any of", type: "arrayOptions", value: ["a", "project:a"] });
+    expect(f.some((x) => x.column === "providedModelName")).toBe(true);
+    expect(f.some((x) => x.column === "type")).toBe(true);
+    expect(r[0]?.abfrage.dimensions?.map((d) => d.field)).toEqual(["traceName", "name", "providedModelName", "environment"]);
+    expect(r[0]?.abfrage.metrics?.map((m) => m.measure)).toEqual(["count", "totalCost", "latency"]);
+  });
+  test("Rezept mit Projektfilter: der Repo-Export trägt beide tags-Filter und der Leser nimmt ihn an", () => {
+    const pf = { column: "tags", operator: "any of", type: "arrayOptions", value: ["factory", "repoA", "project:repoA"] };
+    const r = L.rezept({ von: VON, bis: BIS, projektFilter: pf, repoTags: ["repoA"] }).find((x) => x.art === "repo");
+    expect(r?.abfrage.filters?.filter((x) => x.column === "tags")).toHaveLength(2);
+    expect(() => lese({ art: "repo", abfrage: r?.abfrage, data: [] })).not.toThrow();
+  });
+  test("Leser: der Repo-Tag kommt aus dem tags-Filter, nicht aus name; ohne passenden oder mit mehreren Filtern ist es ein Formfehler", () => {
+    expect(() => lese({ ...repoA, name: undefined })).not.toThrow();
+    expect(rep(...basis.filter((e) => e !== repoA), { ...repoA, name: "egal" }).repo.zeilen.map((z) => z.name)).toContain("repoA");
+    const mit = (filters: unknown[]) => ({ ...repoA, abfrage: { ...repoA.abfrage, filters } });
+    const tags = (value: string[]) => ({ column: "tags", operator: "any of", type: "arrayOptions", value });
+    expect(() => lese(mit([FILTER, LEER_FILTER]))).toThrow(/genau einen Filter tags any of/);
+    expect(() => lese(mit([FILTER, LEER_FILTER, tags(["repoA"])]))).toThrow(/genau einen Filter tags any of/);
+    expect(() => lese(mit([FILTER, LEER_FILTER, tags(["repoA", "project:anderes"])]))).toThrow(/genau einen Filter/);
+    expect(() => lese(mit([FILTER, LEER_FILTER, tags(["repoA", "project:repoA"]), tags(["repoB", "project:repoB"])]))).toThrow(/genau einen Filter/);
+    expect(() => lese(mit([FILTER, LEER_FILTER, tags(["factory", "repoA", "project:repoA"]), tags(["repoA", "project:repoA"])]))).not.toThrow();
+    expect(() => lese(mit([FILTER, LEER_FILTER, { ...tags(["repoA", "project:repoA"]), operator: "none of" }]))).toThrow(/genau einen Filter/);
+    expect(() => lese(mit([FILTER, LEER_FILTER, tags(["repoA", "project:repoA", "x"])]))).toThrow(/genau einen Filter/);
+    expect(() => lese(mit([FILTER, LEER_FILTER, tags(["", "project:"])]))).toThrow(/genau einen Filter/);
+    expect(() => lese(mit([FILTER, LEER_FILTER, tags(["repoA", "project:repoA"]), tags(["repoA", "project:repoA"])]))).not.toThrow(); // derselbe Tag zweimal ist kein Widerspruch
+  });
+  test("zwei Exporte desselben Repo-Tags sind mehrfach, verschiedene Tags nicht", () => {
+    expect(() => rep(...basis, repoA)).toThrow(/Export repo repo=repoA mehrfach/);
+    expect(() => rep(...basis)).not.toThrow();
+  });
+  test("Repo kommt aus dem Repo-Tag: eine Generation ohne Tag steht als Lücke „ohne Repo-Tag“ mit Anzahl, Kosten und Grund, nie unter einem Repo", () => {
+    const b = rep(exp("gesamt", [...gesamtRows, g(...ohneTag, 3, 1.5)]), tageVoll, repoA, repoB);
+    expect(b.repo.zeilen.map((z) => [z.name, z.count, z.cost])).toEqual([["repoA", 30, 15], ["repoB", 4, 2], ["ohne Repo-Tag", 3, 1.5]]);
+    expect(unzZeile(b.repo).name).toBe("ohne Repo-Tag");
+    const l = b.luecken.find((x) => x.startsWith("ohne Repo-Tag:"));
+    expect(l).toContain("3 Calls, 1.50 $");
+    expect(l).toContain("Session außerhalb eines Repos");
+    expect(l).toContain("CC_LANGFUSE_TRACE_TAGS");
+    expect(l).toContain("Daten vor dem Eintrag des Repo-Tags"); // der Kern trägt kein festes Datum
+    expect(l).not.toContain("Stichtag");
+    expect(b.luecken.filter((x) => x.startsWith("Repo:"))).toEqual([]);
+    expect(L.renderMarkdown(b)).toContain("| ohne Repo-Tag | 3 |");
+  });
+  test("ohne Repo-Export: alle Calls ohne Repo-Tag mit Grund, keine Repo-Zeile außer der Lücke", () => {
+    const b = rep(...basis.filter((e) => e.art !== "repo"));
+    expect(b.repo.zeilen.map((z) => [z.name, z.count])).toEqual([["ohne Repo-Tag", 34]]);
+    expect(b.luecken.find((x) => x.startsWith("ohne Repo-Tag:"))).toContain("34 Calls, 17.00 $ (Grund: kein Repo-Export");
+    expect(b.luecken.filter((x) => /Repo/.test(x))).toHaveLength(1); // keine zweite Lücke „kein Metadaten-Export“
+  });
+  test("Kosten null (ohne Preis) in der Lücke: „Lücke: ohne Preis“ bzw. „mindestens“, nie 0 $", () => {
+    const b = rep(exp("gesamt", [...gesamtRows, { ...g(...ohneTag, 3, 0), sum_totalCost: null }]), tageVoll, repoA, repoB);
+    const l = b.luecken.find((x) => x.startsWith("ohne Repo-Tag:")) ?? "";
+    expect(l).toContain("Lücke: ohne Preis (claude-haiku-5)");
+    expect(l).not.toContain("0.00 $");
+    expect(L.renderMarkdown(b)).toMatch(/\| ohne Repo-Tag \| 3 \|.*Lücke: ohne Preis/);
+  });
+  test("Mehrfachzuordnung (Generation mit zwei Repo-Tags) ist „Exporte nicht konsistent“, kein negatives Repo", () => {
+    const b = rep(...basis, repoEx("repoC", [g(...R3, 4, 2, 7)]));
+    expect(b.luecken.join("\n")).toMatch(/Repo: Exporte nicht konsistent/);
+    expect(b.repo.zeilen.every((z) => z.count >= 0 && z.cost >= 0)).toBe(true);
+  });
+  test("ein Repo-Tag mit dem Wortlaut unbekannt ist ein Repo, nie „unzugeordnet“", () => {
+    const b = rep(...basis.filter((e) => e !== repoA), repoEx("unbekannt", [g(...R1, 10, 5, 3), g(...R2, 20, 10, 3)]));
+    expect(b.repo.zeilen.map((z) => z.name)).toContain("unbekannt");
+    expect(b.repo.davon.unbekannt.count).toBe(0);
+  });
+  test("genau ein Call ohne Repo-Tag ist schon eine Lücke (Grenze 0/1)", () => {
+    const b = rep(exp("gesamt", [...gesamtRows, g(...ohneTag, 1, 0.5)]), tageVoll, repoA, repoB);
+    expect(b.luecken.find((x) => x.startsWith("ohne Repo-Tag:"))).toContain("1 Calls, 0.50 $");
+  });
+  test("ohne Calls ohne Repo-Tag: keine Zeile und keine Lücke", () => {
+    const b = rep(...basis);
+    expect(b.repo.zeilen.some((z) => z.name === "ohne Repo-Tag")).toBe(false);
+    expect(b.luecken.some((x) => x.startsWith("ohne Repo-Tag"))).toBe(false);
+  });
+  test("negative Latenz in einer Repo-Zelle macht die Gruppe zur Lücke, nicht zum Repo", () => {
+    const b = rep(...basis.filter((e) => e !== repoA), repoEx("repoA", [g(...R1, 10, 5, -1), g(...R2, 20, 10, 3)]));
+    expect(b.luecken.join("\n")).toMatch(/Repo: 1 Gruppe\(n\) mit negativer Latenz/);
   });
 });
 
@@ -621,6 +721,17 @@ describe("CLI", () => {
     expect(r.exitCode).toBe(0);
     const werte = (JSON.parse(r.text) as { abfrage: Ex["abfrage"] }[]).map((x) => x.abfrage.filters?.[1]?.value);
     expect(werte).toEqual(expect.arrayContaining(["mein-agent", "extra"]));
+  });
+  test("--rezept enthält einen Export repo für das eigene Repo und je --repo-tag einen weiteren (factory#523)", () => {
+    const namen = (argv: string[], deps: Record<string, unknown> = { repoName: "eigen" }) => (JSON.parse(C.auswerten(C.parseArgs(["--rezept", "--von", VON, "--bis", BIS, ...argv]), deps).text) as { art: string; name: string }[]).filter((x) => x.art === "repo").map((x) => x.name);
+    expect(namen([])).toEqual(["repo eigen"]);
+    expect(namen(["--repo-tag", "fremd", "--repo-tag", "eigen"])).toEqual(["repo eigen", "repo fremd"]);
+  });
+  test("--rezept ohne Injektion nimmt den Repo-Namen aus der Projekt-Config", () => {
+    const r = JSON.parse(C.auswerten(C.parseArgs(["--rezept", "--von", VON, "--bis", BIS])).text) as { art: string; name: string }[];
+    expect(r.filter((x) => x.art === "repo")).toHaveLength(1);
+    const wurzel = fileURLToPath(new URL("../", import.meta.url));
+    expect(r.find((x) => x.art === "repo")?.name).toBe(`repo ${repoNameRoh(ladeConfigRoh({ rootDir: wurzel }))}`);
   });
   test("rezept: bis allein, ungültige Zeiten, von gleich bis und ein fehlender Agentenordner sind Fehler", () => {
     erwarte(["--rezept", "--bis", BIS], 2, "--rezept braucht");
