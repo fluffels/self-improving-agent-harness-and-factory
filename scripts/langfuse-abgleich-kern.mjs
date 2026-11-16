@@ -17,6 +17,8 @@ import { beobachtungsId, traceIdVon } from "./langfuse-otlp.mjs";
 export const RUHEFRIST_MIN = 30;
 /** Obergrenze der Metrics-Zeilen; wird sie erreicht, ist das Ergebnis abgeschnitten (fail-closed, nie still kürzen). */
 export const ROW_LIMIT = 1000;
+/** Modell der leeren Hook-GENERATIONs (factory#522); gleich `LEER_MODELL` der Auswertungs-Lib (nicht importiert: Import-Hülle des Nachlieferers, ein Test sichert die Gleichheit). */
+export const LEER_MODELL = "claude";
 
 // ── Stichtag, Fristen und Ledger (geteilt von Abgleich und Nachlieferer, Konvention #1398) ──
 
@@ -174,7 +176,7 @@ export function istAbfragen({ von, bis, session = null }) {
   if (session) filters.push({ column: "sessionId", operator: "=", value: session, type: "string" });
   const basis = { view: "observations", filters, fromTimestamp: von, toTimestamp: bis, config: { row_limit: ROW_LIMIT } };
   return {
-    zaehlung: { ...basis, dimensions: [{ field: "sessionId" }], metrics: [{ measure: "count", aggregation: "count" }], orderBy: [{ field: "count_count", direction: "desc" }] },
+    zaehlung: { ...basis, dimensions: [{ field: "sessionId" }, { field: "providedModelName" }], metrics: [{ measure: "count", aggregation: "count" }], orderBy: [{ field: "count_count", direction: "desc" }] },
     tokens: {
       ...basis,
       dimensions: [{ field: "sessionId" }, { field: "usageType" }],
@@ -204,7 +206,9 @@ export function istAusMetrics(zeilen) {
     const e = map.get(r.sessionId) ?? { calls: null, tokens: null, kosten: null };
     map.set(r.sessionId, e);
     const count = zahl(r.count_count);
-    if (count !== null) e.calls = (e.calls ?? 0) + count;
+    if (count !== null && r.providedModelName === LEER_MODELL) e.leer = (e.leer ?? 0) + count;
+    else if (count !== null) e.calls = (e.calls ?? 0) + count;
+    if (count !== null && "providedModelName" in r) e.modellGetrennt = true;
     const kosten = zahl(r.sum_totalCost);
     if (kosten !== null) e.kosten = (e.kosten ?? 0) + kosten;
     const wert = zahl(r.sum_usageByType);

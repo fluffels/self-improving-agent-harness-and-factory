@@ -21,6 +21,8 @@ import * as rawOtlp from "../../scripts/langfuse-otlp.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawKern from "../../scripts/langfuse-abgleich-kern.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as rawAuswertung from "../../scripts/langfuse-auswertung-lib.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawBase from "../../scripts/token-baseline.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawPreise from "../../scripts/preise.mjs";
@@ -291,7 +293,7 @@ describe("Session-Auswahl", () => {
 describe("Ist: Abfragen und Antwortformen", () => {
   test("Abfragen: GENERATION-Filter, Dimension sessionId, orderBy desc, row_limit; --session filtert zusätzlich", () => {
     const q = A.istAbfragen({ von: "2026-10-01T00:00:00Z", bis: "2026-10-09T00:00:00Z" });
-    expect(q.zaehlung).toMatchObject({ view: "observations", dimensions: [{ field: "sessionId" }], config: { row_limit: A.ROW_LIMIT }, orderBy: [{ field: "count_count", direction: "desc" }] });
+    expect(q.zaehlung).toMatchObject({ view: "observations", dimensions: [{ field: "sessionId" }, { field: "providedModelName" }], config: { row_limit: A.ROW_LIMIT }, orderBy: [{ field: "count_count", direction: "desc" }] });
     expect(q.zaehlung.filters).toEqual([{ column: "type", operator: "=", value: "GENERATION", type: "string" }]);
     expect(q.tokens.dimensions).toEqual([{ field: "sessionId" }, { field: "usageType" }]);
     const mit = A.istAbfragen({ von: "a", bis: "b", session: "s9" });
@@ -1105,7 +1107,7 @@ describe("pruefen (Ablauf)", () => {
     };
     expect((await lauf(2)).text).toContain("leere Hook-GENERATIONs");
     expect((await lauf(2)).text).toContain("1 Session(s) mit Dubletten auf der Zählebene (s1)");
-    expect((await lauf(2)).text).toContain("providedModelName none of");
+    expect((await lauf(2)).text).toContain("keine Dimension providedModelName");
     expect((await lauf(1)).text).not.toContain("leere Hook-GENERATIONs");
     const b = { session: "s1", status: "Dublette", score: null, tickets: [], callsTranskript: 1, callsLangfuse: 2, tokensTranskript: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }, tokensLangfuse: null, kostenTranskript: 0, kostenLangfuse: null, ohnePreis: 0, ueberzaehlung: null, hinweisModellpreis: false, fehlend: 0, dubletten: 1, leer: 0, quote: 1, fehlendeCalls: null, schluessel: "fingerprint" };
     const sum = A.summenzeile([b]);
@@ -1120,8 +1122,37 @@ describe("pruefen (Ablauf)", () => {
     expect(hinweis).not.toContain("s3");
   });
 
-  test("Ohne Zugang nennt der Hinweis den Zähl-Filter gegen leere Hook-GENERATIONs (providedModelName none of claude)", () => {
-    expect(A.ohneZugang()).toContain('Filter providedModelName none of ["claude"]');
+  test("Ohne Zugang nennt der Hinweis die Zähl-Dimension providedModelName (Zeilen mit Modell claude zählen als leer, kein Filter)", () => {
+    expect(A.ohneZugang()).toContain("Dimensionen sessionId und providedModelName (Zeilen mit Modell claude zählen als leer");
+    expect(A.ohneZugang()).not.toContain("none of");
+  });
+
+  test("Zählebene (factory#522): Zeilen mit Modell claude zählen als leer, nicht als Dublette; Soll 1, Zeilen 1 + 42 ist vollständig", async () => {
+    const root = mitSession([msg("a")]);
+    const tokens = tokenZeilen("s1", { input: 10, output: 5, cacheRead: 100, w5: 10, w1: 30 });
+    const lauf = (zeilen: object[]) => {
+      const dateien: Record<string, string> = { "z.json": JSON.stringify({ data: zeilen }), "t.json": JSON.stringify(tokens) };
+      return A.pruefen(args({ ist: ["z.json", "t.json"], json: true }), { env: {}, now: SPAET(), projectsRoot: root, repoRoot: REPO, leseDatei: (p: string) => dateien[p] });
+    };
+    const ok = JSON.parse((await lauf([{ sessionId: "s1", providedModelName: "claude-opus-5-5", count_count: 1 }, { sessionId: "s1", providedModelName: "claude", count_count: 42 }])).text) as { sessions: Bewertung[] };
+    expect(ok.sessions[0]).toMatchObject({ status: "vollständig", dubletten: 0, fehlend: 0, leer: 42, callsLangfuse: 1 });
+    // Negativfall: ein echter zweiter Call mit Modell bleibt Dublette; nur claude fällt heraus.
+    const dub = JSON.parse((await lauf([{ sessionId: "s1", providedModelName: "claude-opus-5-5", count_count: 2 }, { sessionId: "s1", providedModelName: "claude", count_count: 42 }])).text) as { sessions: Bewertung[] };
+    expect(dub.sessions[0]).toMatchObject({ status: "Dublette", dubletten: 1, leer: 42 });
+    // Nur claude-Zeilen: Soll fehlt, nichts wird Dublette.
+    const nur = JSON.parse((await lauf([{ sessionId: "s1", providedModelName: "claude", count_count: 5 }])).text) as { sessions: Bewertung[] };
+    expect(nur.sessions[0]).toMatchObject({ status: "Lücke", dubletten: 0, leer: 5, callsLangfuse: 0 });
+  });
+
+  test("istAusMetrics: claude zählt in leer, die übrigen Zeilen in calls; ohne Dimension (alter Export) bleibt es bei calls, ohne leer und ohne Kennzeichen", () => {
+    const neu = A.istAusMetrics([{ sessionId: "s1", providedModelName: "claude-opus-5-5", count_count: 229 }, { sessionId: "s1", providedModelName: "claude", count_count: "42" }]);
+    expect(neu.get("s1")).toEqual({ calls: 229, leer: 42, modellGetrennt: true, tokens: null, kosten: null });
+    expect(A.istAusMetrics([{ sessionId: "s1", count_count: 3 }]).get("s1")).toEqual({ calls: 3, tokens: null, kosten: null });
+    expect(A.istAusMetrics([{ sessionId: "s1", providedModelName: null, count_count: 3 }]).get("s1")).toMatchObject({ calls: 3, modellGetrennt: true });
+  });
+
+  test("LEER_MODELL des Abgleichs und der Auswertung sind gleich (der Abgleich importiert die Lib nicht: Import-Hülle des Nachlieferers)", () => {
+    expect((rawKern as unknown as { LEER_MODELL: string }).LEER_MODELL).toBe((rawAuswertung as unknown as { LEER_MODELL: string }).LEER_MODELL);
   });
 
   test("Bericht: eine Lücke innerhalb der Nachlieferer-Frist heißt „Lücke, Nachlieferer wartet“, nie „vollständig, Score ausstehend“", async () => {

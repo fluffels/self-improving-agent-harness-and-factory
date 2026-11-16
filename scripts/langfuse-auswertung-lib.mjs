@@ -30,7 +30,11 @@ export const UNZUGEORDNET = "unzugeordnet";
 export const ROLLE_SCHLUESSEL = ["agent_type", "agent_role"];
 export const EFFORT_SCHLUESSEL = ["effort", "reasoning_effort"];
 export const QUELLEN = ["live", "nachgeliefert", "codex", "sonstige"];
-export const ARTEN = ["gesamt", "tage", "latenz", "metadaten"];
+export const ARTEN = ["gesamt", "tage", "latenz", "metadaten", "leer"];
+/** Modellname der leeren Hook-GENERATIONs des Plugins (factory#522: Modell `claude`, leere Usage, eine je Tool-Call). */
+export const LEER_MODELL = "claude";
+/** Filter aller Kosten- und Zähl-Abfragen; nur der Export `leer` trägt ihn nicht. */
+export const LEER_FILTER = { column: "providedModelName", operator: "none of", value: [LEER_MODELL], type: "stringOptions" };
 const EPS = 1e-9;
 const DIMS_GESAMT = ["traceName", "name", "providedModelName", "environment"];
 const MS_TAG = 86400000;
@@ -73,7 +77,8 @@ const dim = (felder) => felder.map((field) => ({ field }));
 
 /** Abfragen für den Agentenlauf (MCP `queryMetrics`); jede gespeicherte Antwort wird `{ art, abfrage, data }`. */
 export function rezept({ von, bis, rollen = [], efforts = EFFORT_STUFEN, codexRollen = ["main", "subagent"], projektFilter }) {
-  const b = (extra) => ({ ...basisAbfrage(von, bis, projektFilter), ...extra });
+  const basisFilter = basisAbfrage(von, bis, projektFilter).filters;
+  const b = (extra) => ({ ...basisAbfrage(von, bis, projektFilter), filters: [...basisFilter, LEER_FILTER], ...extra });
   const out = [
     { art: "gesamt", name: "gesamt", abfrage: b({ dimensions: dim(DIMS_GESAMT), metrics: [{ measure: "count", aggregation: "count" }, { measure: "totalCost", aggregation: "sum" }], orderBy: [{ field: "sum_totalCost", direction: "desc" }] }) },
     { art: "tage", name: "tage", abfrage: b({ dimensions: [], metrics: [{ measure: "count", aggregation: "count" }, { measure: "totalCost", aggregation: "sum" }], timeDimension: { granularity: "day" } }) },
@@ -92,10 +97,12 @@ export function rezept({ von, bis, rollen = [], efforts = EFFORT_STUFEN, codexRo
       abfrage: b({
         dimensions: dim(DIMS_GESAMT),
         metrics: [{ measure: "count", aggregation: "count" }, { measure: "totalCost", aggregation: "sum" }, { measure: "latency", aggregation: "min" }],
-        filters: [...basisAbfrage(von, bis, projektFilter).filters, { column: "metadata", key, operator: "=", value, type: "stringObject" }],
+        filters: [...basisFilter, { column: "metadata", key, operator: "=", value, type: "stringObject" }, LEER_FILTER],
       }),
     });
   }
+  const leerAbfrage = { ...basisAbfrage(von, bis, projektFilter), dimensions: dim(["providedModelName"]), metrics: [{ measure: "count", aggregation: "count" }, { measure: "totalCost", aggregation: "sum" }, { measure: "totalTokens", aggregation: "sum" }], orderBy: [{ field: "count_count", direction: "desc" }] };
+  out.push({ art: "leer", name: "leer", abfrage: leerAbfrage });
   return out;
 }
 
@@ -108,6 +115,10 @@ export const abgeschnittenFehler = (pfad, n) => Object.assign(fehler(pfad, `Expo
 const hatGenerationFilter = (abfrage) =>
   Array.isArray(abfrage?.filters) && abfrage.filters.some((f) => f?.column === "type" && f.operator === "=" && String(f.value).toUpperCase() === "GENERATION");
 
+const istLeerFilter = (f) => f?.column === "providedModelName" && f.operator === "none of" && Array.isArray(f.value) && f.value.includes(LEER_MODELL);
+const hatFilter = (abfrage, pred) => Array.isArray(abfrage?.filters) && abfrage.filters.some(pred);
+const hatModellDimension = (abfrage) => Array.isArray(abfrage?.dimensions) && abfrage.dimensions.some((d) => d?.field === "providedModelName");
+
 const fensterLesbar = (a) => !Number.isNaN(Date.parse(a.fromTimestamp)) && !Number.isNaN(Date.parse(a.toTimestamp));
 
 function pruefeKopf(json, pfad) {
@@ -118,6 +129,12 @@ function pruefeKopf(json, pfad) {
   if (!Array.isArray(json.data)) throw fehler(pfad, "data fehlt oder ist kein Array");
   if (!hatGenerationFilter(json.abfrage)) throw fehler(pfad, "Filter type = GENERATION fehlt (Spans mit Rolle unbekannt würden mitzählen)");
   if (!fensterLesbar(json.abfrage)) throw fehler(pfad, "Fenster (fromTimestamp/toTimestamp) fehlt oder ist kein Zeitstempel in abfrage");
+  if (json.art === "leer") {
+    if (hatFilter(json.abfrage, (f) => f?.column === "providedModelName")) throw fehler(pfad, "Export leer darf keinen Filter auf providedModelName tragen (er zählt gerade das Modell claude)");
+    if (!hatModellDimension(json.abfrage)) throw fehler(pfad, "Export leer braucht die Dimension providedModelName");
+  } else if (!hatFilter(json.abfrage, istLeerFilter)) {
+    throw fehler(pfad, "Filter providedModelName none of [claude] fehlt (die leeren Hook-Generations würden mitzählen, factory#522)");
+  }
   if (json.data.length >= ROW_LIMIT) throw abgeschnittenFehler(pfad, json.data.length);
 }
 
@@ -147,17 +164,26 @@ function zeileVon(r, art, pfad, i) {
   if (!numerisch(r?.count_count) || !kostenOk(r?.sum_totalCost)) {
     throw fehler(pfad, `${zeigeZeile(art, i)} ohne numerische Metriken count_count und sum_totalCost`);
   }
-  const kosten = { count: Number(r.count_count), cost: Number(r.sum_totalCost), ohnePreis: r.sum_totalCost === null && Number(r.count_count) > 0 };
+  const kosten = { count: Number(r.count_count), cost: Number(r.sum_totalCost), ohnePreis: r.sum_totalCost === null ? Number(r.count_count) : 0 };
   if (art === "gesamt") return { ...z, key: keyVon(z), ...kosten, minLatency: null };
   if (!numerisch(r.min_latency)) throw fehler(pfad, `${zeigeZeile(art, i)} ohne numerisches min_latency (Negativ-Latenz nicht prüfbar)`);
   return { ...z, key: keyVon(z), ...kosten, minLatency: Number(r.min_latency) };
+}
+
+/** Zeile des Exports `leer`: Modell, Calls, Kosten (null = ohne Preis, zählt 0) und Tokens (null = 0); fehlende oder nicht numerische Werte sind ein Formfehler. */
+function leerZeileVon(r, pfad, i) {
+  if (!numerisch(r?.count_count) || !kostenOk(r?.sum_totalCost) || !kostenOk(r?.sum_totalTokens)) {
+    throw fehler(pfad, `${zeigeZeile("leer", i)} ohne numerische Metriken count_count, sum_totalCost und sum_totalTokens`);
+  }
+  return { providedModelName: r.providedModelName ?? null, count: Number(r.count_count), cost: Number(r.sum_totalCost ?? 0), tokens: Number(r.sum_totalTokens ?? 0) };
 }
 
 /** Prüft einen Export und liefert `{ art, pfad, von, bis, data, zeilen, schluessel?, wert? }`; wirft bei jedem Formfehler. */
 export function leseExport(json, pfad) {
   pruefeKopf(json, pfad);
   const ex = { art: json.art, pfad, von: json.abfrage.fromTimestamp, bis: json.abfrage.toTimestamp, data: json.data };
-  ex.zeilen = json.art === "tage" ? [] : json.data.map((r, i) => zeileVon(r, json.art, pfad, i));
+  if (json.art === "leer") ex.zeilen = json.data.map((r, i) => leerZeileVon(r, pfad, i));
+  else ex.zeilen = json.art === "tage" ? [] : json.data.map((r, i) => zeileVon(r, json.art, pfad, i));
   return json.art === "metadaten" ? { ...ex, ...metaFilter(json.abfrage, pfad) } : ex;
 }
 
@@ -193,9 +219,21 @@ export function tagesLuecken(von, bis, tageData) {
 /** Gesamt-Zeilen tragen `minLatency: null` (`null < 0` ist falsch), Latenz- und Metadaten-Zeilen eine Zahl. */
 const istNegativ = (z) => z.minLatency < 0;
 const summe = (liste) => liste.reduce((s, z) => ({ count: s.count + z.count, cost: s.cost + z.cost }), { count: 0, cost: 0 });
+const vereinige = (a, b) => [...new Set([...(a ?? []), ...(b ?? [])])].sort(sortName);
+/** Wie `summe`, dazu `ohnePreis` (Calls ohne Preis) und `modelle` dieser Calls (factory#522: Kosten sind dann nur eine Untergrenze). */
+const summeP = (liste) => ({ ...summe(liste), ohnePreis: liste.reduce((s, z) => s + (z.ohnePreis ?? 0), 0), modelle: liste.reduce((m, z) => vereinige(m, z.modelle), []) });
+const nurPreis = (p) => ({ ohnePreis: p.ohnePreis, modelle: p.modelle });
+
+/** Betrag einer Gruppe: ohne Preislücke die Dollarzahl, komplett ohne Preis die Lücke, sonst die Untergrenze (nie 0 $ für fehlende Preise). */
+export function betrag({ cost, count, ohnePreis = 0, modelle = [] }) {
+  if (!(ohnePreis > 0)) return usd(cost);
+  if (ohnePreis >= count) return `Lücke: ohne Preis (${modelle.join(", ")})`;
+  return `mindestens ${usd(cost)}, ohne ${ohnePreis} Calls`;
+}
 
 function anreichern(z) {
-  return { ...z, quelle: quelleVon(z.traceName, z.name), modell: leer(z.providedModelName) ? UNZUGEORDNET : z.providedModelName, repo: leer(z.environment) || z.environment === "default" ? UNZUGEORDNET : z.environment };
+  const modell = leer(z.providedModelName) ? UNZUGEORDNET : z.providedModelName;
+  return { ...z, modell, modelle: z.ohnePreis > 0 ? [modell] : [], quelle: quelleVon(z.traceName, z.name), repo: leer(z.environment) || z.environment === "default" ? UNZUGEORDNET : z.environment };
 }
 
 /** Teilt `gesamt` in Basis (geht in die bereinigten Summen), Audit-Kopien und Gruppen mit negativer Latenz. */
@@ -209,12 +247,12 @@ function teile(gesamtZeilen, latenzZeilen) {
     if (istAudit(z.name)) audit.push(z);
     else if (negativ.has(z.key)) neg.push(z);
     else {
-      basis.set(z.key, basis.has(z.key) ? { ...z, ...summe([basis.get(z.key), z]) } : z);
+      basis.set(z.key, basis.has(z.key) ? { ...z, ...summeP([basis.get(z.key), z]) } : z);
       if (z.ohnePreis) ohnePreis.push(z);
     }
   }
   const ausgeschlossen = new Set([...audit, ...neg].map((z) => z.key));
-  return { basis, audit: summe(audit), negativ: { gruppen: neg.length, ...summe(neg) }, ausgeschlossen, ohnePreis };
+  return { basis, audit: summeP(audit), negativ: { gruppen: neg.length, ...summeP(neg) }, ausgeschlossen, ohnePreis };
 }
 
 const zellenLabel = (z) => (z.wert === "unbekannt" ? UNZUGEORDNET : z.schluessel === "agent_type" ? z.wert : `${z.schluessel}:${z.wert}`);
@@ -231,8 +269,8 @@ function zellenPosten(teil, metaExporte) {
     } else if (istNegativ(z)) {
       st.kaputt.add(z.key);
     } else {
-      st.zugeteilt.set(z.key, summe([st.zugeteilt.get(z.key) ?? { count: 0, cost: 0 }, z]));
-      st.posten.push({ key: z.key, quelle: b.quelle, label: zellenLabel(z), count: z.count, cost: z.cost, art: z.wert === "unbekannt" ? "unbekannt" : "wert" });
+      st.zugeteilt.set(z.key, summeP([st.zugeteilt.get(z.key) ?? { count: 0, cost: 0 }, z]));
+      st.posten.push({ key: z.key, quelle: b.quelle, label: zellenLabel(z), count: z.count, cost: z.cost, ohnePreis: z.ohnePreis, modelle: z.ohnePreis > 0 ? [b.modell] : [], art: z.wert === "unbekannt" ? "unbekannt" : "wert" });
     }
   }
   return st;
@@ -246,10 +284,10 @@ function restPosten(teil, st) {
   const out = { posten: [], inkonsistent: 0, luecke: { count: 0, cost: 0 } };
   for (const b of teil.basis.values()) {
     const z = st.zugeteilt.get(b.key) ?? { count: 0, cost: 0 };
-    const rest = { count: b.count - z.count, cost: b.cost - z.cost };
+    const rest = { count: b.count - z.count, cost: b.cost - z.cost, ohnePreis: Math.max(0, (b.ohnePreis ?? 0) - (z.ohnePreis ?? 0)) };
     if (st.kaputt.has(b.key)) out.luecke = summe([out.luecke, b]);
     else if (restKaputt(rest)) out.inkonsistent += 1;
-    else out.posten.push({ key: b.key, quelle: b.quelle, label: UNZUGEORDNET, count: rest.count, cost: Math.max(0, rest.cost), art: "rest" });
+    else out.posten.push({ key: b.key, quelle: b.quelle, label: UNZUGEORDNET, count: rest.count, cost: Math.max(0, rest.cost), ohnePreis: rest.ohnePreis, modelle: rest.ohnePreis > 0 ? b.modelle : [], art: "rest" });
   }
   return out;
 }
@@ -268,14 +306,23 @@ function dimensionPosten(teil, metaExporte, name) {
 const usd = (x) => `${x.toFixed(2)} $`;
 
 /** Gruppiert Posten je Label; die Zeile „unzugeordnet“ steht immer (auch mit 0). */
+const leerePosten = () => ({ count: 0, cost: 0, ohnePreis: 0, modelle: [] });
+const addPosten = (ziel, p) => {
+  ziel.count += p.count;
+  ziel.cost += p.cost;
+  ziel.ohnePreis += p.ohnePreis ?? 0;
+  ziel.modelle = vereinige(ziel.modelle, p.modelle);
+};
+
 export function tabelle(posten) {
-  const zeilen = new Map([[UNZUGEORDNET, { name: UNZUGEORDNET, count: 0, cost: 0, quellen: {} }]]);
+  const zeilen = new Map([[UNZUGEORDNET, { name: UNZUGEORDNET, ...leerePosten(), quellen: {}, quellenInfo: {} }]]);
   const davon = { unbekannt: { count: 0, cost: 0 }, ohneSchluessel: { count: 0, cost: 0 } };
   for (const p of posten) {
-    const z = zeilen.get(p.label) ?? { name: p.label, count: 0, cost: 0, quellen: {} };
-    z.count += p.count;
-    z.cost += p.cost;
+    const z = zeilen.get(p.label) ?? { name: p.label, ...leerePosten(), quellen: {}, quellenInfo: {} };
+    addPosten(z, p);
     z.quellen[p.quelle] = (z.quellen[p.quelle] ?? 0) + p.cost;
+    z.quellenInfo[p.quelle] ??= leerePosten();
+    addPosten(z.quellenInfo[p.quelle], p);
     zeilen.set(p.label, z);
     if (p.label === UNZUGEORDNET) {
       const ziel = p.art === "unbekannt" ? davon.unbekannt : davon.ohneSchluessel;
@@ -286,10 +333,10 @@ export function tabelle(posten) {
   const alle = [...zeilen.values()];
   const rest = alle.filter((z) => z.name === UNZUGEORDNET);
   const rang = alle.filter((z) => z.name !== UNZUGEORDNET).sort((a, b) => b.cost - a.cost || sortName(a.name, b.name));
-  return { zeilen: [...rang, ...rest], summe: summe(alle), davon };
+  return { zeilen: [...rang, ...rest], summe: summe(alle), preis: nurPreis(summeP(alle)), davon };
 }
 
-const postenAusBasis = (basis, feld) => [...basis.values()].map((b) => ({ quelle: b.quelle, label: b[feld], count: b.count, cost: b.cost, art: "wert" }));
+const postenAusBasis = (basis, feld) => [...basis.values()].map((b) => ({ quelle: b.quelle, label: b[feld], count: b.count, cost: b.cost, ohnePreis: b.ohnePreis, modelle: b.modelle, art: "wert" }));
 
 /** Lücke für Gruppen mit Calls, aber ohne Preis (Kosten null): die Summen zählen sie mit 0 $, das ist nie still. */
 function preisLuecke(ohnePreis) {
@@ -308,6 +355,7 @@ export function bericht(exporte) {
   const tageFehlend = tage ? tagesLuecken(gesamt.von, gesamt.bis, tage.data) : null;
   const rolle = dimensionPosten(teil, exporte.filter((e) => e.art === "metadaten" && ROLLE_SCHLUESSEL.includes(e.schluessel)), "Rolle");
   const effort = dimensionPosten(teil, exporte.filter((e) => e.art === "metadaten" && EFFORT_SCHLUESSEL.includes(e.schluessel)), "Effort");
+  const leer2 = leerAuswerten(exporte.find((e) => e.art === "leer"), summe(gesamt.zeilen).count);
   const luecken = [
     ...(tage ? [] : ["Tage nicht geprüft (Export tage fehlt)"]),
     ...(tageFehlend?.length ? [`Tage ohne Daten: ${tageFehlend.join(", ")}`] : []),
@@ -316,14 +364,17 @@ export function bericht(exporte) {
     ...(teil.negativ.gruppen ? [`negative Latenzen: ${teil.negativ.gruppen} Gruppe(n) mit min_latency unter 0, ${teil.negativ.count} Calls (${usd(teil.negativ.cost)}), aus allen Summen genommen`] : []),
     ...rolle.luecken,
     ...effort.luecken,
+    ...leer2.luecken,
   ];
-  const basisSumme = summe([...teil.basis.values()]);
+  const basisSumme = summeP([...teil.basis.values()]);
   return {
     fenster: { von: gesamt.von, bis: gesamt.bis },
     vermerk: tage ? (tageFehlend.length ? ` (ohne Tag ${tageFehlend.join(", ")})` : "") : " (Tage nicht geprüft)",
     roh: summe([basisSumme, teil.audit, teil.negativ]),
-    bereinigt: basisSumme,
-    audit: teil.audit,
+    bereinigt: summe([basisSumme]),
+    preis: { roh: nurPreis(summeP([basisSumme, teil.audit, teil.negativ])), bereinigt: nurPreis(basisSumme) },
+    leer: leer2.leer,
+    audit: summe([teil.audit]),
     negativ: { gruppen: teil.negativ.gruppen, count: teil.negativ.count, cost: teil.negativ.cost },
     quelle: tabelle(postenAusBasis(teil.basis, "quelle")),
     modell: tabelle(postenAusBasis(teil.basis, "modell")),
@@ -335,6 +386,24 @@ export function bericht(exporte) {
     dubletten: "Dubletten Live/Nachgeliefert: nicht abgezogen (Stichprobe factory#286: keine belegt)",
   };
 }
+
+/**
+ * Leere Hook-Generations (Modell `claude`, Tokens 0) aus dem Kontroll-Export `leer`: Anzahl für die eigene Zeile, nie in Summen.
+ * Modell `claude` mit Tokens über 0 ist keine leere Generation, sondern eine Datenlücke; die Summe aller Zeilen ohne `claude` muss die Calls von `gesamt` ergeben, sonst schließt der Filter (NULL-Modell) still etwas aus.
+ */
+function leerAuswerten(ex, gesamtCalls) {
+  if (!ex) return { leer: null, luecken: ["leere Hook-Generations: nicht geprüft (Export leer fehlt)"] };
+  const claude = ex.zeilen.filter((z) => z.providedModelName === LEER_MODELL);
+  const mitUsage = summe(claude.filter((z) => z.tokens > 0));
+  const tokens = claude.filter((z) => z.tokens > 0).reduce((s, z) => s + z.tokens, 0);
+  const luecken = [];
+  if (mitUsage.count > 0) luecken.push(`Modell claude mit Usage: ${mitUsage.count} Calls, ${tokens} Tokens (nicht in Summen, keine leeren Hook-Generations)`);
+  const ohneClaude = summe(ex.zeilen.filter((z) => z.providedModelName !== LEER_MODELL)).count;
+  if (ohneClaude !== gesamtCalls) luecken.push(`Kontrolle leere Hook-Generations: Export leer führt ${ohneClaude} Calls ohne Modell claude, gesamt ${gesamtCalls} (Differenz ${gesamtCalls - ohneClaude}: der Filter none of schließt Generations aus, z. B. ohne Modell, oder das Fenster war noch offen)`);
+  return { leer: { count: summe(claude.filter((z) => z.tokens === 0)).count }, luecken };
+}
+
+const leerZeile = (l) => (l ? `leere Hook-Generations: ${l.count} (nicht gezählt)` : "leere Hook-Generations: nicht geprüft (Export leer fehlt)");
 
 /** Generations ohne Rolle (Schlüssel fehlt oder `unbekannt`) oder ohne Modell; ohne Rollen-Export gilt alles als ohne Rolle. */
 function unzugeordnetGesamt(teil, rolle) {
@@ -348,7 +417,7 @@ function unzugeordnetGesamt(teil, rolle) {
 const quellenKopf = "| Name | Calls | Live | Nachgeliefert | Codex | sonstige | Σ |";
 
 function tabellenZeilen(t) {
-  return t.zeilen.map((z) => `| ${z.name} | ${z.count} | ${QUELLEN.map((q) => usd(z.quellen[q] ?? 0)).join(" | ")} | ${usd(z.cost)} |`);
+  return t.zeilen.map((z) => `| ${z.name} | ${z.count} | ${QUELLEN.map((q) => betrag(z.quellenInfo[q] ?? leerePosten())).join(" | ")} | ${betrag(z)} |`);
 }
 
 function abschnitt(titel, t, vermerk, mitDavon) {
@@ -364,7 +433,8 @@ export function renderMarkdown(b) {
   return [
     `# Langfuse-Auswertung ${b.fenster.von} bis ${b.fenster.bis}`,
     "",
-    `Gesamt${v}: roh ${usd(b.roh.cost)} (${b.roh.count} Calls), bereinigt ${usd(b.bereinigt.cost)} (${b.bereinigt.count} Calls; ohne negative Latenzen ${n.count} Calls ${usd(n.cost)}, ohne doppelte Audit-Markierungen ${b.audit.count} Calls ${usd(b.audit.cost)}).`,
+    `Gesamt${v}: roh ${betrag({ ...b.roh, ...b.preis.roh })} (${b.roh.count} Calls), bereinigt ${betrag({ ...b.bereinigt, ...b.preis.bereinigt })} (${b.bereinigt.count} Calls; ohne negative Latenzen ${n.count} Calls ${usd(n.cost)}, ohne doppelte Audit-Markierungen ${b.audit.count} Calls ${usd(b.audit.cost)}).`,
+    leerZeile(b.leer),
     b.dubletten,
     `unzugeordnet${v}: ${b.unzugeordnet.count} Calls (${usd(b.unzugeordnet.cost)}) ohne Rolle oder ohne Modell.`,
     "",

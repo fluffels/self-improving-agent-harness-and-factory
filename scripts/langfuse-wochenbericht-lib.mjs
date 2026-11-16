@@ -13,7 +13,7 @@
  */
 
 import { projektFilterTags } from "./langfuse-otlp.mjs";
-import { ABGESCHNITTEN, ROW_LIMIT, bericht, leseExport, pruefeProjektFilter, renderMarkdown, rezept } from "./langfuse-auswertung-lib.mjs";
+import { ABGESCHNITTEN, ROW_LIMIT, bericht, betrag, leseExport, pruefeProjektFilter, renderMarkdown, rezept } from "./langfuse-auswertung-lib.mjs";
 
 export const MS_TAG = 86400000;
 export const MS_WOCHE = 7 * MS_TAG;
@@ -203,12 +203,20 @@ export function mergeAnzahl(text) {
   return j.total_count;
 }
 
+/** Calls, Calls ohne Preis und deren Modelle der bereinigten Summe (Bericht ohne `preis`, z. B. von Hand gebaut: kein Preisausfall). */
+const preisVon = (b) => ({ count: b.bereinigt.count, ohnePreis: b.preis?.bereinigt?.ohnePreis ?? 0, modelle: b.preis?.bereinigt?.modelle ?? [] });
+
+/** Grund, warum ein Δ fehlt (Woche komplett ohne Preis, sonst die Vorwoche ohne Kosten). */
+const nichtBewertbar = (k) => (k.preis.woche.count > 0 && k.preis.woche.ohnePreis >= k.preis.woche.count ? "Woche ohne Preis, nicht bewertbar" : "Vorwoche ohne Kosten, nicht bewertbar");
+
 /**
  * Summe, Δ, Kosten je Merge und Anteil unzugeordnet aus den Berichten der Woche und der Vorwoche; nicht bewertbare Werte sind `null`.
  * `merges` = `{ woche, vorwoche }` gemergte PRs (Nenner mindestens 1); ohne `merges` ist `deltaJeMergeProzent` `null`, bei 0 Merges in beiden Wochen ergibt der Nenner 1 beider Seiten das Summen-Δ.
  */
 export function kennzahlen(b, bV, merges = null) {
-  const bewertbar = bV.bereinigt.count > 0 && bV.bereinigt.cost > 0;
+  const preis = { woche: preisVon(b), vorwoche: preisVon(bV) };
+  const wocheOhnePreis = preis.woche.count > 0 && preis.woche.ohnePreis >= preis.woche.count;
+  const bewertbar = bV.bereinigt.count > 0 && bV.bereinigt.cost > 0 && !wocheOhnePreis;
   const delta = bewertbar ? ((b.bereinigt.cost - bV.bereinigt.cost) / bV.bereinigt.cost) * 100 : null;
   const unz = b.bereinigt.cost > 0 ? (b.unzugeordnet.cost / b.bereinigt.cost) * 100 : null;
   const je = (cost, n) => cost / Math.max(n, 1);
@@ -216,7 +224,7 @@ export function kennzahlen(b, bV, merges = null) {
   const jeMergeVor = merges === null ? null : je(bV.bereinigt.cost, merges.vorwoche);
   let deltaJe = null;
   if (bewertbar && merges !== null) deltaJe = ((jeMerge - jeMergeVor) / jeMergeVor) * 100;
-  return { summe: b.bereinigt.cost, vorwoche: bV.bereinigt.cost, deltaProzent: delta, merges, jeMerge, jeMergeVorwoche: jeMergeVor, deltaJeMergeProzent: deltaJe, unzugeordnetProzent: unz };
+  return { summe: b.bereinigt.cost, vorwoche: bV.bereinigt.cost, preis, deltaProzent: delta, merges, jeMerge, jeMergeVorwoche: jeMergeVor, deltaJeMergeProzent: deltaJe, unzugeordnetProzent: unz };
 }
 
 // ── Urteil ───────────────────────────────────────────────────────────────────
@@ -257,8 +265,8 @@ function urteilZeilen(u) {
 
 function jeMergeZeile(k) {
   if (k.merges === null) return "Gemergte PRs: nicht ermittelt, Kosten je Merge nicht bewertbar.";
-  const delta = `Δ ${prozent(k.deltaJeMergeProzent)}${k.deltaJeMergeProzent === null ? " (Vorwoche ohne Kosten, nicht bewertbar)" : ""}`;
-  return `Gemergte PRs: Woche ${k.merges.woche}, Vorwoche ${k.merges.vorwoche}; Kosten je Merge ${usd(k.jeMerge)} (Vorwoche ${usd(k.jeMergeVorwoche)}), ${delta}. Nenner mindestens 1; das Urteil misst \`kostenAnstiegProzent\` an diesem Δ, nicht an der Summe.`;
+  const delta = `Δ ${prozent(k.deltaJeMergeProzent)}${k.deltaJeMergeProzent === null ? ` (${nichtBewertbar(k)})` : ""}`;
+  return `Gemergte PRs: Woche ${k.merges.woche}, Vorwoche ${k.merges.vorwoche}; Kosten je Merge ${betrag({ ...k.preis.woche, cost: k.jeMerge })} (Vorwoche ${betrag({ ...k.preis.vorwoche, cost: k.jeMergeVorwoche })}), ${delta}. Nenner mindestens 1; das Urteil misst \`kostenAnstiegProzent\` an diesem Δ, nicht an der Summe.`;
 }
 
 /** Markdown des Wochenberichts (die Auswertung steht mit um eine Ebene tieferen Überschriften darunter). */
@@ -276,7 +284,7 @@ export function renderWochenbericht(montag, projektFilter, a) {
     "",
     "## Summe, Kosten je Merge und Δ Vorwoche",
     "",
-    `Woche ${usd(k.summe)}, Vorwoche ${usd(k.vorwoche)}, Δ ${prozent(k.deltaProzent)}${k.deltaProzent === null ? " (Vorwoche ohne Kosten, nicht bewertbar)" : ""}. Beide Summen bereinigt nur um negative Latenz (nur Woche) und Audit-Kopien, ohne Überzählung und Preisabweichung (dafür braucht es die Transkripte, \`--pruefen\`).`,
+    `Woche ${betrag({ ...k.preis.woche, cost: k.summe })}, Vorwoche ${betrag({ ...k.preis.vorwoche, cost: k.vorwoche })}, Δ ${prozent(k.deltaProzent)}${k.deltaProzent === null ? ` (${nichtBewertbar(k)})` : ""}. Beide Summen bereinigt nur um negative Latenz (nur Woche) und Audit-Kopien, ohne Überzählung und Preisabweichung (dafür braucht es die Transkripte, \`--pruefen\`).`,
     jeMergeZeile(k),
     "",
     "## Erfassungsprobe",
@@ -290,7 +298,7 @@ export function renderWochenbericht(montag, projektFilter, a) {
 
 /** JSON-Form des Wochenberichts (`status: "bericht"`). */
 export function wochenJson(montag, projektFilter, a) {
-  return { status: "bericht", woche: montag, projektFilter, vermerk: a.vermerk, summe: a.kennzahlen, erfassungsprobe: a.probe, datenluecken: a.bericht.luecken, schwellen: a.schwellen, urteil: a.urteil };
+  return { status: "bericht", woche: montag, projektFilter, vermerk: a.vermerk, summe: a.kennzahlen, erfassungsprobe: a.probe, leereHookGenerations: a.bericht.leer, datenluecken: a.bericht.luecken, schwellen: a.schwellen, urteil: a.urteil };
 }
 
 // ── Wochenbericht-Lauf (factory#314) ─────────────────────────────────────────

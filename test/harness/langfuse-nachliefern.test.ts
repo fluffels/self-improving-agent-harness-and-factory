@@ -163,8 +163,8 @@ const mock = (cfg: Cfg = {}) => {
       if (status !== 200) return antwort({ error: "x" }, status);
     }
     if (url.includes("/v2/observations")) return antwort({ data: cfg.obs ?? [], meta: {} });
-    const q = JSON.parse(new URL(url).searchParams.get("query") ?? "{}") as { dimensions: unknown[] };
-    return antwort({ data: q.dimensions.length === 1 && cfg.ist ? [{ sessionId: "s1", count_count: cfg.ist }] : [] });
+    const q = JSON.parse(new URL(url).searchParams.get("query") ?? "{}") as { dimensions: { field: string }[] };
+    return antwort({ data: q.dimensions.some((d) => d.field === "providedModelName") && cfg.ist ? [{ sessionId: "s1", providedModelName: "claude-opus-5-5", count_count: cfg.ist }] : [] });
   };
   return { aufrufe, otlp, scores, fetchImpl, posts: () => aufrufe.filter((a) => a.method === "POST") };
 };
