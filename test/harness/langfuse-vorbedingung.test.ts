@@ -22,6 +22,7 @@ type Health = {
   pruefeLangfuse: (o: { baseUrl: string; fetchImpl?: Fetch; fristMs?: number }) => Promise<Urteil>;
 };
 type Vorbedingung = {
+  basisUrlLokal: (url: string) => boolean;
   main: (argv: string[], env: Record<string, string | undefined>, out: (s: string) => void, err: (s: string) => void, o?: { fetchImpl?: Fetch; fristMs?: number; home?: string; lies?: (p: string) => string; mcpZeilen?: () => string[] | string[][] | null; jetzt?: number }) => Promise<number>;
 };
 const v = raw as unknown as Vorbedingung;
@@ -149,14 +150,55 @@ describe("main", () => {
   test("--json erreichbar: Exit 0 und {erreichbar:true, grund:null} auf stdout, stderr leer", async () => {
     const r = await lauf(["--json"], antwort(200));
     expect(r.code).toBe(0);
-    expect(r.out.map((z) => JSON.parse(z) as unknown)).toEqual([{ erreichbar: true, grund: null, mcp: { status: "nicht-pruefbar", grund: "keine Claude-Code-Session" } }]);
+    expect(r.out.map((z) => JSON.parse(z) as unknown)).toEqual([{ erreichbar: true, grund: null, basisLokal: true, mcp: { status: "nicht-pruefbar", grund: "keine Claude-Code-Session" } }]);
     expect(r.err).toEqual([]);
   });
   test("--json nicht erreichbar: Exit 1, stdout nennt den Grund, stderr bleibt leer", async () => {
     const r = await lauf(["--json"], antwort(500));
     expect(r.code).toBe(1);
-    expect(r.out.map((z) => JSON.parse(z) as unknown)).toEqual([{ erreichbar: false, grund: "Langfuse antwortet mit HTTP 500" }]);
+    expect(r.out.map((z) => JSON.parse(z) as unknown)).toEqual([{ erreichbar: false, grund: "Langfuse antwortet mit HTTP 500", basisLokal: true }]);
     expect(r.err).toEqual([]);
+  });
+  describe("Lokalität der Basis-URL (ADR 0019)", () => {
+    const fern = { LANGFUSE_BASE_URL: "https://cloud.langfuse.com/pfad?key=geheim" };
+    const mit = async (argv: string[], env: Record<string, string | undefined>, f: Fetch) => {
+      const out: string[] = [];
+      const err: string[] = [];
+      const code = await v.main(argv, env, (s) => out.push(s), (s) => err.push(s), { fetchImpl: f, fristMs: 20, home: "/h", lies: keineDatei });
+      return { code, out, err };
+    };
+    test("basisUrlLokal: Loopback-Hosts ja, Fremdhosts und Unparsebares nein", () => {
+      for (const u of ["http://localhost:3000", "http://127.0.0.1:3000", "http://[::1]:3000", "http://x.localhost"]) expect(v.basisUrlLokal(u), u).toBe(true);
+      for (const u of ["https://cloud.langfuse.com", "http://192.168.1.5:3000", "kein url", ""]) expect(v.basisUrlLokal(u), u).toBe(false);
+    });
+    test("nicht lokal: Hinweis mit nur dem Host auf stderr, Exit bleibt 0", async () => {
+      const r = await mit([], fern, antwort(200));
+      expect(r.code).toBe(0);
+      const text = r.err.join("\n");
+      expect(text).toContain("Datenschutz: LANGFUSE_BASE_URL zeigt auf cloud.langfuse.com (nicht lokal, ADR 0019)");
+      expect(text).not.toMatch(/pfad|geheim/);
+    });
+    test("lokal: kein Datenschutz-Hinweis", async () => {
+      expect((await mit([], {}, antwort(200))).err.join("\n")).not.toContain("Datenschutz");
+    });
+    test("--json: basisLokal false, stderr leer, Exit folgt der Health-Prüfung", async () => {
+      const r = await mit(["--json"], fern, antwort(200));
+      expect(r.code).toBe(0);
+      expect((JSON.parse(r.out[0]) as { basisLokal: boolean }).basisLokal).toBe(false);
+      expect(r.err).toEqual([]);
+    });
+    test("--sessionstart: erreichbar, aber nicht lokal steht der Hinweis in systemMessage", async () => {
+      const r = await mit(["--sessionstart"], fern, antwort(200));
+      expect(r.code).toBe(0);
+      const j = JSON.parse(r.out[0]) as { systemMessage: string };
+      expect(j.systemMessage).toContain("Datenschutz: LANGFUSE_BASE_URL zeigt auf cloud.langfuse.com");
+    });
+    test("--sessionstart: bei Ausfall und nicht lokal stehen beide Aussagen in systemMessage", async () => {
+      const r = await mit(["--sessionstart"], fern, antwort(500));
+      const j = JSON.parse(r.out[0]) as { systemMessage: string };
+      expect(j.systemMessage).toContain("Langfuse aus, bitte starten");
+      expect(j.systemMessage).toContain("Datenschutz");
+    });
   });
   test("--json zusammen mit --sessionstart ist ein Aufruf-Fehler (Exit 2, nichts auf stdout)", async () => {
     const r = await lauf(["--json", "--sessionstart"], antwort(200));
