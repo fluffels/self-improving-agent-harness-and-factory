@@ -2,11 +2,13 @@
 /**
  * Langfuse-Auswertung (factory#289, Teil 5/5 von factory#274): Kostenbericht aus Exporten des Langfuse-MCP `queryMetrics`.
  *
- *   node scripts/langfuse-auswertung.mjs --rezept --von <ISO> --bis <ISO> [--rolle <name>…]
+ *   node scripts/langfuse-auswertung.mjs --rezept --von <ISO> --bis <ISO> [--rolle <name>…] [--repo-tag <name>…]
  *   node scripts/langfuse-auswertung.mjs --export <datei>… [--json]
  *
  * NUR OFFLINE: die CLI liest Exportdateien (und mit `--rezept` die Agentennamen aus `.claude/agents/*.md`), nie Netz und nie
  * den Langfuse-Secret-Key (ein Test hält die Import-Hülle fest). Die Rechenlogik steht pur in `langfuse-auswertung-lib.mjs`.
+ * Das Rezept enthält je Repo-Tag einen Export `repo` (factory#523): das eigene Repo (Namensteil von `repo` der Projekt-Config) und jedes `--repo-tag`;
+ * der Bericht trennt Repos über diesen Tag, Generations ohne Repo-Tag stehen als Lücke „ohne Repo-Tag“.
  * Exit 0 Bericht (auch mit Datenlücken), 1 Export- oder Lesefehler, 2 Aufruffehler.
  */
 
@@ -17,13 +19,15 @@ import { istDirektaufruf } from "./direktaufruf.mjs";
 import { flagsLesen, istIsoZeitpunkt, AUFRUF_EXIT } from "./flag-lib.mjs";
 import { factorySeiteIn } from "./factory-seite.mjs";
 import { agentenNamen } from "./agenten-namen.mjs";
+import { ladeProjektConfig, repoName } from "./projekt-config-lib.mjs";
 import { bericht, leseExport, renderMarkdown, rezept } from "./langfuse-auswertung-lib.mjs";
 
 const WURZEL = fileURLToPath(new URL("..", import.meta.url));
 
 export const aufrufHilfe = () =>
   "Aufruf: node scripts/langfuse-auswertung.mjs --export <datei> [--export <datei>…] [--json]\n" +
-  "        node scripts/langfuse-auswertung.mjs --rezept --von <ISO> --bis <ISO> [--rolle <name>…] [--agenten <ordner>]\n" +
+  "        node scripts/langfuse-auswertung.mjs --rezept --von <ISO> --bis <ISO> [--rolle <name>…] [--repo-tag <name>…] [--agenten <ordner>]\n" +
+  "Das Rezept enthält einen Export je Repo-Tag: das eigene Repo und jedes --repo-tag.\n" +
   "`bis` höchstens jetzt minus 30 min (Ruhefrist der Ingestion). Rezept und Grenzen: " +
   factorySeiteIn(WURZEL, "docs/model-routing.md", "langfuse-auswertung-factory289") + ".";
 
@@ -35,6 +39,7 @@ export function parseArgs(argv) {
     von: { type: "string" },
     bis: { type: "string" },
     rolle: { type: "string", multiple: true },
+    "repo-tag": { type: "string", multiple: true },
     agenten: { type: "string" },
   };
   const { werte, fehler } = flagsLesen(argv, optionen);
@@ -45,6 +50,7 @@ export function parseArgs(argv) {
     von: werte.von,
     bis: werte.bis,
     rollen: werte.rolle ?? [],
+    repoTags: werte["repo-tag"] ?? [],
     agenten: werte.agenten ?? join(WURZEL, ".claude", "agents"),
   };
   if (fehler) a.fehler = fehler.text;
@@ -58,7 +64,9 @@ function rezeptAusgeben(args, deps) {
   }
   try {
     const rollen = [...agentenNamen(args.agenten, deps), ...args.rollen];
-    return { exitCode: 0, text: JSON.stringify(rezept({ von: args.von, bis: args.bis, rollen }), null, 2) };
+    const eigenes = deps.repoName ?? repoName(ladeProjektConfig({ rootDir: WURZEL }));
+    const repoTags = [...new Set([eigenes, ...args.repoTags])];
+    return { exitCode: 0, text: JSON.stringify(rezept({ von: args.von, bis: args.bis, rollen, repoTags }), null, 2) };
   } catch (e) {
     return { exitCode: 1, text: `Fehler: ${e.message}` };
   }
