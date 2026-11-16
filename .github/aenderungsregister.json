@@ -168,6 +168,267 @@
         "datum": "2026-11-11",
         "pr": "factory#272"
       }
+    },
+    {
+      "id": "verfall-kontext-budget-ratchet",
+      "art": "verfall",
+      "ziel": "test/harness/kontext-budget-ratchet.test.ts",
+      "aufgenommen": "2026-11-11",
+      "ablauf": "2027-03-01",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-verbleib",
+      "art": "verfall",
+      "ziel": "test/harness/verbleib.test.ts",
+      "aufgenommen": "2026-11-11",
+      "ablauf": "2027-03-01",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-lens-auftrag-zusatzpass",
+      "art": "verfall",
+      "ziel": "test/harness/lens-auftrag-zusatzpass.test.ts",
+      "aufgenommen": "2026-11-11",
+      "ablauf": "2027-03-01",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-bedingte-dateien",
+      "art": "verfall",
+      "ziel": "test/harness/bedingte-dateien.test.ts",
+      "aufgenommen": "2026-11-11",
+      "ablauf": "2027-03-01",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-sicherheits-workflows",
+      "art": "verfall",
+      "ziel": "test/harness/sicherheits-workflows.test.ts",
+      "aufgenommen": "2026-11-11",
+      "ablauf": "2027-03-01",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-workflow-skripte",
+      "art": "verfall",
+      "ziel": "test/harness/workflow-skripte.test.ts",
+      "aufgenommen": "2026-11-12",
+      "ablauf": "2027-03-01",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-fabrik-regeltext",
+      "art": "verfall",
+      "ziel": "test/harness/fabrik-regeltext.test.ts",
+      "aufgenommen": "2026-11-13",
+      "ablauf": "2027-03-01",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-raum-vertrag",
+      "art": "verfall",
+      "ziel": "test/harness/raum-vertrag.test.ts",
+      "aufgenommen": "2026-11-13",
+      "ablauf": "2027-03-01",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-kern-laufzeittexte",
+      "art": "verfall",
+      "ziel": "test/harness/kern-laufzeittexte.test.ts",
+      "aufgenommen": "2026-11-15",
+      "ablauf": "2027-03-01",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-review-nachweis",
+      "art": "verfall",
+      "ziel": "test/harness/review-nachweis.test.ts",
+      "aufgenommen": "2026-11-15",
+      "ablauf": "2027-03-01",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-skript-verweise",
+      "art": "verfall",
+      "ziel": "test/harness/skript-verweise.test.ts",
+      "aufgenommen": "2026-11-15",
+      "ablauf": "2027-03-01",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-agent-harness-gliederung",
+      "art": "verfall",
+      "ziel": "test/harness/agent-harness-gliederung.test.ts",
+      "aufgenommen": "2026-11-12",
+      "ablauf": "2027-03-01",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-risikostufe-ablauf",
+      "art": "verfall",
+      "ziel": "test/harness/risikostufe-ablauf.test.ts",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2027-03-01",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-token-budget-regel",
+      "art": "verfall",
+      "ziel": "test/harness/token-budget-regel.test.ts",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2027-03-01",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-brillen-dateien-308",
+      "art": "verfall",
+      "ziel": "docs/model-routing.md#review-staffel-1265",
+      "aufgenommen": "2026-11-11",
+      "ablauf": "2027-03-01",
+      "messgroesse": "fangquote",
+      "durch": [
+        "verfall-lens-auftrag-zusatzpass"
+      ]
+    },
+    {
+      "id": "verfall-plattform-weiche-310",
+      "art": "verfall",
+      "ziel": "docs/model-routing.md#umsetzer-kontext",
+      "aufgenommen": "2026-11-11",
+      "ablauf": "2027-03-01",
+      "messgroesse": "fangquote",
+      "durch": [
+        "verfall-bedingte-dateien"
+      ]
+    },
+    {
+      "id": "verfall-risikoklasse-333",
+      "art": "verfall",
+      "ziel": "docs/model-routing.md#risikostufe-factory525",
+      "aufgenommen": "2026-11-11",
+      "ablauf": "2027-03-01",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-sweep-tiefe-272",
+      "art": "verfall",
+      "ziel": "docs/model-routing.md#review-staffel-1265",
+      "aufgenommen": "2026-11-11",
+      "ablauf": "2027-03-01",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-zusatzpass-272",
+      "art": "verfall",
+      "ziel": "docs/model-routing.md#review-staffel-1265",
+      "aufgenommen": "2026-11-11",
+      "ablauf": "2027-03-01",
+      "messgroesse": "fangquote",
+      "durch": [
+        "verfall-lens-auftrag-zusatzpass"
+      ]
+    },
+    {
+      "id": "verfall-sicherheits-checks-335",
+      "art": "verfall",
+      "ziel": "docs/adr/fortschreibungen/0009-335-sicherheits-checks-merge-pflicht.md#fortschreibung-335-2026-11-11-dependency-review-und-zizmor-sind-merge-pflicht",
+      "aufgenommen": "2026-11-11",
+      "ablauf": "2027-03-01",
+      "messgroesse": "fangquote",
+      "durch": [
+        "verfall-sicherheits-workflows"
+      ]
+    },
+    {
+      "id": "verfall-modulkopien-244",
+      "art": "verfall",
+      "ziel": "docs/adr/fortschreibungen/0022-244-modulkopien.md#fortschreibung-244-2026-11-12-modulkopien-im-drift-gate",
+      "aufgenommen": "2026-11-12",
+      "ablauf": "2027-03-01",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-eingangsgrenze-sammelzeilen",
+      "art": "verfall",
+      "ziel": "docs/ticket-reihenfolge.md#sammelticket-mechanik",
+      "aufgenommen": "2026-11-12",
+      "ablauf": "2027-03-01",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-risikostufe-01-529",
+      "art": "verfall",
+      "ziel": "docs/adr/fortschreibungen/0027-529-groessenstufe-s-aufgegangen.md#entscheidung",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2027-03-01",
+      "messgroesse": "fangquote",
+      "durch": [
+        "verfall-risikostufe-ablauf"
+      ]
+    },
+    {
+      "id": "verfall-waechter-voll-396",
+      "art": "verfall",
+      "ziel": "docs/adr/fortschreibungen/0027-396-ledger-trigger-pruefbar.md#entscheidung",
+      "aufgenommen": "2026-11-12",
+      "ablauf": "2027-03-01",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-ausgabe-diaet-310",
+      "art": "verfall",
+      "ziel": "docs/adr/fortschreibungen/0027-396-ledger-trigger-pruefbar.md#entscheidung",
+      "aufgenommen": "2026-11-11",
+      "ablauf": "2027-03-01",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-budget-beleg-237",
+      "art": "verfall",
+      "ziel": "docs/adr/fortschreibungen/0035-237-raum-vertrag-ratchet.md#fortschreibung-237-2026-11-13-raum-vertrag-und-budget-ratchet",
+      "aufgenommen": "2026-11-13",
+      "ablauf": "2027-03-01",
+      "messgroesse": "fangquote",
+      "durch": [
+        "verfall-kontext-budget-ratchet"
+      ]
+    },
+    {
+      "id": "verfall-basis-nachlauf-499",
+      "art": "verfall",
+      "ziel": "docs/agent-harness.md#ablauf-review-und-eskalation",
+      "aufgenommen": "2026-11-15",
+      "ablauf": "2027-03-01",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-epic-abschluss-507",
+      "art": "verfall",
+      "ziel": "docs/git-host.md#workflows",
+      "aufgenommen": "2026-11-15",
+      "ablauf": "2027-03-01",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-probe-vorab-541",
+      "art": "verfall",
+      "ziel": "docs/adr/fortschreibungen/0027-541-proben-vorab-bewerten.md#entscheidung",
+      "aufgenommen": "2026-11-15",
+      "ablauf": "2027-03-01",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-token-budget-560",
+      "art": "verfall",
+      "ziel": "AGENTS.md#kern-regeln-factory-besitz",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2027-03-01",
+      "messgroesse": "fangquote",
+      "durch": [
+        "verfall-token-budget-regel"
+      ]
     }
   ]
 }

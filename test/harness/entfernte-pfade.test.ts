@@ -36,6 +36,9 @@
  * Dazu (factory#529): die Größenstufe S ist zurückgebaut (aufgegangen in Risikostufe 0/1, Fortschreibung zu ADR 0027): `RESTE_GROESSENSTUFE_S` scannt das entfernte Skript, die Zeile `STUFE: S` und die Altformen der Nachweis-Zeilen.
  * Bewusste Grenze: der Scan der Skizzen-Form trifft nur den Geviertstrich (die Nachweis-Wächter weisen auch `-` und `–` ab); `groessenstufe-lib.mjs` und `GROESSENSTUFE_S` behalten ihren Namen (Kombi-Lens- und Trivial-Grenze); Wächter-Tests mit Altform-Fixtures stehen in `AUSNAHMEN_GROESSENSTUFE_S`.
  *
+ * Dazu (factory#574): der Sammeleintrag des Regel-Verfalls in `.github/wiedervorlagen.json` ist in Registerzeilen aufgelöst; `RESTE_SAMMELEINTRAG` scannt seinen Namen, auch in den Fortschreibungen (nur das Ledger in ADR 0027, Punkt 8, ist ausgenommen).
+ * Bewusste Grenze: nur der exakte Name; das Muster `regeln-verfall-<JJJJ-MM>` wird nicht gescannt (Bezieher führen solche Einträge).
+ *
  * Ein künftiger harmloser Gebrauch eines dieser Wörter braucht einen Eintrag in `REGEL_AUSNAHMEN`.
  *
  * Dazu (#1748): die Agenten-Dateien heißen nach der Rolle (`factory-planer.md` usw.), das Ticket-Skill-Verzeichnis `factory-ticket/`; die alten
@@ -669,6 +672,47 @@ describe("Keine Reste der Größenstufe S (factory#529)", () => {
     for (const r of RESTE_GROESSENSTUFE_S) {
       assert.ok(r.fix.length > 10, `Regel ${r.name} ohne Fix`);
       assert.deepEqual(findeReste([{ pfad: "docs/x.md", inhalt: r.fix }], RESTE_GROESSENSTUFE_S, []), [], `Fix von ${r.name} trägt die Altform`);
+    }
+  });
+});
+
+// ---- Sammeleintrag des Regel-Verfalls aufgelöst (factory#574) ----
+
+/** Der Name steht zusammengesetzt im Wächter, damit `git grep` ihn nicht findet; geschlossen, ein Muster. */
+const SAMMEL_NAME = ["regeln", "verfall", "2027", "03"].join("-");
+export const RESTE_SAMMELEINTRAG: Rest[] = [
+  { name: "Sammeleintrag Regel-Verfall", muster: new RegExp(SAMMEL_NAME), fix: "der Sammeleintrag ist aufgelöst: Registerzeile `art: verfall` in `.github/aenderungsregister.json` (factory#574)" },
+];
+
+/** Nur das Ledger in ADR 0027 (Punkt 8: alte Zeilen bleiben) trägt den Namen; bewusst nicht `AUSNAHMEN`, das nähme ganz `docs/adr/` aus, die Fortschreibungen sollen gescannt werden. */
+export const AUSNAHMEN_SAMMELEINTRAG: Ausnahme[] = [
+  { praefix: "docs/adr/0027-regeln-lockern.md", grund: "Ledger-Zeilen sind historisch und bleiben unverändert (ADR 0027 Punkt 8)" },
+  { praefix: "test/harness/entfernte-pfade.test.ts", grund: "dieser Wächter trägt das Muster selbst" },
+];
+
+describe("Kein Sammeleintrag des Regel-Verfalls mehr (factory#574)", () => {
+  const sammel = (inhalt: string, pfad = "docs/x.md") => findeReste([{ pfad, inhalt }], RESTE_SAMMELEINTRAG, AUSNAHMEN_SAMMELEINTRAG);
+
+  test("das Repo ist frei vom Namen außerhalb des Ledgers", () => {
+    const treffer = findeReste(getrackteTextdateien(), RESTE_SAMMELEINTRAG, AUSNAHMEN_SAMMELEINTRAG);
+    assert.deepEqual(treffer, [], `${meldungMitFix(treffer, RESTE_SAMMELEINTRAG)}\nTreffer: ${treffer.join(", ")}`);
+  });
+
+  test("Negativfall: der Name wird in Doku und in Fortschreibungen gefunden", () => {
+    assert.deepEqual(sammel(`a\nEintrag ${SAMMEL_NAME}\nb`), ["docs/x.md:2: Sammeleintrag Regel-Verfall"]);
+    assert.equal(sammel(`Prüftermin ${SAMMEL_NAME}`, "docs/adr/fortschreibungen/0027-x.md").length, 1);
+    assert.equal(sammel(SAMMEL_NAME, ".github/wiedervorlagen.json").length, 1);
+  });
+
+  test("Grenze: nur der exakte Name; das Ledger in ADR 0027 und ein Bezieher-Muster sind erlaubt", () => {
+    assert.deepEqual(sammel(SAMMEL_NAME, "docs/adr/0027-regeln-lockern.md"), []);
+    assert.deepEqual(sammel("Eintrag regeln-verfall-<JJJJ-MM> und regeln-verfall-2028-01"), []);
+  });
+
+  test("der Fix nennt den Namen nicht selbst", () => {
+    for (const r of RESTE_SAMMELEINTRAG) {
+      assert.ok(r.fix.length > 10, `Regel ${r.name} ohne Fix`);
+      assert.deepEqual(findeReste([{ pfad: "docs/x.md", inhalt: r.fix }], RESTE_SAMMELEINTRAG, []), []);
     }
   });
 });

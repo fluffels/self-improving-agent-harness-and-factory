@@ -67,7 +67,7 @@ Messwerte Red-Green (je per Edit verfälscht, `git diff --stat` belegte die Änd
 
 Gegenprobe Bezieher-Export (`node scripts/probe-erstbezug.mjs`, Exit 0, GRÜN 17 Schritte): im Export steht „Änderungen nur upstream (`npm run check:factorydrift` nennt den Weg)“ (AGENTS.md Zeile 9) und „Prüfungen außerhalb von `verify` laut Projekt-Block“ (Umsetzer, 1 Treffer); „selbst upstream“ und „kern-literale-baseline“ fehlen (grep Exit 1). Budgets: Kern-Block 15.182 (Budget 15.300 auf 15.200 gesenkt), Projekt-Raum 12.700 auf 12.800, Summe 28.000.
 
-Re-Evaluierung: mehr als 15 Einträge „beide“ oder wiederholte Fehltreffer: Wächter enger fassen oder streichen (Prüftermin `regeln-verfall-2027-03`).
+Re-Evaluierung: mehr als 15 Einträge „beide“ oder wiederholte Fehltreffer: Wächter enger fassen oder streichen (Prüftermin: Registerzeile `verfall-fabrik-regeltext` in `.github/aenderungsregister.json`).
 
 ## Bekannte Grenzen
 

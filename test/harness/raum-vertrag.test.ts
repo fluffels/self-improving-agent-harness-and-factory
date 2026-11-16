@@ -6,7 +6,7 @@
  *
  * Grenze: gerechnet wird mit dem Kern der Fabrik; im Bezieher trägt der Kern zusätzlich die Projektwert-Tabelle (wenige Dutzend Zeichen mehr). Ein Raum, der nur durch ein Absenken von `PROJEKT_BLOCK_RAUM` passt, bricht den
  * Vertrag und ist im Budget-Ratchet (`kontext-budget-ratchet.test.ts`) ohne Beleg und Bezieher-Migration rot.
- * Verfall: Prüftermin laut `.github/wiedervorlagen.json` (Eintrag `regeln-verfall-2027-03`, ADR 0027). */
+ * Verfall: Prüftermin: Registerzeile `verfall-raum-vertrag` in `.github/aenderungsregister.json` (ADR 0027). */
 import { describe, test } from "vitest";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";

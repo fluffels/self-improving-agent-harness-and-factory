@@ -1,6 +1,6 @@
 # Fortschreibung #529 (2026-11-16): Größenstufe S ist in Risikostufe 0/1 aufgegangen
 
-Ergänzt [ADR 0027](../0027-regeln-lockern.md) (Punkt 4, Rückfall-Trigger der Größenstufe S aus factory#271 und der Wiedervorlage `regeln-verfall-2027-03` Punkt 11a); die Ledger-Zeilen bleiben unverändert (Punkt 8). Teil 5/5 des Epics factory#511. Der Abschnitt steht als Datei, weil die Zahl angehängter `## Fortschreibung`-Abschnitte je ADR eingefroren ist ([README](../README.md#format)).
+Ergänzt [ADR 0027](../0027-regeln-lockern.md) (Punkt 4, Rückfall-Trigger der Größenstufe S aus factory#271 und der Registerzeile `verfall-risikostufe-01-529`, früher Punkt 11a eines Sammeleintrags); die Ledger-Zeilen bleiben unverändert (Punkt 8). Teil 5/5 des Epics factory#511. Der Abschnitt steht als Datei, weil die Zahl angehängter `## Fortschreibung`-Abschnitte je ADR eingefroren ist ([README](../README.md#format)).
 
 ## Kontext
 
@@ -14,7 +14,7 @@ Entscheidung: die Größenstufe `S` ist keine eigene Stufe mehr, weil die Risiko
 - Die Grenze selbst bleibt als **Kombi-Lens-Grenze** (`KOMBI: ja|nein` aus `node scripts/risikostufe.mjs`; bei Risikostufe ≤ 1 und Code-Diff genügt `lenses=kombiniert`) und als **Trivial-Grenze** (Risikostufe 0, Regel 5B in `scripts/risikostufe-lib.mjs`). Rechenlogik und Konstante `GROESSENSTUFE_S` bleiben in `scripts/groessenstufe-lib.mjs` (Name unverändert, Umbenennen sprengte den Slice).
 - `RISIKO:` und `SWEEP:` gibt `node scripts/risikostufe.mjs` aus (neu dazu `KOMBI:`); `scripts/groessenstufe.mjs` ist entfernt (Ersatz für Bezieher mit eigenen Aufrufen: `node scripts/risikostufe.mjs`).
 - Die Skizzen- und Klein-Form der Plan- und der Abnahme-Zeile sind entfernt. `check-review-nachweis` und `check-abnahme-nachweis` erkennen die Altformen weiter und weisen sie bei jeder Stufe ab, mit einem Hinweis auf `Plan: ohne — stufe <0|1>` bzw. `Abnahme: entfaellt — stufe <0|1>`. `test/harness/entfernte-pfade.test.ts` hält die entfernten Namen aus verteilten Dateien fern.
-- Punkt 11a der Wiedervorlage `regeln-verfall-2027-03` prüft jetzt die Risikostufe 0/1 (Läufe mit `lenses=kombiniert` oder `— stufe`) statt der Größenstufe `S`.
+- Die Registerzeile `verfall-risikostufe-01-529` prüft jetzt die Risikostufe 0/1 (Läufe mit `lenses=kombiniert` oder `— stufe`) statt der Größenstufe `S`.
 
 ## Konsequenzen
 
@@ -23,4 +23,4 @@ Entscheidung: die Größenstufe `S` ist keine eigene Stufe mehr, weil die Risiko
 
 ## Re-Evaluierung
 
-Prüftermin 2027-03-01 (Sammeleintrag `regeln-verfall-2027-03`, Punkt 11a): Nachmessung wie in `docs/model-routing.md` (Kombi-Lens-Grenze); liefert die Kombi-Lens-Grenze keine Einsparung oder fand ein Folge-Fix einen Fehler, den der volle Satz gefunden hätte, wird die Grenze `GROESSENSTUFE_S` gesenkt oder die Kombi-Lens gestrichen (ADR 0027 Punkt 4).
+Prüftermin 2027-03-01 (Registerzeile `verfall-risikostufe-01-529`): Nachmessung wie in `docs/model-routing.md` (Kombi-Lens-Grenze); liefert die Kombi-Lens-Grenze keine Einsparung oder fand ein Folge-Fix einen Fehler, den der volle Satz gefunden hätte, wird die Grenze `GROESSENSTUFE_S` gesenkt oder die Kombi-Lens gestrichen (ADR 0027 Punkt 4).

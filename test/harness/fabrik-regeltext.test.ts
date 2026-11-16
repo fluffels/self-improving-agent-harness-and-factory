@@ -7,7 +7,7 @@
  * Einordnung: `verweis` (Fabrik-Verweis `<x>.md (Fabrik)`, factory#177), `beide` (Eintrag der Inventur umschließt den Treffer in derselben Zeile), sonst `offen` = Fehler.
  * Grenzen: Heuristik mit einer Wortliste; Wörter außerhalb der Liste („Bezieher“, „Factory-Board“) fallen durch, Laufzeittexte in `.mjs` und Workflows sind nicht gescannt,
  * Codeblöcke werden mitgescannt. Der Ausschnitt bricht bei geänderter Formulierung (dann neu einordnen). Re-Evaluierung: mehr als 15 Einträge „beide“ oder wiederholte
- * Fehltreffer: Wächter enger fassen oder streichen (Wiedervorlage `regeln-verfall-2027-03`).
+ * Fehltreffer: Wächter enger fassen oder streichen (Registerzeile `verfall-fabrik-regeltext` in `.github/aenderungsregister.json`).
  *
  * @harness-waechter – einziger Durchsetzer seiner Regel, darum im geschützten test/harness/ (#1165).
  */

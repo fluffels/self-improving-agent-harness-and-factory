@@ -18,7 +18,7 @@
  * Geschlossene Liste: Muster `NUMMER` (3-4 Ziffern) und `KURZE_NUMMER` (1-2 Ziffern) aus `scripts/herkunftsform.mjs`; Umfang: Quelltext ohne Kommentare in verteilten
  * `.mjs/.cjs/.js`-Einheiten (`wirdVerteilt`, ganze Datei). Kein Fund: Präfixformen (`quellprojekt#`, `factory#`, `owner/repo#`, `x.md#`) und eine Nummer direkt vor `;`
  * (Entity-Code `#35;`, `&#39;`). Grenze: zur Laufzeit zusammengesetzte Strings (`"#" + nr`) und Kommentare; Regex-Literale und sonstiger Code außerhalb von Kommentaren zählen mit.
- * Verfall: Prüftermin laut `.github/wiedervorlagen.json` (Eintrag `regeln-verfall-2027-03`, ADR 0027).
+ * Verfall: Prüftermin: Registerzeile `verfall-kern-laufzeittexte` in `.github/aenderungsregister.json` (ADR 0027).
  *
  * Geschlossene Ausnahmen (Datei -> Namen): Standardbefehle, die ein Bezieher per `befehle`-Block der Projekt-Config überschreibt
  * (`gate-befehl-lib.mjs`, `docs-gen.mjs`) und die Update-Schritte in `release-tag-lib.mjs`; sie wachsen nur zusammen mit einer Bezieher-Migrationszeile im Commit.

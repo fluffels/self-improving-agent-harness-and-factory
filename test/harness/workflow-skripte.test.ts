@@ -16,7 +16,7 @@
  * in mehrzeiligem `run: |`. Grenzen (nicht erkannt): Ketten über `npm run <x>`, Composite Actions und `uses:`-Schritte, dynamische Pfade
  * (`node "$SKRIPT"`), `working-directory`, andere Aufrufer als `node`. Bewusst offen: ein Skript, das weder in einem Required-Check-Job noch in einem
  * privilegierten Job (L9b) läuft, ist nicht erzwungen (`scripts/audit-einordnung.mjs` steht vorsorglich in der Schutzliste).
- * Verfall: Prüftermin laut `.github/wiedervorlagen.json` (Eintrag `regeln-verfall-2027-03`, ADR 0027).
+ * Verfall: Prüftermin: Registerzeile `verfall-workflow-skripte` in `.github/aenderungsregister.json` (ADR 0027).
  */
 import { describe, expect, test } from "vitest";
 import { parse } from "yaml";
