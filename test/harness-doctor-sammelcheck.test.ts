@@ -176,6 +176,8 @@ describe("Sammel-Check, Review-Runde 1 (factory#401)", () => {
     const g2 = "  g2:\n    needs: [build, audit, gate]\n    if: always()\n    runs-on: x\n" + PRUEF;
     const alarm2 = ALARM.replace("alarm:", "alarm2:").replace("needs: [gate]", "needs: [g2]");
     expect(punktFuer({ config, workflows: ci(GUT.replace(ALARM, g2 + ALARM + alarm2)) })).toEqual({ punkt: "Sammel-Check", ok: true });
+    const alt = (s: string) => s.split(ALARM_USES).join(ALARM_ALT);
+    expect(punktFuer({ config, workflows: ci(alt(GUT.replace(ALARM, g2 + ALARM + alarm2))) }), "Altform ./ ist von der needs-Pflicht ausgenommen").toEqual({ punkt: "Sammel-Check", ok: true });
     const nur1 = punktFuer({ config, workflows: ci(GUT.replace(ALARM, g2 + ALARM)) });
     expect(nur1.ok).toBe(false);
     expect(nur1.befund).toMatch(/Alarm-Job „alarm“.*needs nennt „g2“ nicht/);
