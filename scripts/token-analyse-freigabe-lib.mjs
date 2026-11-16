@@ -56,8 +56,8 @@ export function pruefeBezieher({ istCheckout, eigentuemer, login }) {
 }
 
 /** Geschlossene Allowlist (AK 3). Alles andere wird abgelehnt. */
-export const GIT_UNTERBEFEHLE = ["log", "ls-files", "show"];
-export const WC_OPTIONEN = ["-l", "-c", "-w", "-m"];
+const GIT_UNTERBEFEHLE = ["log", "ls-files", "show"];
+const WC_OPTIONEN = ["-l", "-c", "-w", "-m"];
 /** Optionen, die einen lesenden Git-Befehl schreiben, Programme starten oder fremde Dateien lesen lassen. */
 const GIT_VERBOTEN = [/^--output/, /^-o$/, /^-c$/, /^--ext-diff$/, /^--textconv$/, /^--exec/, /^--upload-pack/, /^--config/, /^-O/, /^--open-files-in-pager/, /^--(git-dir|work-tree|namespace)/];
 
@@ -71,7 +71,6 @@ export function liegtUnter(pfad, wurzeln) {
 
 const abgelehnt = (grund) => ({ ok: false, grund });
 const identitaet = (p) => p;
-
 function pruefeGit(argv, wurzel, real) {
   if (argv[1] !== "-C" || typeof argv[2] !== "string" || real(argv[2]) !== real(wurzel)) return abgelehnt("git nur mit -C auf die freigegebene Wurzel");
   if (!GIT_UNTERBEFEHLE.includes(argv[3])) return abgelehnt("Git-Unterbefehl nicht in der Allowlist");

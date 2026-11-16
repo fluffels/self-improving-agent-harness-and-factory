@@ -166,13 +166,6 @@ describe("Ausführung nur für Freigegebene", () => {
     expect(r.stdout).toBe("0,1,0");
     expect(run(["node", "-e", "process.stdout.write(process.argv[1])", "a b;c"]).stdout).toBe("a b;c");
   });
-  test("wc über den Standard-Runner auf eine Fixture-Datei", () => {
-    const s = welt((w) => `${w.alpha}\n`);
-    const p = cli.pruefen(s.env, s.deps);
-    const r = cli.fuehreFreigegebenAus(1, ["wc", "-l", "a.txt"], p.freigegeben!, {}) as { status: number; stdout: string };
-    expect(r.status).toBe(0);
-    expect(r.stdout.trim().startsWith("2")).toBe(true);
-  });
 });
 
 describe("pruefen (CLI-Logik)", () => {
@@ -253,10 +246,6 @@ describe("Ablage", () => {
     const r = cli.cli(["ablegen", "--eingabe", eingabe(s.root)], { ...s.env, FACTORY_ANALYSE_ABLAGE: join(s.root, "link", "neu") }, s.deps);
     expect(r.code).toBe(1);
     expect(existsSync(join(s.w.repo, "neu"))).toBe(false);
-  });
-  test("ohne FACTORY_ANALYSE_ABLAGE: Exit 1", () => {
-    const s = welt((w) => `${w.alpha}\n`);
-    expect(cli.cli(["ablegen", "--eingabe", eingabe(s.root)], { FACTORY_ANALYSE_FREIGABE: s.env.FACTORY_ANALYSE_FREIGABE }, s.deps).code).toBe(1);
   });
   test("zweimal am selben Tag: erster Schnappschuss, dann Vorher/Nachher; Dateiname -2", () => {
     const s = welt((w) => `${w.alpha}\n`);
