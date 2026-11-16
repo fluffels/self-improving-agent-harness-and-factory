@@ -1347,6 +1347,7 @@ describe("Risikostufe: die Wächter rechnen nach (factory#526)", () => {
     assert.deepEqual(bew(text("ohne — stufe 1", voll(1)), R1), []);
     assert.deepEqual(bew(text("ohne — stufe 1", voll(1, "doku")), R1, { dateien: ["docs/a.md"] }), []);
     rot(bew(text("ohne — stufe 1", voll(3)), R1), /runden=3.*Obergrenze.*Risikostufe 1/);
+    rot(bew(text("ohne — stufe 1", voll(3)), R1), /Risikostufe aus dem Diff: 1; die Ticket-Prognose zählt für den Cap nicht/);
     assert.deepEqual(bew(text("ohne — stufe 1", voll(3, DREI, " zusatzpass=1:Blocker aus Runde 2")), R1), []);
     rot(bew(text("ohne — stufe 1", `head=${SHA} runden=1 lenses=kombiniert blocker=kombiniert:0 sollte=kombiniert:0 hinweis=kombiniert:0 teilbrillen=architektur:0,requirement-treue:0,test-adaequanz:0 verdikt=ok`), R1), /lenses fehlt/);
   });
