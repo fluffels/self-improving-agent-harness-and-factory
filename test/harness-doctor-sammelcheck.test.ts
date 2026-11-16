@@ -14,7 +14,8 @@ interface Ergebnis { punkt: string; ok: boolean; nichtPruefbar?: boolean; hinwei
 const punktFuer = rawPunkt as (e: { config?: unknown; workflows?: Workflow[]; vorAbbruch?: boolean }) => Ergebnis;
 const jobsLesen = rawJobs as (t: string) => { ausloeser?: string[]; jobs?: { id: string; needs: string[]; if: string | null; uses: string | null }[]; fehler?: { zeile: number; konstrukt: string } };
 
-const ALARM_USES = "./.github/workflows/alarm-rot-main.yml";
+const ALARM_USES = "$/.github/workflows/alarm-rot-main.yml";
+const ALARM_ALT = "./.github/workflows/alarm-rot-main.yml";
 const CONFIG = { sammelChecks: [{ workflow: "ci.yml", job: "gate" }] };
 const KOPF = "name: CI\non:\n  push:\n    branches: [main]\n  pull_request:\njobs:\n";
 const BUILD = "  build:\n    runs-on: ubuntu-latest\n  audit:\n    runs-on: ubuntu-latest\n";
@@ -53,6 +54,16 @@ describe("Sammel-Check (factory#401)", () => {
     expect(lauf(GUT.replace("needs: [build, audit]", "needs:\n      - build\n      - audit")).ok).toBe(true);
     expect(lauf(KOPF + "  build:\n    runs-on: x\n  gate:\n    needs: build\n    if: always()\n" + PRUEF + ALARM).ok).toBe(true);
     expect(lauf(GUT.replace("needs: [build, audit]", "needs: [build]")).befund).toMatch(/audit/);
+  });
+
+  test("Alarm-Job in beiden Formen ($/ und ./) gilt als Alarm-Aufruf; ein anderer Workflow nicht", () => {
+    expect(lauf(GUT.replace(ALARM_USES, ALARM_ALT))).toEqual({ punkt: "Sammel-Check", ok: true });
+    for (const anderer of ["./.github/workflows/anderer.yml", "$/.github/workflows/anderer.yml"]) {
+      const p = lauf(GUT.replace(ALARM_USES, anderer));
+      expect(p.ok).toBe(false);
+      expect(p.befund).toMatch(/kein Job ruft/);
+      expect(p.fix).toContain(ALARM_USES);
+    }
   });
 
   test("L52: Alarm-Job ohne failure() im if ist eine Lücke", () => {
@@ -165,6 +176,8 @@ describe("Sammel-Check, Review-Runde 1 (factory#401)", () => {
     const g2 = "  g2:\n    needs: [build, audit, gate]\n    if: always()\n    runs-on: x\n" + PRUEF;
     const alarm2 = ALARM.replace("alarm:", "alarm2:").replace("needs: [gate]", "needs: [g2]");
     expect(punktFuer({ config, workflows: ci(GUT.replace(ALARM, g2 + ALARM + alarm2)) })).toEqual({ punkt: "Sammel-Check", ok: true });
+    const alt = (s: string) => s.split(ALARM_USES).join(ALARM_ALT);
+    expect(punktFuer({ config, workflows: ci(alt(GUT.replace(ALARM, g2 + ALARM + alarm2))) }), "Altform ./ ist von der needs-Pflicht ausgenommen").toEqual({ punkt: "Sammel-Check", ok: true });
     const nur1 = punktFuer({ config, workflows: ci(GUT.replace(ALARM, g2 + ALARM)) });
     expect(nur1.ok).toBe(false);
     expect(nur1.befund).toMatch(/Alarm-Job „alarm“.*needs nennt „g2“ nicht/);
