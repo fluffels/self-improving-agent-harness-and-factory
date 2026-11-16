@@ -23,7 +23,7 @@ type Nachweis = {
   review: { head: string | null; runden: number; lenses: string[]; blocker: { lens: string; n: number }[] | null; sollte: { lens: string; n: number }[] | null; hinweis: { lens: string; n: number }[] | null; teilbrillen: { lens: string; n: number }[] | null; verdikt: string | null } | null;
   bedrohungen?: { zeile: string; teile: Record<string, string>; doppelt: string[]; unbekannt: string[]; ohneSchluessel: string[] } | null;
 };
-type Stufe = { stufe: 0 | 1 | 2; gruende: string[]; treffer: { pfad: string; muster: string; liste: string }[]; pfade: string[]; ausloeser?: string };
+type Stufe = { stufe: 0 | 1 | 2; gruende: string[]; treffer: { pfad: string; muster: string; liste: string }[]; pfade: string[]; ausloeser?: string; kombi?: { zulaessig: boolean; gruende: string[] } };
 type Risiko = { klasse: "hoch" | "normal" | "doku"; gruende: string[] };
 type Zeilen = { praefix: string; planer: string; plan: string; review: string; bedrohungen: string; reviewOverride: string; diffsizeOverride: string };
 type Mod = {
@@ -68,6 +68,8 @@ const NORMAL: Risiko = { klasse: "normal", gruende: ["kein Pfad trifft ein Risik
 /** Berechnete Risikostufen für die Bewertung (factory#526); die Bestandstests laufen mit Stufe 1. */
 const R1: Stufe = { stufe: 1, gruende: ["Produktionscode"], treffer: [], pfade: ["src/x.ts"], ausloeser: "src/x.ts" };
 const R0: Stufe = { stufe: 0, gruende: ["nur *.md ohne Leitplanken- oder Grundschutz-Pfad"], treffer: [], pfade: ["docs/a.md"] };
+/** Mit Kombi-Lens-Grenze unterschritten (`kombi.zulaessig`, factory#529): der einzige Rechenpfad für `lenses=kombiniert` (L4). */
+const KOMBI_JA = { zulaessig: true, gruende: ["unter der Grenze"] };
 const R2: Stufe = { stufe: 2, gruende: ["package.json trifft /package.json (basis:manifeste)"], treffer: [{ pfad: "package.json", muster: "/package.json", liste: "basis:manifeste" }], pfade: ["package.json"] };
 const DREI = "architektur,requirement-treue,test-adaequanz";
 const SHA = "a".repeat(40);
@@ -240,7 +242,7 @@ describe("sollte- und hinweis-Pflichtfelder (factory#530, Schwere der Lens-Funde
   const mit = (felder: string, runden = 2, lenses = DREI) =>
     bewerteNachweis({
       nachweis: parseNachweis(review(`head=${SHA} runden=${runden} lenses=${lenses} ${felder} verdikt=ok`)),
-      stufe: lenses === "kombiniert" ? "S" : "voll",
+      risikostufe: lenses === "kombiniert" ? { ...R1, kombi: KOMBI_JA } : R1,
       dateien: lenses === "doku" ? ["docs/x.md"] : ["src/x.ts"],
       headBekannt: true,
       headImSlice: true,
@@ -336,7 +338,7 @@ describe("teilbrillen-Feld (factory#402 L21, Kombi-Lens je Teil-Brille)", () => 
       dateien: ["src/x.ts"],
       headBekannt: true,
       headImSlice: true,
-      stufe: "S",
+      risikostufe: { ...R1, kombi: KOMBI_JA },
     });
   const GUT = "architektur:1,requirement-treue:1,test-adaequanz:1";
   test("Parser: Feld fehlt → null, sonst Liste wie blocker (Umlaute, Leerzeichen)", () => {
@@ -1398,8 +1400,8 @@ describe("Risikostufe: die Wächter rechnen nach (factory#526)", () => {
   });
   test("K7: kombiniert gilt nur unter der Kombi-Lens-Grenze bei Stufe ≤ 1; die Altformen Skizze und Klein sind bei jeder Stufe rot (K2)", () => {
     const kombi = `head=${SHA} runden=1 lenses=kombiniert blocker=kombiniert:0 sollte=kombiniert:0 hinweis=kombiniert:0 teilbrillen=architektur:0,requirement-treue:0,test-adaequanz:0 verdikt=ok`;
-    assert.deepEqual(bew(text(PL, kombi), R1, { stufe: "S" }), []);
-    rot(bew(text(PL, kombi), R1, { stufe: "voll" }), /kombiniert genügt nur unter der Kombi-Lens-Grenze.*KOMBI: nein/);
+    assert.deepEqual(bew(text(PL, kombi), { ...R1, kombi: KOMBI_JA }), []);
+    rot(bew(text(PL, kombi), { ...R1, kombi: { zulaessig: false, gruende: ["zu groß"] } }), /kombiniert genügt nur unter der Kombi-Lens-Grenze.*KOMBI: nein/);
     for (const r of [R0, R1, R2]) {
       rot(bew(text(`${PL} — skizze`, kombi), r, { stufe: "S" }), /Skizzen-Form ist entfernt.*ohne — stufe <0\|1>/);
       rot(bew(text("ohne — klein: Tippfehler", kombi), r, { stufe: "S" }), /Klein-Form ist entfernt.*ohne — stufe <0\|1>/);
@@ -1407,7 +1409,26 @@ describe("Risikostufe: die Wächter rechnen nach (factory#526)", () => {
     const sicher = `${DREI},sicherheit`;
     rot(bew(text(`${PL} — skizze`, voll(2, sicher), true), R2, { stufe: "S" }), /Skizzen-Form ist entfernt/);
     rot(bew(text("ohne — klein: Tippfehler", voll(2, sicher), true), R2, { stufe: "S" }), /Klein-Form ist entfernt/);
-    rot(bew(text(PL, `${kombi.replace("lenses=kombiniert", "lenses=kombiniert,sicherheit")}`, true), R2, { stufe: "S" }), /berechnet aus dem Diff: KOMBI: ja, Risikostufe 2/);
+    rot(bew(text(PL, `${kombi.replace("lenses=kombiniert", "lenses=kombiniert,sicherheit")}`, true), { ...R2, kombi: { zulaessig: false, gruende: ["Risikostufe 2"] } }), /berechnet aus dem Diff: KOMBI: nein, Risikostufe 2/);
+    // L4: Größe S allein genügt nicht, nur risikostufe.kombi.zulaessig zählt (fail-closed: fehlt kombi, gilt nein)
+    rot(bew(text(PL, kombi), R2, { stufe: "S" }), /KOMBI: nein, Risikostufe 2/);
+    rot(bew(text(PL, kombi), R1, { stufe: "S" }), /KOMBI: nein, Risikostufe 1/);
+    assert.deepEqual(bew(text(PL, kombi), { ...R1, kombi: KOMBI_JA }, { stufe: "voll" }), []);
+  });
+  test("L4: kleiner Diff mit Stufe-2-Treffer (scripts/check-x.mjs), lenses=kombiniert: Meldung sagt KOMBI: nein, nie KOMBI: ja (Rechenpfad risikostufe.kombi)", () => {
+    const kombi = `head=${SHA} runden=2 lenses=kombiniert blocker=kombiniert:0 sollte=kombiniert:0 hinweis=kombiniert:0 teilbrillen=architektur:0,requirement-treue:0,test-adaequanz:0 verdikt=ok`;
+    const r = checkReviewNachweis({ runGit: fakeGit({ messages: text(PL, kombi, true), files: "scripts/check-x.mjs\n", numstat: "5\t1\tscripts/check-x.mjs\n" }), env: { FACTORY_DIFF_BASE: "base" } }) as unknown as { fehler: string[]; risikostufe: Stufe };
+    assert.equal(r.risikostufe.stufe, 2);
+    const f = r.fehler.join("\n");
+    assert.match(f, /kombiniert genügt nur unter der Kombi-Lens-Grenze.*KOMBI: nein, Risikostufe 2/);
+    assert.equal((r as unknown as { stufe: string }).stufe, "voll"); // Anzeige aus risikostufe.kombi, nicht aus der Größe
+  });
+  test("L4: zulässige Kombi-Lens genügt nur mit lenses=kombiniert und nur bei Code-Diff; Hinweis nennt dann KOMBI: ja", () => {
+    // Satz unvollständig ohne kombiniert: auch bei zulässiger Kombi-Lens rot (kombi && kombiOk, nicht kombiOk allein)
+    rot(bew(text(PL, voll(2, "architektur")), { ...R1, kombi: KOMBI_JA }), /lenses fehlt requirement-treue, test-adaequanz/);
+    // Doku-Diff (eine Pflicht-Brille): kombiniert genügt nicht (pflicht.length > 1); die Meldung zeigt den berechneten Wert KOMBI: ja
+    const kombi = `head=${SHA} runden=1 lenses=kombiniert blocker=kombiniert:0 sollte=kombiniert:0 hinweis=kombiniert:0 teilbrillen=architektur:0,requirement-treue:0,test-adaequanz:0 verdikt=ok`;
+    rot(bew(text(PL, kombi), { ...R1, kombi: KOMBI_JA }, { dateien: ["docs/a.md"] }), /berechnet aus dem Diff: KOMBI: ja, Risikostufe 1/);
   });
   test("Stufe-2-Pflicht über bewerteKlasseHoch: Risikostufe 2 allein genügt, Stufe 1 verlangt nichts", () => {
     const n = parseNachweis(text(PL, voll(2)));

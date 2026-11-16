@@ -2,6 +2,7 @@
 import { describe, expect, test } from "vitest";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
+import { EventEmitter } from "node:events";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as raw from "../scripts/lens-filter.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
@@ -257,5 +258,52 @@ describe("Fundstelle, Zusammenfassen, Sortierung (Review-Runde 1)", () => {
       expect(() => L.liesArgumente(a)).toThrow();
     }
     expect(L.liesArgumente(["--runde", "3"])).toMatchObject({ runde: 3, ticket: null });
+  });
+});
+
+describe("liesEingabe (factory#622 L10): kein unbegrenztes Warten auf stdin", () => {
+  type Strom = EventEmitter & { isTTY?: boolean; destroy: () => void; setEncoding: (e: string) => void; resume: () => void };
+  const R = raw as unknown as { liesEingabe: (o: { stdin: unknown; fristMs: number }) => Promise<string>; FilterFehler: new (m: string) => Error };
+  const strom = (isTTY = false): Strom => {
+    const s = new EventEmitter() as Strom;
+    s.isTTY = isTTY;
+    s.destroy = () => { s.emit("close"); };
+    s.setEncoding = () => {};
+    s.resume = () => {};
+    return s;
+  };
+  test("TTY: sofort Fehler mit Umleitungs-Hinweis", async () => {
+    // große Frist: nur die sofortige TTY-Ablehnung kann vor dem Testende rejecten (sonst wäre die Frist-Meldung vom selben Text)
+    const p = R.liesEingabe({ stdin: strom(true), fristMs: 60_000 });
+    await expect(p).rejects.toThrow(/keine Eingabe \(TTY\).*< berichte\.md/);
+    await expect(R.liesEingabe({ stdin: strom(true), fristMs: 60_000 })).rejects.toBeInstanceOf(R.FilterFehler);
+  });
+  test("Strom-Fehler wird durchgereicht", async () => {
+    const s = strom();
+    const p = R.liesEingabe({ stdin: s, fristMs: 60_000 });
+    s.emit("error", new Error("kaputt"));
+    await expect(p).rejects.toThrow("kaputt");
+  });
+  test("kein Byte innerhalb der Frist: Fehler mit Hinweis, Strom zerstört", async () => {
+    const s = strom();
+    let zerstoert = false;
+    s.destroy = () => { zerstoert = true; };
+    await expect(R.liesEingabe({ stdin: s, fristMs: 20 })).rejects.toThrow(/< berichte\.md/);
+    expect(zerstoert).toBe(true);
+  });
+  test("sofort leeres Ende: leere Eingabe", async () => {
+    const s = strom();
+    const p = R.liesEingabe({ stdin: s, fristMs: 1000 });
+    s.emit("end");
+    await expect(p).rejects.toThrow(/leere Eingabe/);
+  });
+  test("Text: geliefert; Frist zählt nur bis zum ersten Byte", async () => {
+    const s = strom();
+    const p = R.liesEingabe({ stdin: s, fristMs: 20 });
+    s.emit("data", "ab");
+    await new Promise((r) => setTimeout(r, 60));
+    s.emit("data", "cd");
+    s.emit("end");
+    await expect(p).resolves.toBe("abcd");
   });
 });

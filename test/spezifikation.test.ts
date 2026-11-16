@@ -29,6 +29,7 @@ const EIGENES = (boardLibRaw as unknown as { REPO: string }).REPO;
 const S = raw as unknown as { POSITIONS_KRITERIEN: string; fuehreAus: (argv: string[], io: Io) => { code: number; out: string; err: string }; aufrufPruefen: (argv: string[]) => { fehler?: string; befehl?: string; werte?: Record<string, unknown>; positional?: string[] } };
 
 const GUT = "## Ziel\nZ\n\n## Akzeptanzkriterien\n- Es geht.\n- Negativfall: ohne Spezifikation wird nichts angelegt.\n";
+const GUT_PFADE = `${GUT}\n## Pfade\n- \`scripts/x.mjs\`\n`;
 const OHNE_NEGATIV = "## Ziel\nZ\n\n## Akzeptanzkriterien\n- Es geht.\n";
 const ALT = "Das ist der alte Text.\nZweite Zeile des alten Texts.";
 
@@ -452,7 +453,7 @@ describe("anlegen --epic (L1): native Unteraufgabe", () => {
   const MIT = (...e: string[]) => [...ANLEGEN, ...e.flatMap((x) => ["--epic", x])];
   const mitKnoten = (extra: Record<string, unknown> = {}) => {
     const verknuepft: unknown[] = [];
-    const u = umgebung({ "b.md": GUT });
+    const u = umgebung({ "b.md": GUT_PFADE });
     const io = {
       ...u.io,
       erzeuge: (a: Parameters<Io["erzeuge"]>[0]) => ({ ...u.io.erzeuge(a), node_id: "N900" }),
@@ -466,6 +467,30 @@ describe("anlegen --epic (L1): native Unteraufgabe", () => {
     const r = S.fuehreAus(MIT("275"), io);
     expect(r.code).toBe(0);
     expect(verknuepft).toEqual([{ issueNodeId: "N900", epic: 275, repo: FREMD.repo }]);
+  });
+  test("--epic ohne Abschnitt `## Pfade`: Exit 2, nichts angelegt, nichts verknüpft (Negativfall)", () => {
+    const { io, verknuepft, aufrufe } = mitKnoten();
+    const r = S.fuehreAus(MIT("568"), { ...io, leseDatei: () => GUT });
+    expect(r.code).toBe(2);
+    expect(r.err).toContain("Pfade");
+    expect(aufrufe.erzeuge).toEqual([]);
+    expect(verknuepft).toEqual([]);
+  });
+  test("--epic mit leerem Abschnitt `## Pfade`: Exit 2, nichts angelegt", () => {
+    const { io, aufrufe } = mitKnoten();
+    expect(S.fuehreAus(MIT("568"), { ...io, leseDatei: () => `${GUT}\n## Pfade\n` }).code).toBe(2);
+    expect(aufrufe.erzeuge).toEqual([]);
+  });
+  test("ohne --epic und ohne Abschnitt: weiter wie bisher, Hinweis auf Stufe 2 (fail-closed) auf stderr", () => {
+    const { io, aufrufe } = umgebung({ "b.md": GUT });
+    const r = S.fuehreAus(ANLEGEN, io);
+    expect(r.code).toBe(0);
+    expect(r.err).toContain("ohne Abschnitt „Pfade“ wertet risikostufe --ticket Stufe 2 (fail-closed)");
+    expect(aufrufe.erzeuge).toHaveLength(1);
+  });
+  test("ohne --epic mit Abschnitt: kein Hinweis", () => {
+    const { io } = umgebung({ "b.md": GUT_PFADE });
+    expect(S.fuehreAus(ANLEGEN, io).err).toBe("");
   });
   test("ohne --epic kein Aufruf", () => {
     const { io, verknuepft } = mitKnoten();

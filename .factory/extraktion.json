@@ -792,6 +792,11 @@
       "grund": "Gegenstand ist Besitz"
     },
     {
+      "muster": "test/harness/vertrauensgrenzen-risiko.test.ts",
+      "art": "projekt-test",
+      "grund": "Projekt-Test: prüft die Risiko-Muster der Fabrik-Config gegen die Kanal-Tabelle"
+    },
+    {
       "muster": "test/entfernte-pfade-projekt.test.ts",
       "art": "projekt-test",
       "grund": "Projekt-Test: prüft Textreste entfernter Projektpfade"

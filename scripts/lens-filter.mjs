@@ -11,9 +11,8 @@
  * Hinweise lösen nie etwas aus). Verwerfen: nur Funde der Schwere sollte, nur im Arm `schlank`, nur mit echter Begründung; jeder Verstoß endet mit Exit 2 und verwirft nichts.
  * Formfehler (factory#566): im Absatz direkt nach der Zeile `Verdikt:` (Leerzeilen davor ignoriert) ist jede Zeile der Form `[…]`, `- […]` oder `- …` ohne gültige Schwere-Marke ein Fehler (Exit 2);
  * beginnt der Absatz nicht mit einer Fundzeile (null Funde, etwa Scope-Vorschläge), wird er nicht geprüft; Grenze: andere Listenzeichen (`*`, `1.`) gelten nicht als Fundzeile; ein Lens-Block ohne `Verdikt:`-Zeile hat keinen Prüfbereich, Text nach der ersten Leerzeile dahinter bleibt ungeprüft.
- * Ohne `--ticket` gilt das Verhalten von `vollablauf`, ohne Arm-Zeile. Exit 0 = Ausgabe, 2 = Eingabefehler. Der Kern ist pur und exportiert.
+ * Ohne `--ticket` gilt das Verhalten von `vollablauf`, ohne Arm-Zeile. Exit 0 = Ausgabe, 2 = Eingabefehler, auch ohne Eingabe (TTY, leer oder Frist ohne erstes Byte). Der Kern ist pur und exportiert.
  */
-import { readFileSync } from "node:fs";
 import { flagsLesen } from "./flag-lib.mjs";
 import { istDirektaufruf } from "./direktaufruf.mjs";
 import { BEKANNTE_LENSES, armAusTicket, istLeererWert, normalisiereLens } from "./nachweis-lib.mjs";
@@ -187,10 +186,41 @@ export function liesArgumente(argv) {
   return { runde: ganzzahl("runde", werte.runde) ?? Number.NaN, ticket: ganzzahl("ticket", werte.ticket), verwerfen };
 }
 
-function main(argv = process.argv.slice(2)) {
+const EINGABE_HINWEIS = "Berichte per Umleitung übergeben: node scripts/lens-filter.mjs --runde <n> < berichte.md";
+
+/** Frist bis zum ersten stdin-Byte (10 s): ohne Eingabe darf ein Umsetzer nicht unbegrenzt hängen (Endlos-stdin als Missbrauchsfall). */
+export const EINGABE_FRIST_MS = 10_000;
+
+/** Liest stdin vollständig; TTY, sofort leeres Ende oder Frist ohne erstes Byte → `FilterFehler`. Die Frist zählt nur bis zum ersten Byte, danach bis EOF. */
+export function liesEingabe({ stdin, fristMs = EINGABE_FRIST_MS }) {
+  return new Promise((resolve, reject) => {
+    if (stdin.isTTY) return reject(new FilterFehler(`keine Eingabe (TTY). ${EINGABE_HINWEIS}`));
+    let text = "";
+    const timer = setTimeout(() => {
+      stdin.destroy();
+      reject(new FilterFehler(`keine Eingabe innerhalb von ${fristMs} ms. ${EINGABE_HINWEIS}`));
+    }, fristMs);
+    stdin.setEncoding?.("utf8");
+    stdin.on("data", (chunk) => {
+      clearTimeout(timer);
+      text += chunk;
+    });
+    stdin.on("error", (e) => {
+      clearTimeout(timer);
+      reject(e);
+    });
+    stdin.on("end", () => {
+      clearTimeout(timer);
+      if (text === "") reject(new FilterFehler(`leere Eingabe. ${EINGABE_HINWEIS}`));
+      else resolve(text);
+    });
+  });
+}
+
+async function main(argv = process.argv.slice(2)) {
   try {
     const args = liesArgumente(argv);
-    console.log(formatiere(filtere({ text: readFileSync(0, "utf8"), ...args })));
+    console.log(formatiere(filtere({ text: await liesEingabe({ stdin: process.stdin }), ...args })));
   } catch (e) {
     if (!(e instanceof Error)) throw e;
     console.error(`lens-filter: ${e.message}`);

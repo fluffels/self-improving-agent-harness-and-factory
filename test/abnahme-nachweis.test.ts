@@ -284,6 +284,18 @@ describe("checkAbnahmeNachweis (git und gh injiziert)", () => {
     expect(text.r.fehler.join("\n")).toMatch(/Risikostufe berechnet 2.*Leitplanken kaputt/);
   });
 
+  test("L4: die Anzeige der Kombi-Lens-Grenze folgt risikostufe.kombi: kleiner Diff mit Stufe-2-Treffer zeigt `voll`, nie `S`", () => {
+    const numstat = "1\t1\tsrc/x.ts\n";
+    const klein = lauf({ numstat }).r as { stufe?: string; risikostufe?: { stufe: number; kombi?: { zulaessig: boolean } } };
+    expect(klein.risikostufe?.stufe).toBe(1);
+    expect(klein.stufe).toBe("S");
+    const basis = { kategorien: { gates: ["/src/x.ts"] }, muster: ["/src/x.ts"] };
+    const zwei = lauf({ numstat, ladeBasis: () => basis }).r as typeof klein;
+    expect(zwei.risikostufe?.stufe).toBe(2);
+    expect(zwei.risikostufe?.kombi?.zulaessig).toBe(false);
+    expect(zwei.stufe).toBe("voll");
+  });
+
   describe("Szenario-Durchgang zählt nicht gegen das Cap (factory#358, Ende zu Ende)", () => {
     const marker2 = (d: number, urteil: string, ursache = "") => ({ user: { login: FREMD_OWNER, type: "User" }, body: `<!-- ${abnahmeMarker(Z)} durchgang=${d} head=${H} urteil=${urteil}${ursache} -->` });
     const zeile2 = `${Z.abnahme}: head=${H} durchgaenge=2 urteil=K1:erfuellt,K2:erfuellt`;
