@@ -61,14 +61,25 @@ export function istKaputteFundzeile(zeile) {
 /** Zeile, die den Fund-Bereich eines Lens-Blocks beendet: eine Überschrift (ab "##") oder ein Abschnitt "Außerhalb …". */
 const beendetFundBereich = (zeile) => /^\s*#{2,}\s/.test(zeile) || /^\s*(\*\*)?\s*Außerhalb\b/i.test(zeile);
 
+const neuerBereich = () => ({ absatz: 0, inhalt: false, leer: false, beendet: false });
+
+/** Führt die Absatz-Zählung eines Lens-Blocks um eine Zeile weiter: Leerzeile nach Inhalt beginnt einen neuen Absatz, Überschrift oder "Außerhalb …" beendet den Fund-Bereich. */
+function bereichWeiter(b, zeile) {
+  if (zeile.trim() === "") {
+    if (b.inhalt && !b.leer) b.absatz++;
+    b.leer = true;
+  } else {
+    b.inhalt = true;
+    b.leer = false;
+  }
+  if (beendetFundBereich(zeile)) b.beendet = true;
+}
+
 /** Berichte (mehrere `## Lens: <Name>`-Blöcke) → `[{lens, funde:[{schwere, befund, ort, beleg}]}]`. Wirft `FilterFehler` ohne Lens-Block, bei unbekannter oder doppelter Brille und bei kaputter Fundzeile (`istKaputteFundzeile`). Pur. */
 export function parseBerichte(text) {
   const lenses = [];
   let aktuell = null;
-  let absatz = 0;
-  let inhalt = false;
-  let leer = false;
-  let beendet = false;
+  let bereich = neuerBereich();
   for (const zeile of String(text).replace(/\r/g, "").split("\n")) {
     const kopf = /^##\s*Lens:\s*(.+?)\s*$/i.exec(zeile);
     if (kopf) {
@@ -77,21 +88,11 @@ export function parseBerichte(text) {
       if (lenses.some((l) => l.lens === name)) throw new FilterFehler(`Brille ${name} kommt doppelt vor`);
       aktuell = { lens: name, funde: [] };
       lenses.push(aktuell);
-      absatz = 0;
-      inhalt = false;
-      leer = false;
-      beendet = false;
+      bereich = neuerBereich();
       continue;
     }
-    if (zeile.trim() === "") {
-      if (inhalt && !leer) absatz++;
-      leer = true;
-    } else {
-      inhalt = true;
-      leer = false;
-    }
-    if (beendetFundBereich(zeile)) beendet = true;
-    if (aktuell && absatz <= 1 && !beendet && istKaputteFundzeile(zeile)) throw new FilterFehler(`Brille ${aktuell.lens}: Fundzeile ohne gültige Schwere-Marke oder ohne führendes "- ": ${zeile.trim()}`);
+    bereichWeiter(bereich, zeile);
+    if (aktuell && bereich.absatz <= 1 && !bereich.beendet && istKaputteFundzeile(zeile)) throw new FilterFehler(`Brille ${aktuell.lens}: Fundzeile ohne gültige Schwere-Marke oder ohne führendes "- ": ${zeile.trim()}`);
     const fund = aktuell ? parseFund(zeile) : null;
     if (fund) aktuell.funde.push(fund);
   }
