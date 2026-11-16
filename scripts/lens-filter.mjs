@@ -44,42 +44,10 @@ function parseFund(zeile) {
   return { schwere: m[1].toLowerCase(), befund, ort: ort ? ort[1].trim() : "", beleg };
 }
 
-/**
- * Kaputte Fundzeile innerhalb des Fund-Bereichs eines Lens-Blocks (bekannte Muster: a, b, c; weitere Formen sind bewusste Grenze):
- * (a) "- [Marke] … — `ort`" mit unbekannter Marke (nicht "[ ]", "[x]" oder ein Markdown-Link), (b) "[Schwere] …" ohne führendes "- " (kein Link),
- * (c) Drei-Teil-Aufzählung "- Befund — `ort` — Beleg" ohne Marke. Nur wenn FUND_RE die Zeile nicht erkennt. Pur.
- * Bewusste Grenze: geprüft wird nur der Fund-Bereich, also der erste Absatz nach dem Verdikt (bis zur ersten Leerzeile) und nie hinter einer Überschrift oder einer Zeile "Außerhalb …"; Scope-Vorschläge und Protokolle gehören in einen eigenen Absatz.
- */
-export function istKaputteFundzeile(zeile) {
-  if (FUND_RE.test(zeile)) return false;
-  const a = /^\s*-\s*\[(?!\s*[xX]?\s*\]|[^\]]*\]\()[^\]]+\][^—–]*[—–]\s*\x60/;
-  const b = /^\s*\[[^\]]*(blockierend|sollte|hinweis)[^\]]*\](?!\()/i;
-  const c = /^\s*-\s+(?!\[).+\s[—–]\s*\x60[^\x60]+\x60\s*[—–]/;
-  return a.test(zeile) || b.test(zeile) || c.test(zeile);
-}
-
-/** Zeile, die den Fund-Bereich eines Lens-Blocks beendet: eine Überschrift (ab "##") oder ein Abschnitt "Außerhalb …". */
-const beendetFundBereich = (zeile) => /^\s*#{2,}\s/.test(zeile) || /^\s*(\*\*)?\s*Außerhalb\b/i.test(zeile);
-
-const neuerBereich = () => ({ absatz: 0, inhalt: false, leer: false, beendet: false });
-
-/** Führt die Absatz-Zählung eines Lens-Blocks um eine Zeile weiter: Leerzeile nach Inhalt beginnt einen neuen Absatz, Überschrift oder "Außerhalb …" beendet den Fund-Bereich. */
-function bereichWeiter(b, zeile) {
-  if (zeile.trim() === "") {
-    if (b.inhalt && !b.leer) b.absatz++;
-    b.leer = true;
-  } else {
-    b.inhalt = true;
-    b.leer = false;
-  }
-  if (beendetFundBereich(zeile)) b.beendet = true;
-}
-
-/** Berichte (mehrere `## Lens: <Name>`-Blöcke) → `[{lens, funde:[{schwere, befund, ort, beleg}]}]`. Wirft `FilterFehler` ohne Lens-Block, bei unbekannter oder doppelter Brille und bei kaputter Fundzeile (`istKaputteFundzeile`). Pur. */
+/** Berichte (mehrere `## Lens: <Name>`-Blöcke) → `[{lens, funde:[{schwere, befund, ort, beleg}]}]`. Wirft `FilterFehler` ohne Lens-Block, bei unbekannter oder doppelter Brille. Pur. */
 export function parseBerichte(text) {
   const lenses = [];
   let aktuell = null;
-  let bereich = neuerBereich();
   for (const zeile of String(text).replace(/\r/g, "").split("\n")) {
     const kopf = /^##\s*Lens:\s*(.+?)\s*$/i.exec(zeile);
     if (kopf) {
@@ -88,11 +56,8 @@ export function parseBerichte(text) {
       if (lenses.some((l) => l.lens === name)) throw new FilterFehler(`Brille ${name} kommt doppelt vor`);
       aktuell = { lens: name, funde: [] };
       lenses.push(aktuell);
-      bereich = neuerBereich();
       continue;
     }
-    bereichWeiter(bereich, zeile);
-    if (aktuell && bereich.absatz <= 1 && !bereich.beendet && istKaputteFundzeile(zeile)) throw new FilterFehler(`Brille ${aktuell.lens}: Fundzeile ohne gültige Schwere-Marke oder ohne führendes "- ": ${zeile.trim()}`);
     const fund = aktuell ? parseFund(zeile) : null;
     if (fund) aktuell.funde.push(fund);
   }

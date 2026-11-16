@@ -9,5 +9,3 @@ Nach jeder Runde, wenn alle Berichte da sind: Berichte über stdin an `node scri
 - `vollablauf` (Kontrollarm): blockierend und sollte lösen eine Fix-Runde aus; null davon ⇒ konvergiert.
 - `schlank`: ein Pass ohne `❌ blockierend` konvergiert. Jeden `🔶 sollte` verwirfst du mit Begründung (`--verwerfen F<k>=<Begründung>`, im PR-Text festhalten) oder fixt ihn; ein Fix zieht einen Delta-Pass nach sich (der letzte Blick ist nie der Fixer). Hinweise lösen nichts aus. Bei `runden=1` verlangt das Gate nur `blocker`-Summe 0.
 - Verwerfen: nur im Arm `schlank`, nie ein blockierender Fund, nie mit leerer Begründung (leer, `…`, `-`): Exit 2, nichts wird verworfen. Ohne `--ticket` verhält sich der Filter wie `vollablauf`, ohne `arm=`.
-
-Eine kaputte Fundzeile im ersten Absatz nach dem Verdikt (unbekannte Marke, `[Schwere]` ohne `- `, Drei-Teil-Aufzählung ohne Marke; Muster: `istKaputteFundzeile`) endet mit Exit 2: Bericht von der Lens korrigieren lassen (`SendMessage`), Filter neu fahren. Scope-Vorschläge und Protokolle stehen in einem eigenen Absatz oder hinter einer Überschrift bzw. „Außerhalb …“, dort wird nichts geprüft.
