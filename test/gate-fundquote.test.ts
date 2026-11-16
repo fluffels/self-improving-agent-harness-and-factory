@@ -688,7 +688,7 @@ describe("Messpunkte-Export der Wächter-Fänge", () => {
   const argv = ["--von", "2026-11-01", "--bis", "2026-11-02", "--ci-log", "x.txt", "--waechter-dir", "test/harness"];
   const lauf = (text: string, dateien: string[] = [A, B]) => {
     const b = basis({ liesDatei: () => text, waechterDateien: () => dateien });
-    return { exit: gf.main(argv, b.deps), out: b.log.mock.calls.map((c) => c[0] as string) };
+    return { exit: gf.main(argv, b.deps), out: b.log.mock.calls.map((c) => c[0]) };
   };
   type Export = { art: string; quelle: string; luecke?: string; punkte: { parameter: string; wert: number; einheitId: string; zeitpunkt: string }[] };
 
