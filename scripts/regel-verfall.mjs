@@ -28,7 +28,7 @@ const REGISTER = join(WURZEL, ".github", "aenderungsregister.json");
 export const aufrufHilfe = () =>
   "Aufruf: node scripts/regel-verfall.mjs --kandidaten [--export <datei>…] [--heute JJJJ-MM-TT] [--json] [--register <datei>]\n" +
   "        node scripts/regel-verfall.mjs --generieren [--heute JJJJ-MM-TT] [--trocken] [--register <datei>]\n" +
-  "Doku: docs/harness-glossar.md › Standard-Verfall, Sicherheits-Ausnahmeliste (factory#517).";
+  "Doku: Glossar-Zeilen Standard-Verfall und Sicherheits-Ausnahmeliste in docs/harness-glossar.md (factory#517).";
 
 export function parseArgs(argv) {
   const optionen = {

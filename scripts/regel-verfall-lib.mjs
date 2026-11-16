@@ -11,6 +11,7 @@
  */
 
 import { fangquote } from "./aenderungsregister-lib.mjs";
+import { fenceMaske } from "./docs-gen/markdown.mjs";
 
 /** Länge des Standard-Verfalls und des Fang-Fensters in Tagen. */
 export const VERFALL_TAGE = 30;
@@ -66,13 +67,13 @@ export const fettRegeln = (agentsText) =>
 
 /** Pur: alle Anker einer Markdown-Datei (Überschriften) und, bei `AGENTS.md`, der fett markierten Regeln. */
 export const ankerAus = (text, mitFettRegeln = false) => {
+  const zeilen = String(text).split(/\r?\n/);
+  const maske = fenceMaske(zeilen);
   const anker = new Set();
-  let imCode = false;
-  for (const zeile of String(text).split(/\r?\n/)) {
-    if (/^\s*(```|~~~)/.test(zeile)) imCode = !imCode;
-    const m = !imCode && /^#{1,6}\s+(.+?)\s*#*\s*$/.exec(zeile);
+  zeilen.forEach((zeile, i) => {
+    const m = !maske[i] && /^#{1,6}\s+(.+?)\s*#*\s*$/.exec(zeile);
     if (m) anker.add(ankerVon(m[1]));
-  }
+  });
   if (mitFettRegeln) for (const r of fettRegeln(text)) anker.add(r.anker);
   return anker;
 };
