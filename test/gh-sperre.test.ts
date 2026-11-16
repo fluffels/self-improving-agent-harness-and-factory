@@ -1,5 +1,5 @@
 /* gh-Sperre in Vitest (factory#560): die pure Funktion ghSperrePfad legt eine gh-Attrappe an und stellt ihren Ordner vor PATH. Hier nur die reinen Teile; die Setup-Datei (gh-sperre-setup.ts) wirkt über vite.config.ts. */
-import { chmodSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, delimiter } from "node:path";
 import { spawnSync } from "node:child_process";
@@ -109,6 +109,17 @@ describe("ghSperrePfad: vorbelegter Ordner (Missbrauch im geteilten Temp)", () =
     const uid = process.getuid!() + 1;
     mkdirSync(join(tmp, `factory-gh-attrappe-${uid}`), { mode: 0o700 });
     expect(() => ghSperrePfad({ PATH: "/bin" }, tmp, "linux", uid)).toThrow(/anderen Nutzer/);
+  });
+
+  it.skipIf(process.getuid === undefined)("eigene uid injiziert: Ordner endet auf -<uid>, ohne uid auf -u", () => {
+    const uid = process.getuid!();
+    const tmp = frisch();
+    const mit = ghSperrePfad({ PATH: "/bin" }, tmp, "linux", uid);
+    expect(mit).not.toBeNull();
+    expect(readdirSync(tmp)).toContain(`factory-gh-attrappe-${uid}`);
+    const tmp2 = frisch();
+    ghSperrePfad({ PATH: "/bin" }, tmp2, "linux", undefined);
+    expect(readdirSync(tmp2)).toContain("factory-gh-attrappe-u");
   });
 
   it("ein Symlink als gh-Datei mit gleichem Inhalt wird trotzdem durch eine echte Datei ersetzt", () => {

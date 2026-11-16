@@ -9,6 +9,8 @@
  * Stichprobenarm (`armAusTicket`, nachweis-lib.mjs): Ticketnummer durch 4 teilbar ⇒ `vollablauf` (blockierend und sollte lösen die nächste Fix-Runde aus),
  * sonst `schlank` (nur blockierend löst den nächsten Pass aus; sollte-Funde werden mit Begründung verworfen oder gefixt, ein Fix zieht einen Delta-Pass nach sich;
  * Hinweise lösen nie etwas aus). Verwerfen: nur Funde der Schwere sollte, nur im Arm `schlank`, nur mit echter Begründung; jeder Verstoß endet mit Exit 2 und verwirft nichts.
+ * Formfehler (factory#566): im Absatz direkt nach der Zeile `Verdikt:` (Leerzeilen davor ignoriert) ist jede Zeile der Form `[…]`, `- […]` oder `- …` ohne gültige Schwere-Marke ein Fehler (Exit 2);
+ * ein Lens-Block ohne `Verdikt:`-Zeile hat keinen Prüfbereich, Text nach der ersten Leerzeile dahinter bleibt ungeprüft.
  * Ohne `--ticket` gilt das Verhalten von `vollablauf`, ohne Arm-Zeile. Exit 0 = Ausgabe, 2 = Eingabefehler. Der Kern ist pur und exportiert.
  */
 import { readFileSync } from "node:fs";
@@ -44,6 +46,25 @@ function parseFund(zeile) {
   return { schwere: m[1].toLowerCase(), befund, ort: ort ? ort[1].trim() : "", beleg };
 }
 
+/** Formprüfung im Prüfbereich eines Lens-Blocks (factory#566 L8): ab der Zeile `Verdikt:` ein Absatz (führende Leerzeilen übersprungen, Ende an der ersten Leerzeile danach).
+ *  Wirft bei einer Fundzeile, die FUND_RE verfehlt: `[…]` ohne führendes `- `, `- [` mit unbekannter Schwere, `- `-Zeile ohne Marke. Anderer Text bleibt ungeprüft. Ohne Verdikt-Zeile gibt es keinen Prüfbereich. */
+function pruefeFundzeile(block, zeile) {
+  if (block.bereich === undefined) {
+    if (/^\s*Verdikt:/i.test(zeile)) block.bereich = { absatz: -1 };
+    return;
+  }
+  const b = block.bereich;
+  if (b.absatz > 0) return;
+  if (zeile.trim() === "") {
+    if (b.absatz === 0) b.absatz = 1;
+    return;
+  }
+  b.absatz = 0;
+  if (!FUND_RE.test(zeile) && /^\s*(-\s|\[)/.test(zeile)) {
+    throw new FilterFehler(`Brille ${block.lens}: Fundzeile ohne gültige Schwere-Marke oder ohne führendes "- ": ${zeile.trim()}`);
+  }
+}
+
 /** Berichte (mehrere `## Lens: <Name>`-Blöcke) → `[{lens, funde:[{schwere, befund, ort, beleg}]}]`. Wirft `FilterFehler` ohne Lens-Block, bei unbekannter oder doppelter Brille. Pur. */
 export function parseBerichte(text) {
   const lenses = [];
@@ -58,6 +79,7 @@ export function parseBerichte(text) {
       lenses.push(aktuell);
       continue;
     }
+    if (aktuell) pruefeFundzeile(aktuell, zeile);
     const fund = aktuell ? parseFund(zeile) : null;
     if (fund) aktuell.funde.push(fund);
   }
