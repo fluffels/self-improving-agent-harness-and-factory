@@ -54,9 +54,13 @@ describe("R6: Zusatzpass-Feld ab Pass über dem Cap (K1, K5)", () => {
 describe("zusatzpassKopfAus", () => {
   test("lange Leerzeichen-Läufe laufen linear (kein ReDoS)", () => {
     const start = Date.now();
-    assert.equal(zusatzpassKopfAus(`Zusatzpass: doku:${" ".repeat(50000)}`), null);
-    assert.equal(zusatzpassKopfAus(`Zusatzpass: doku:P · Entscheidung: A, weil ${" ".repeat(50000)}`), null);
+    assert.equal(zusatzpassKopfAus(`Zusatzpass: doku:${" ".repeat(3000)}`), null);
+    assert.equal(zusatzpassKopfAus(`Zusatzpass: doku:P · Entscheidung: A, weil ${" ".repeat(3000)}`), null); // 3000 statt 50000: ein Rückfall auf kubische Laufzeit wird rot statt zu hängen
     assert.ok(Date.now() - start < 1000);
+  });
+  test("Trenner: `·` ohne Leerzeichen gilt, „weil“ ohne Leerzeichen dahinter nicht", () => {
+    assert.equal(zusatzpassKopfAus("Zusatzpass: doku:P·Entscheidung: A, weil B")?.weil, "B");
+    assert.equal(zusatzpassKopfAus("Zusatzpass: doku:P · Entscheidung: A, weilB"), null);
   });
   test("liest die vier Teile, der letzte Treffer zählt, Teile mit Platzhalter ergeben null", () => {
     assert.deepEqual(zusatzpassKopfAus("Zusatzpass: doku:P2 · Entscheidung: A, B, weil C"), { brille: "doku", pruefpunkt: "P2", entscheidung: "A, B", weil: "C" });

@@ -85,6 +85,11 @@ describe("zusatzpassZeilenAus", () => {
     assert.equal((zusatzpassZeilenAus(`${Zl.zusatzpass}: R4 Zusatzpass - Entscheidung: X, weil Y`, Zl.zusatzpass)[0] as { k: number }).k, 4);
     assert.equal((zusatzpassZeilenAus(`* ${Zl.zusatzpass}: R4 Zusatzpass — Entscheidung: X, weil Y`, Zl.zusatzpass)[0] as { k: number }).k, 4);
   });
+  test("lange Strich-Läufe laufen linear (kein ReDoS)", () => {
+    const start = Date.now();
+    assert.ok("ungueltig" in zusatzpassZeilenAus(`${Zl.zusatzpass}: R4 ${"-".repeat(40000)}x`, Zl.zusatzpass)[0]);
+    assert.ok(Date.now() - start < 500);
+  });
   test("ungültige Formen werden als ungültig markiert", () => {
     for (const w of ["R4 Unbekannt — Entscheidung: X, weil Y", "R4 Zusatzpass — Entscheidung: X", "R4 Zusatzpass — Entscheidung: , weil Y", "R4 Zusatzpass — Entscheidung: X, weil <Grund>", "R0 Zusatzpass — Entscheidung: X, weil Y", "Rx Zusatzpass — Entscheidung: X, weil Y", "nur Text", "4 Zusatzpass — Entscheidung: X, weil Y", "xR4 Zusatzpass — Entscheidung: X, weil Y", "R4 Zusatzpass Entscheidung: X, weil Y"]) {
       assert.ok("ungueltig" in zusatzpassZeilenAus(`${Zl.zusatzpass}: ${w}`, Zl.zusatzpass)[0], w);
