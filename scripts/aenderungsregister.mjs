@@ -28,6 +28,11 @@ import { istDatum, leseMesspunkte, markerFuer, pruefeRegister, renderMarkdown, t
 
 const WURZEL = fileURLToPath(new URL("..", import.meta.url));
 const REGISTER = join(WURZEL, ".github", "aenderungsregister.json");
+const WEIL = "Qualitätsverstoß einer geprüften Änderung: kleine, entblockende Entscheidung vor Features, Rückfall-Frist läuft";
+
+/** Pur: die `gh`-Argumente der Dublettensuche zu einer Id (alle Zustände, mit Autor für die Vertrauensprüfung). */
+export const suchArgumente = (repo, id) => ["issue", "list", "--repo", repo, "--search", `aenderungsregister:${id} in:body`, "--state", "all", "--limit", "20", "--json", "number,state,body,author"];
+
 /** Pur: die Argumente für `spezifikation.mjs anlegen` (`#5` und `5` sind dieselbe Nummer; `--label` nur mit Label). */
 export const anlegeArgumente = ({ titel, datei, nach, label }) => [
   "scripts/spezifikation.mjs",
@@ -43,7 +48,6 @@ export const anlegeArgumente = ({ titel, datei, nach, label }) => [
   WEIL,
 ];
 
-const WEIL = "Qualitätsverstoß einer geprüften Änderung: kleine, entblockende Entscheidung vor Features, Rückfall-Frist läuft";
 
 export const aufrufHilfe = () =>
   "Aufruf: node scripts/aenderungsregister.mjs [--export <datei>…] [--json] [--ablage <pfad>] [--heute JJJJ-MM-TT] [--nach <nr>] [--trocken] [--register <datei>]\n" +
@@ -83,7 +87,7 @@ const standardDeps = () => {
       mkdirSync(join(pfad, ".."), { recursive: true });
       writeFileSync(pfad, text);
     },
-    ladeTickets: (repo, id) => ghJson(["issue", "list", "--repo", repo, "--search", `aenderungsregister:${id} in:body`, "--state", "all", "--limit", "20", "--json", "number,state,body,author"]),
+    ladeTickets: (repo, id) => ghJson(suchArgumente(repo, id)),
     legeAn: ({ titel, body, nach, label }) => {
       const ordner = mkdtempSync(join(tmpdir(), "aenderungsregister-"));
       try {

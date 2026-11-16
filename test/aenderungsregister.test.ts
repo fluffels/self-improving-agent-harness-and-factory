@@ -30,7 +30,7 @@ const lib = libModul as unknown as {
   renderMarkdown: (e: Z, t?: string[]) => string;
   pruefeRegister: (z: unknown) => string[];
 };
-const cli = cliModul as unknown as { parseArgs: (a: string[]) => Z; anlegeArgumente: (a: Z) => string[]; auswerten: (a: Z, d?: Z) => { exitCode: number; text: string } };
+const cli = cliModul as unknown as { parseArgs: (a: string[]) => Z; anlegeArgumente: (a: Z) => string[]; suchArgumente: (r: string, i: string) => string[]; auswerten: (a: Z, d?: Z) => { exitCode: number; text: string } };
 const spec = specModul as unknown as { pruefeEingang: (i: Z, o: Z) => { art: string; fehlt?: string[] } };
 
 const FIX = join(__dirname, "fixtures", "aenderungsregister");
@@ -316,7 +316,7 @@ describe("CLI", () => {
   });
 });
 
-describe("Grenzen und Zweige (Review Runde 1)", () => {
+describe("Grenzen und Zweige", () => {
   const qualitaetZeile = (extra: Z = {}): Z => zeile({ messgroesse: "ci-fix-runden", parameter: undefined, ...extra });
   const langfuse = (rows: Z[]): Export => ({ quelle: "langfuse", punkte: rows.map((r) => ({ messgroesse: "kosten-je-ticket-rolle", parameter: "planer", repoTag: "fix-fabrik", ...r })) });
   const q = (): Export => nurQualitaet([10, 10], [10, 10])[0];
@@ -418,6 +418,11 @@ describe("Grenzen und Zweige (Review Runde 1)", () => {
       expect(u).toMatchObject({ urteil: "Lücke", messwert: null });
       expect(u.grund).toContain("Nacharbeit-Quote fehlt");
     });
+    it("eine Lücke der Fund-Regel berichtet die Kosten trotzdem", () => {
+      const kz = zeile({ toleranz: z.toleranz });
+      const u = solo(kz, [...funde([5, 5], [1, 1], punkte("nacharbeit-quote", [14, 14], NACH_Z)), langfuse(kost([5, 5], [4, 4]))]);
+      expect(u).toMatchObject({ urteil: "Lücke", kosten: { basis: 5, nach: 4 } });
+    });
     it("Richtung faellt bei normalem Maß: genau −Schwelle ist eingehalten, darunter Verstoß", () => {
       const n = qualitaetZeile({ toleranz: { ...zeile().toleranz, richtung: "faellt" } });
       expect(solo(n, nurQualitaet([10, 10], [8, 8])).urteil).toBe("eingehalten");
@@ -434,10 +439,15 @@ describe("Grenzen und Zweige (Review Runde 1)", () => {
       const k = lib.bereichKontext([LANGFUSE], "bezieher", { ...O, repoTagAb: "2026-09-20" });
       expect((k.langfuse as Z).punkte).toHaveLength(3);
     });
+    it("Bezieher ohne Stichtag: jede Quelle trägt den Bezieher-Grund, auch ohne Export; die Fabrik nennt den fehlenden Export", () => {
+      const k = lib.bereichKontext([], "bezieher", { ...O, repoTagAb: null });
+      for (const quelle of Object.keys(k)) expect(k[quelle], quelle).toEqual({ grund: "Repo-Tag fehlt (factory#523)" });
+      expect((lib.bereichKontext([], "fabrik", O).langfuse as Z).grund).toMatch(/^Export fehlt/);
+    });
     it("Stichtag nach dem Prüftermin: Lücke mit dem Bezieher-Grund, Kosten werden trotzdem berichtet", () => {
       const erg = lib.auswertung(register, [FABRIK, LANGFUSE], { heute: "2026-11-16", ...O, repoTagAb: "2026-11-01" });
       expect(erg.zeilen[0].bezieher).toMatchObject({ urteil: "Lücke", grund: "Repo-Tag fehlt (factory#523)" });
-      expect(erg.zeilen[0].bezieher).toHaveProperty("kosten");
+      expect((erg.zeilen[0].bezieher as Z).kosten).toHaveProperty("luecke");
     });
   });
 
@@ -446,6 +456,13 @@ describe("Grenzen und Zweige (Review Runde 1)", () => {
     const kosten2 = (extra: Z): Z => ({ ...register.zeilen[2], messgroesse: "kosten-je-ticket-rolle", parameter: "planer", toleranz: { ...a.toleranz, qualitaetsmass: "ci-fix-runden" }, ...extra });
     it("gleiche Messgröße samt Parameter berührt auch bei anderem Qualitätsmaß", () => {
       expect(lib.ueberlappungen([a, kosten2({})])).toEqual([["fix-faellig", "fix-ueberlappt"]]);
+    });
+    it("die Fenstergrenzen berühren sich inklusive: Änderungsdatum gleich Prüftermin der anderen Zeile zählt, ein Tag später nicht", () => {
+      const grenze = (extra: Z) => lib.ueberlappungen([a, kosten2(extra)]);
+      expect(grenze({ datum: "2026-10-29", pruefTermin: "2026-11-26" })).toHaveLength(1);
+      expect(grenze({ datum: "2026-10-30", pruefTermin: "2026-11-27" })).toEqual([]);
+      expect(grenze({ datum: "2026-09-03", pruefTermin: "2026-10-01" })).toHaveLength(1);
+      expect(grenze({ datum: "2026-09-02", pruefTermin: "2026-09-30" })).toEqual([]);
     });
     it("gleiche Messgröße mit anderem Parameter und anderem Maß berührt nicht", () => {
       expect(lib.ueberlappungen([a, kosten2({ parameter: "umsetzer" })])).toEqual([]);
@@ -472,6 +489,12 @@ describe("Grenzen und Zweige (Review Runde 1)", () => {
   describe("CLI-Verdrahtung", () => {
     const basis = { bezieher: false, heute: "2026-11-16", eigenerRepoTag: "fix-fabrik", repo: "o/r", label: "x", schreibe: () => undefined, ladeTickets: () => [] };
     const dateien = ["--register", join(FIX, "register.json"), "--export", join(FIX, "messpunkte-fabrik.json"), "--export", join(FIX, "messpunkte-langfuse.json"), "--json"];
+    it("die Dublettensuche fragt alle Zustände ab und lädt den Autor für die Vertrauensprüfung", () => {
+      const a = cli.suchArgumente("o/r", "solo");
+      expect(a[a.indexOf("--json") + 1]).toContain("author");
+      expect(a[a.indexOf("--state") + 1]).toBe("all");
+      expect(a).toContain("aenderungsregister:solo in:body");
+    });
     it("--heute geht vor dem Standard-Datum", () => {
       const r = cli.auswerten(cli.parseArgs([...dateien, "--heute", "2026-10-28"]), basis);
       expect(JSON.parse(r.text).zeilen[0].fabrik.urteil).toBe("noch nicht fällig");
