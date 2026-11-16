@@ -74,7 +74,7 @@ function standardWorktrees(repoWurzel) {
   return r.stdout.split(/\r?\n/).filter((z) => z.startsWith("worktree ")).map((z) => z.slice("worktree ".length));
 }
 
-function abhaengigkeiten(deps = {}) {
+export function abhaengigkeiten(deps = {}) {
   const repoWurzel = deps.repoWurzel ?? REPO_WURZEL;
   return {
     repoWurzel: realMitVorfahr(repoWurzel),
@@ -85,7 +85,7 @@ function abhaengigkeiten(deps = {}) {
 }
 
 /** Liest die Freigabeliste; `{ hinweis }` wenn Variable oder Datei fehlen, `{ fehler }` bei kaputter Liste. */
-function ladeListe(env) {
+export function ladeListe(env) {
   const pfad = (umgebungsWert(env, "FACTORY_ANALYSE_FREIGABE") ?? "").trim();
   if (!pfad) return { hinweis: "Hinweis: Teil 6 entfällt (keine Freigabeliste: FACTORY_ANALYSE_FREIGABE nicht gesetzt)" };
   if (!existsSync(pfad)) return { hinweis: "Hinweis: Teil 6 entfällt (keine Freigabeliste: Datei fehlt)" };
@@ -101,7 +101,7 @@ function pruefeEinen(wurzel, login) {
   return pruefeBezieher({ istCheckout: konfig !== null, eigentuemer: konfig === null ? null : remoteEigentuemer(konfig), login });
 }
 
-function ablageFehler(env, d, bezieherWurzeln) {
+export function ablageFehler(env, d, bezieherWurzeln) {
   const roh = (umgebungsWert(env, "FACTORY_ANALYSE_ABLAGE") ?? "").trim();
   if (!roh) return { fehler: "FACTORY_ANALYSE_ABLAGE nicht gesetzt: nichts geschrieben" };
   const ablage = realMitVorfahr(roh);
