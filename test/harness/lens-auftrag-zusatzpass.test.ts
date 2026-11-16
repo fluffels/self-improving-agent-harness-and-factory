@@ -6,6 +6,10 @@
  * `Zusatzpass: <Brille>:<Prüfpunkt> · Entscheidung: <X>, weil <Y>`. Grenze: nur der Review-Worktree `r`, nicht `m/a/c`. */
 import { describe, test } from "vitest";
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { FREMD } from "../support/fremd-config";
 // @ts-expect-error: kein .d.ts für das .mjs-Hook-Skript.
 import * as hookRaw from "../../scripts/pretooluse-hook.mjs";
@@ -83,7 +87,7 @@ describe("zusatzpassKopfAus", () => {
 });
 
 describe("R6 stufenabhängig: bei Risikostufe 1 sperrt schon `-lens-r3-` (factory#583)", () => {
-  const WTPFAD = (ende: string) => `/w/.claude/worktrees/${WT}7-lens-${ende}`;
+  const ARBEIT = `/w/.claude/worktrees/${WT}7`;
   const mit = (stufe: number | "wirft", aufrufe: string[] = []) => (prompt: string) =>
     hook.dispatch(agent(prompt), "/w", undefined, undefined, {
       config: FREMD,
@@ -98,29 +102,64 @@ describe("R6 stufenabhängig: bei Risikostufe 1 sperrt schon `-lens-r3-` (factor
     const r = mit(1, aufrufe)(kopf("r3-architektur"));
     assert.equal(r?.hookSpecificOutput.permissionDecision, "deny");
     assert.match(r?.hookSpecificOutput.permissionDecisionReason ?? "", /Runde 3, das Cap liegt bei 2 Pässen/);
-    assert.deepEqual(aufrufe, [WTPFAD("r3-architektur")], "die Stufe kommt aus dem Lens-Worktree");
+    assert.deepEqual(aufrufe, [ARBEIT], "die Stufe kommt aus dem Arbeitsverzeichnis (der Lens-Worktree existiert beim Spawn noch nicht)");
     assert.equal(mit(1)(kopf("r2-architektur")), null);
   });
-  test("Stufe 1: ein vollständiges Feld lässt `-lens-r3-` durch, auch ohne Stufenbestimmung", () => {
+  test("Stufe 1: ein vollständiges Feld lässt `-lens-r3-` durch, ohne Stufenbestimmung", () => {
     const aufrufe: string[] = [];
     assert.equal(mit(1, aufrufe)(kopf("r3-architektur", FELD)), null);
     assert.deepEqual(aufrufe, []);
   });
-  test("Stufe 2: `-lens-r3-` ohne Feld geht durch, `-lens-r4-` bleibt gesperrt", () => {
+  test("Stufe 2: `-lens-r3-` ohne Feld geht durch, `-lens-r4-` bleibt gesperrt und fragt die Stufe nicht", () => {
     assert.equal(mit(2)(kopf("r3-architektur")), null);
-    assert.match(mit(2)(kopf("r4-architektur"))?.hookSpecificOutput.permissionDecisionReason ?? "", /Cap liegt bei 3 Pässen/);
+    const aufrufe: string[] = [];
+    assert.match(mit(1, aufrufe)(kopf("r4-architektur"))?.hookSpecificOutput.permissionDecisionReason ?? "", /Cap liegt bei 3 Pässen/);
+    assert.deepEqual(aufrufe, [], "über MAX_REVIEW_PAESSE startet kein Prozess");
   });
-  test("Stufe nicht bestimmbar: bisheriges Verhalten (Cap MAX_REVIEW_PAESSE), auch mit dem Standard-Kindprozess in einem fehlenden Worktree", () => {
+  test("Stufe nicht bestimmbar: bisheriges Verhalten (Cap MAX_REVIEW_PAESSE)", () => {
     assert.equal(mit("wirft")(kopf("r3-architektur")), null);
     assert.equal(mit("wirft")(kopf("r4-architektur"))?.hookSpecificOutput.permissionDecision, "deny");
-    assert.equal(deny(kopf("r3-architektur")), null);
+    assert.equal(deny(kopf("r3-architektur")), null, "Standard-Kindprozess in einem fehlenden Arbeitsverzeichnis");
   });
-  test("ein Pfad außerhalb von `.claude/worktrees/` (oder mit `..`) startet keinen Prozess", () => {
-    for (const ende of ["/tmp/fremd/" + WT + "7-lens-r3-architektur", "/w/.claude/worktrees/../x/" + WT + "7-lens-r3-architektur", WT + "7-lens-r3-architektur"]) {
+  test("ein Arbeitsverzeichnis außerhalb von `.claude/worktrees/` oder mit `..` startet keinen Prozess; Laufwerk und Backslash gelten", () => {
+    const mitArbeit = (arbeit: string) => `Brille: architektur · Arbeitsverzeichnis: ${arbeit} · Patch: /tmp/x/${WT}7-r1.patch · erwarteter HEAD: abc1234def · Sabotage-Worktree: /w/.claude/worktrees/${WT}7-lens-r3-architektur`;
+    for (const arbeit of ["/tmp/fremd/" + WT + "7", "/w/../.claude/worktrees/" + WT + "7", "/w/.claude/worktrees/../x/" + WT + "7", WT + "7", "/w/.claude/worktrees/a/b", ""]) {
       const aufrufe: string[] = [];
-      const prompt = `Brille: architektur · Arbeitsverzeichnis: /w/.claude/worktrees/${WT}7 · Patch: /tmp/x/${WT}7-r1.patch · erwarteter HEAD: abc1234def · Sabotage-Worktree: ${ende}`;
-      assert.equal(mit(1, aufrufe)(prompt), null, ende);
-      assert.deepEqual(aufrufe, [], ende);
+      assert.equal(mit(1, aufrufe)(mitArbeit(arbeit)), null, arbeit);
+      assert.deepEqual(aufrufe, [], arbeit);
+    }
+    for (const arbeit of ["C:\\w\\.claude\\worktrees\\" + WT + "7", "`/w/.claude/worktrees/" + WT + "7`"]) {
+      const aufrufe: string[] = [];
+      assert.equal(mit(1, aufrufe)(mitArbeit(arbeit))?.hookSpecificOutput.permissionDecision, "deny", arbeit);
+      assert.equal(aufrufe.length, 1, arbeit);
+    }
+  });
+  test("echter Kindprozess: ein Git-Worktree mit Codeänderung ergibt Stufe 1 und sperrt `-lens-r3-`, ein Feld lässt ihn durch", () => {
+    const wurzel = mkdtempSync(join(tmpdir(), "zusatzpass-"));
+    const arbeit = join(wurzel, ".claude", "worktrees", `${WT}7`);
+    const git = (...a: string[]) => execFileSync("git", a, { cwd: arbeit, stdio: "ignore" });
+    const alt = process.env.FACTORY_DIFF_BASE;
+    delete process.env.FACTORY_DIFF_BASE;
+    try {
+      mkdirSync(join(arbeit, "scripts"), { recursive: true });
+      git("init", "-q", "-b", "main");
+      git("config", "user.email", "t@example.invalid");
+      git("config", "user.name", "t");
+      writeFileSync(join(arbeit, "scripts", "a.mjs"), "a\n");
+      git("add", "-A");
+      git("commit", "-qm", "basis");
+      git("update-ref", "refs/remotes/origin/main", "HEAD");
+      git("checkout", "-q", "-b", "f");
+      writeFileSync(join(arbeit, "scripts", "a.mjs"), "a\nb\n");
+      git("commit", "-qam", "aenderung");
+      const prompt = `Brille: architektur · Arbeitsverzeichnis: ${arbeit} · Patch: /tmp/x/${WT}7-r1.patch · erwarteter HEAD: abc1234def · Sabotage-Worktree: ${arbeit}-lens-r3-architektur`;
+      const r = deny(prompt);
+      assert.equal(r?.hookSpecificOutput.permissionDecision, "deny");
+      assert.match(r?.hookSpecificOutput.permissionDecisionReason ?? "", /Runde 3, das Cap liegt bei 2 Pässen/);
+      assert.equal(deny(prompt.replace("Brille: architektur", `Brille: architektur${FELD}`)), null);
+    } finally {
+      if (alt !== undefined) process.env.FACTORY_DIFF_BASE = alt;
+      rmSync(wurzel, { recursive: true, force: true });
     }
   });
 });
