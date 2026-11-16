@@ -1242,6 +1242,11 @@
       "grund": "Prüft das Änderungsregister der Fabrik (.github/aenderungsregister.json, nicht im Besitz)"
     },
     {
+      "muster": "test/fangquote-export.test.ts",
+      "art": "projekt-test",
+      "grund": "Prüft den Fangquote-Export der Fabrik (scripts/fangquote-export.mjs, nicht im Besitz, factory#607)"
+    },
+    {
       "muster": "test/aenderungsregister.test.ts",
       "art": "projekt-test",
       "grund": "Prüft die Wirkungsprüfung der Fabrik (scripts/aenderungsregister.mjs, nicht im Besitz, factory#572)"
