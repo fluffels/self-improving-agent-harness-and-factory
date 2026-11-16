@@ -5,7 +5,7 @@
     "CC_LANGFUSE_TRACE_TAGS": "factory,self-improving-agent-harness-and-factory"
   },
   "enabledPlugins": {
-    "langfuse-observability@langfuse-observability": true,
+    "langfuse-observability@langfuse-observability": false,
     "data@synced": false,
     "cowork-plugin-management@synced": false
   },

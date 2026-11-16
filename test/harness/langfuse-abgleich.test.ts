@@ -12,7 +12,7 @@ import { readdirSync, readFileSync, statSync, utimesSync } from "node:fs";
 import { join, posix } from "node:path";
 import { fixture } from "../support/tmp-fixture";
 import { lokaleImporteTransitiv } from "./hook-importe";
-import { FREMD, projektConfig } from "../support/fremd-config";
+import { FREMD } from "../support/fremd-config";
 
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawAbgleichEinstieg from "../../scripts/langfuse-abgleich.mjs";

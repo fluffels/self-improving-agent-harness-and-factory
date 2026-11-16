@@ -32,7 +32,6 @@ import * as kontingentRoh from "../scripts/kontingent-lib.mjs";
 
 type Row = Record<string, unknown>;
 const WT = FREMD.praefixe.worktree;
-const BRANCH = FREMD.praefixe.branch;
 const { planer: PLANER, umsetzer: UMSETZER, lens: LENS } = FREMD.agenten;
 type Lauf = { meta: { agentType?: string }; zeilen: Row[] };
 type Namen = { agenten: Record<string, string>; praefixe: { worktree: string } };

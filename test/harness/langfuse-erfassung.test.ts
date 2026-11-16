@@ -197,11 +197,12 @@ const erfassungKonfigIntakt = (settingsJson: string): boolean => {
     enabledPlugins?: Record<string, boolean>;
     env?: Record<string, string>;
     disableAllHooks?: boolean;
+    hooks?: Record<string, { hooks: { args?: string[] }[] }[]>;
   };
-  return (
-    s.enabledPlugins?.["langfuse-observability@langfuse-observability"] === true &&
-    s.disableAllHooks !== true
-  );
+  const plugin = s.enabledPlugins?.["langfuse-observability@langfuse-observability"];
+  // Plugin an (Sender Plugin) oder im Projekt-Scope bewusst aus (factory#524, ADR 0036): dann sendet der Nachlieferer, also muss SessionEnd ihn starten.
+  const nachlieferer = (s.hooks?.SessionEnd ?? []).some((e) => e.hooks.some((h) => (h.args ?? []).some((a) => a.endsWith("scripts/langfuse-abgleich-hook.mjs"))));
+  return (plugin === true || (plugin === false && nachlieferer)) && s.disableAllHooks !== true;
 };
 
 /** Der automatische Abgleich (#1578) ist verdrahtet: SessionStart UND SessionEnd starten den Hook, kein Stop/SubagentStop, und das vom Hook gestartete Skript samt Importen ist geschützt. */
@@ -401,6 +402,11 @@ describe("Langfuse-Status und Erfassungsschutz (#1293)", () => {
     const ok = { enabledPlugins: { "langfuse-observability@langfuse-observability": true } };
     assert.ok(erfassungKonfigIntakt(JSON.stringify(ok)));
     assert.ok(!erfassungKonfigIntakt(JSON.stringify({ ...ok, enabledPlugins: {} })));
+    // Plugin aus: nur mit Nachlieferer als Sender (SessionEnd-Hook), sonst sendet niemand
+    const aus = { enabledPlugins: { "langfuse-observability@langfuse-observability": false } };
+    const hook = { SessionEnd: [{ hooks: [{ type: "command", command: "node", args: ["${CLAUDE_PROJECT_DIR}/scripts/langfuse-abgleich-hook.mjs"] }] }] };
+    assert.ok(erfassungKonfigIntakt(JSON.stringify({ ...aus, hooks: hook })));
+    assert.ok(!erfassungKonfigIntakt(JSON.stringify(aus)));
     assert.ok(!erfassungKonfigIntakt(JSON.stringify({ ...ok, disableAllHooks: true })));
   });
 });

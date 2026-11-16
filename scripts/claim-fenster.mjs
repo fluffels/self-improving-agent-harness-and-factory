@@ -12,10 +12,13 @@
  *   Merge        → `nachlauf`, wenn ein Fenster offen ist
  * Gründe ohne Ticket: `vor-claim`, `nach-freigabe`, `nachlauf`, `ohne-zeit` (Call ohne gültigen Zeitstempel).
  */
-import { toolEventsFromTranscript } from "./brain-metrics.mjs";
+import { toolPaare } from "./transkript.mjs";
 import { claimNummer, freigabeNummer, istMerge } from "./mess-lib.mjs";
 
 const SHELLS = new Set(["Bash", "PowerShell"]);
+
+/** Tool-Aufrufe der Zeilen als `{ ts, tool, input }` (die Hülle des Nachlieferers kennt `transkript.mjs`, nicht `brain-metrics.mjs`). */
+const aufrufe = (zeilen) => toolPaare(zeilen).map(({ use: { row, block } }) => ({ ts: row.timestamp, tool: block.name, input: block.input ?? {} }));
 
 /** Claims der Tool-Events (Bash/PowerShell) als `{ nr, ts, turn }`; `turnVon(ev)` ordnet jedem Claim seinen Turn zu. */
 export function claimsAus(events, turnVon) {
@@ -34,8 +37,8 @@ export function claimsAus(events, turnVon) {
  */
 export function fensterAus(sitzung) {
   const events = [
-    ...toolEventsFromTranscript(sitzung.main),
-    ...(sitzung.subagents ?? []).filter((sa) => !sa.meta?.parentAgentId).flatMap((sa) => toolEventsFromTranscript(sa.zeilen)),
+    ...aufrufe(sitzung.main),
+    ...(sitzung.subagents ?? []).filter((sa) => !sa.meta?.parentAgentId).flatMap((sa) => aufrufe(sa.zeilen)),
   ];
   const out = [];
   for (const ev of events) {
