@@ -166,7 +166,7 @@ describe("sollEintraege: Ticket und Trace je Call", () => {
   });
   test("ein verschachtelter Agent erbt über die Kette das Ticket der Startzeit des Wurzel-Agenten", () => {
     // das Fenster endet vor dem Start von b: ohne die Kette zum Wurzel-Agenten a wäre b `nachlauf`
-    const s = sitzung([call(1, claim(7)), call(10, merge)], [sub("a", [call(3)]), sub("b", [call(50)], "a")]);
+    const s = sitzung([call(1, claim(7)), call(10, merge)], [sub("a", [call(3)]), sub("b", [call(50)], "agent-a")]); // die Eltern-ID trägt das Präfix agent-
     expect(K.sollEintraege(s, { worktree: WT }).filter((x) => x.rolle).map((x) => x.ticket)).toEqual([`${WT}7`, `${WT}7`]);
   });
   test("Call ohne Zeitstempel: ohne-zeit", () => {
