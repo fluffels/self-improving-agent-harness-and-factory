@@ -1267,6 +1267,16 @@
       "grund": "Fixtures der Wirkungsprüfung (factory#572), nur von projekt-test genutzt"
     },
     {
+      "muster": "test/token-analyse-ausloesen.test.ts",
+      "art": "projekt-test",
+      "grund": "Prüft den Auslöser der Token-Analyse (Fabrik-eigen, factory#518, nicht im Besitz)"
+    },
+    {
+      "muster": "test/harness/token-analyse-notfall.test.ts",
+      "art": "projekt-test",
+      "grund": "Bindet die Notfall-Art token-analyse an die Fabrik-eigene Quelle (factory#518, nicht im Besitz)"
+    },
+    {
       "muster": "test/harness/repo-tag-fabrik.test.ts",
       "art": "projekt-test",
       "grund": "Prüft das Repo-Tag in den Settings der Fabrik (env der .claude/settings.json steht nicht im Besitz; Bezieher prüft der Harness-Doctor)"

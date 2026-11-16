@@ -2,7 +2,7 @@
 /* Harness-Doctor, Punkt `Sammel-Check` (factory#401): jeder Workflow aus `sammelChecks` der Projekt-Config hat einen Sammel-Job, der per `needs` an allen anderen Jobs seines Workflows hängt
  * (ein Required Check deckt so eine wechselnde Job-Menge; `needs` wirkt nur innerhalb eines Workflows), und einen Alarm-Job, der bei rotem Lauf auf main das Alarm-Issue öffnet.
  *
- *   L53 (needs-Vollständigkeit): jeder Schlüssel unter `jobs` steht in `needs` des Sammel-Jobs. Ausgenommen sind der Sammel-Job selbst, Jobs mit `uses: ./.github/workflows/alarm-rot-main.yml` und Jobs, die (auch über mehrere Stufen) selbst am Sammel-Job hängen (ein Eintrag dort wäre ein Zyklus; solche Jobs gaten den Required Check nicht).
+ *   L53 (needs-Vollständigkeit): jeder Schlüssel unter `jobs` steht in `needs` des Sammel-Jobs. Ausgenommen sind der Sammel-Job selbst, Jobs mit `uses: $/.github/workflows/alarm-rot-main.yml` (oder der älteren Form `./…`) und Jobs, die (auch über mehrere Stufen) selbst am Sammel-Job hängen (ein Eintrag dort wäre ein Zyklus; solche Jobs gaten den Required Check nicht).
  *   factory#413 L6 (Ergebnisprüfung): GitHub wertet einen übersprungenen Job als bestanden, auch als Required Check; läuft der Sammel-Job nicht, wenn ein Bedarfsjob rot ist, deckt er nichts. Sein `if` enthält darum `always()` oder `!cancelled()`, und sein Block wertet `needs.<job>.result` (auch `needs.*.result`) oder `toJSON(needs)` aus (Textsuche im Job-Block ohne Kommentarzeilen und Zeilenend-Kommentare, unabhängig von der Einrückung; rot bei failure und cancelled, nicht bei skipped). Grenze: eine Auswertung in einer Composite-Action oder einem wiederverwendbaren Workflow erkennt der Punkt nicht.
  *   L52 (Alarm bei rotem main): es gibt einen Job mit genau diesem `uses`, dessen `needs` den Sammel-Job nennt und dessen `if` `failure()` und `github.event_name == 'push'` enthält; der Workflow läuft auf `push`.
  *
@@ -12,7 +12,9 @@ import { gut, luecke, nichtPruefbar } from "./harness-doctor-ergebnis.mjs";
 import { blockformJobs } from "./workflow-blockform.mjs";
 
 const PUNKT = "Sammel-Check";
-const ALARM_USES = "./.github/workflows/alarm-rot-main.yml";
+const ALARM_USES = "$/.github/workflows/alarm-rot-main.yml";
+const ALARM_USES_FORMEN = [ALARM_USES, "./.github/workflows/alarm-rot-main.yml"];
+const istAlarm = (j) => ALARM_USES_FORMEN.includes(j.uses);
 const PRUEFEN = "node scripts/harness-doctor.mjs --pruefen";
 
 const aufruf = (job) => `  alarm-rot-main:\n    needs: [${job}]\n    if: failure() && github.event_name == 'push'\n    permissions: { contents: read, issues: write }\n    uses: ${ALARM_USES}\n    with: { label: <Alarm-Label> }\n    secrets: { PROJECT_TOKEN: \${{ secrets.PROJECT_TOKEN }} }`;
@@ -32,7 +34,7 @@ function haengtAn(jobs, j, ziel, besucht = new Set()) {
 }
 
 function needsLuecke(jobs, sammel, workflow) {
-  const pflicht = jobs.filter((j) => j.id !== sammel.id && j.uses !== ALARM_USES && !haengtAn(jobs, j, sammel.id));
+  const pflicht = jobs.filter((j) => j.id !== sammel.id && !istAlarm(j) && !haengtAn(jobs, j, sammel.id));
   const fehlend = pflicht.filter((j) => !sammel.needs.includes(j.id)).map((j) => j.id);
   if (fehlend.length === 0) return [];
   const alle = pflicht.map((j) => j.id);
@@ -50,7 +52,7 @@ function ergebnisLuecke(sammel, workflow) {
 }
 
 function alarmLuecke(jobs, ausloeser, job, workflow) {
-  const alarme = jobs.filter((j) => j.uses === ALARM_USES);
+  const alarme = jobs.filter(istAlarm);
   const alarm = alarme.find((j) => j.needs.includes(job)) ?? alarme[0];
   const fix = `den Alarm-Aufruf ergänzen, dann ${PRUEFEN}:\n${aufruf(job)}`;
   if (alarm === undefined) return [{ befund: `${workflow}: kein Job ruft ${ALARM_USES} auf (ein roter main bliebe ohne Alarm-Issue)`, fix }];

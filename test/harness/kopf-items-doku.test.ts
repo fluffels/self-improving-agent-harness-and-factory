@@ -18,6 +18,7 @@ const WURZEL = fileURLToPath(new URL("../../", import.meta.url));
 export const ANZEIGE: Record<string, string> = {
   "rot-main": "Notfälle",
   security: "Notfälle",
+  "token-analyse": "Token-Analyse",
   dependabot: "Dependabot",
   forum: "Forum",
   wiedervorlage: "Wiedervorlage",

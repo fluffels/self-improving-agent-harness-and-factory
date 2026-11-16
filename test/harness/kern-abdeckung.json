@@ -71,6 +71,14 @@
     "art": "projekt",
     "grund": "Fabrik-eigene Token-Analyse (factory#518), nicht im Besitz-Manifest"
   },
+  "scripts/token-analyse-ausloesen.mjs": {
+    "art": "projekt",
+    "grund": "Fabrik-eigener Auslöser der Token-Analyse (factory#518), nicht im Besitz-Manifest"
+  },
+  "scripts/token-analyse-ausloesen-lib.mjs": {
+    "art": "projekt",
+    "grund": "Fabrik-eigene Auslöser-Logik der Token-Analyse (factory#518), nicht im Besitz-Manifest"
+  },
   ".github/aenderungsregister.json": {
     "art": "projekt",
     "grund": "Änderungsregister dieses Repos (Daten der Fabrik, factory#571)"
