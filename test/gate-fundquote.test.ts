@@ -1,5 +1,7 @@
 /* Gate-Fundquote (factory#39): Verhalten von scripts/gate-fundquote.mjs. Fixtures mit synthetischem Paket, IO ist injiziert. */
-import { readFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, expect, test, vi } from "vitest";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as gfModule from "../scripts/gate-fundquote.mjs";
@@ -599,7 +601,7 @@ const wf = gfModule as {
   waechterPunkte: (l: (Lauf & { ts: number; waechter?: Waechter })[], d: string[]) => { datei: string; einheitId: string; ts: number; wert: number }[];
   waechterLuecke: (l: Lauf[]) => string;
   waechterExport: (p: { datei: string; einheitId: string; ts: number; wert: number }[], luecke: string) => Record<string, unknown>;
-  waechterDateien: (o: string, liste: (p: string) => string[]) => string[];
+  waechterDateien: (o: string, liste?: (p: string) => string[]) => string[];
 };
 const A = "test/harness/a.test.ts";
 const B = "test/harness/b.test.ts";
@@ -735,5 +737,107 @@ describe("Messpunkte-Export der Wächter-Fänge", () => {
     expect(wf.waechterDateien("test/harness", () => ["b.test.ts", "sub\\a.spec.mts", "hilfe.ts", "README.md"])).toEqual(["test/harness/b.test.ts", "test/harness/sub/a.spec.mts"]);
     expect(wf.waechterExport([], "g")).toMatchObject({ luecke: "g", punkte: [] });
     expect(wf.waechterExport([{ datei: A, einheitId: "e", ts: 0, wert: 1 }], "g")).not.toHaveProperty("luecke");
+  });
+});
+
+// ── Runde 1: Nachschärfung der Wächter-Fänge (Lens-Funde) ───────────────────
+
+describe("faengeAusText: Muster und Grenzen", () => {
+  const ESC = String.fromCharCode(27);
+  const lauf = (...z: string[]) => wf.faengeAusText([...z, ...summe]);
+
+  test("Farbcodes vor FAIL und Summe stören nicht (gh-Log mit ESC-Sequenzen)", () => {
+    const z = [`${ESC}[41m${ESC}[1m FAIL ${ESC}[22m${ESC}[49m ${A}${ESC}[2m > ${ESC}[22mx`, `${ESC}[2m Test Files ${ESC}[22m ${ESC}[31m1 failed${ESC}[39m`];
+    expect(wf.faengeAusText(z)).toEqual({ vitest: true, faenge: [A], ausgeschlossen: [] });
+  });
+
+  test.each([
+    ["Hook timed out", "Error: Hook timed out in 10000ms.", "Zeitlimit"],
+    ["Timeout of exceeded", "Error: Timeout of 5000 ms exceeded", "Zeitlimit"],
+    ["Großschreibung", "ERROR: TEST TIMED OUT IN 5000MS", "Zeitlimit"],
+    ["SIGKILL", "Process exited with SIGKILL", "Abbruch"],
+    ["SIGINT", "received SIGINT", "Abbruch"],
+    ["Terminated", "Terminated", "Abbruch"],
+    ["ECONNRESET", "Error: read ECONNRESET", "Infrastruktur"],
+    ["ECONNREFUSED", "connect ECONNREFUSED 127.0.0.1:1", "Infrastruktur"],
+    ["ETIMEDOUT", "connect ETIMEDOUT", "Infrastruktur"],
+    ["EAI_AGAIN", "getaddrinfo EAI_AGAIN host", "Infrastruktur"],
+    ["ENOSPC", "ENOSPC: no space left on device", "Infrastruktur"],
+    ["socket hang up", "Error: socket hang up", "Infrastruktur"],
+  ])("Negativfall %s ist kein Fang", (_n, text, grund) => {
+    expect(lauf(` FAIL  ${A} > t`, text)).toEqual({ vitest: true, faenge: [], ausgeschlossen: [{ datei: A, grund }] });
+  });
+
+  test("ein Wort wie Terminated mitten im Satz ist kein Abbruch", () => {
+    expect(lauf(` FAIL  ${A} > t`, "AssertionError: Terminated early expected").faenge).toEqual([A]);
+  });
+
+  test("FAIL-Zeile: nur am Zeilenanfang, Pfad endet am Zeilenende oder Leerzeichen, spec und mjs zählen", () => {
+    expect(lauf("x FAIL  test/harness/a.test.ts > t").faenge).toEqual([]);
+    expect(lauf(" FAIL  test/harness/a.test.ts.snap > t").faenge).toEqual([]);
+    expect(lauf(" FAIL  test/harness/a.spec.mjs").faenge).toEqual(["test/harness/a.spec.mjs"]);
+    expect(lauf(" FAIL  test/harness/a.test.tsx > t").faenge).toEqual(["test/harness/a.test.tsx"]);
+    expect(lauf(" FAIL  test/harness/a.test.jsx > t").faenge).toEqual(["test/harness/a.test.jsx"]);
+  });
+
+  test("die Vitest-Summe braucht eine Zahl", () => {
+    expect(wf.faengeAusText(["Test Files"]).vitest).toBe(false);
+    expect(wf.faengeAusText(["Test Files  3 passed"]).vitest).toBe(true);
+  });
+
+  test("Blockgrenze: ein Ausschlussgrund in der 25. Zeile des Blocks zählt, in der 26. nicht", () => {
+    const fuell = (n: number) => Array.from({ length: n }, () => "zeile");
+    const ab = (n: number) => wf.faengeAusText([` FAIL  ${A} > t`, ...fuell(n), "Error: Test timed out in 5ms."]);
+    expect(ab(23).ausgeschlossen).toHaveLength(1);
+    expect(ab(24).faenge).toEqual([A]);
+  });
+});
+
+describe("Wächter-Fänge: Transkript und persistierte Ausgabe", () => {
+  const rot = [` FAIL  ${A} > t`, "AssertionError: x", ...summe].join("\n");
+  const marker = "<persisted-output>\nOutput too large (84.7KB). Full output saved to: /x/proj/sess1/tool-results/abc.txt\n\nPreview (first 2KB):\n";
+
+  test("die persistierte Ausgabe liefert die Fänge", () => {
+    const l = laeufe([{ command: "npm test", text: `Exit code 1\n${marker}`, fehler: true }], { liesDatei: () => `${kopf("test")}${rot}` }) as unknown as { waechter?: Waechter }[];
+    expect(l[0].waechter).toEqual({ faenge: [A], ausgeschlossen: [] });
+  });
+
+  test("Transkript-Läufe fließen in den Export (ohne CI-Quelle)", () => {
+    const log = vi.fn<(t: string) => void>();
+    const aufruf = { command: "npm test", text: `Exit code 1\n${kopf("test")}${rot}`, fehler: true, ts: T0 };
+    const deps = { pkg, findeSessions: () => [{ id: "s", main: zeilen([aufruf]), subagents: [] }], gh: () => "[]", liesDatei: lies, log, err: vi.fn(), jetzt: () => T0 + 86_400_000, waechterDateien: () => [B, A] };
+    expect(gf.main(["--waechter-dir", "test/harness"], deps)).toBe(0);
+    const e = JSON.parse(log.mock.calls[0][0]) as { punkte: { parameter: string; wert: number }[] };
+    expect(e.punkte.map((p) => [p.parameter, p.wert])).toEqual([[B, 0], [A, 1]]);
+  });
+
+  test("sammle ohne zusätzliche Flags lehnt ein fremdes Flag ab, mit zusatz nimmt es an", () => {
+    const sammle = (gfModule as { sammle: (a: string[], d: Record<string, unknown>, z?: Record<string, unknown>) => { exit?: number; werte?: Record<string, unknown> } }).sammle;
+    const d = { pkg, findeSessions: () => [], gh: () => "[]", liesDatei: lies, err: vi.fn(), jetzt: () => T0 };
+    expect(sammle(["--extra", "1"], d).exit).toBe(2);
+    expect(sammle(["--extra", "1"], d, { extra: { type: "string" } }).werte?.extra).toBe("1");
+  });
+});
+
+describe("waechterDateien: Produktionsweg", () => {
+  test("liest einen echten Ordner rekursiv, sortiert, nur Testdateien", () => {
+    const wurzel = mkdtempSync(join(tmpdir(), "gf-"));
+    try {
+      mkdirSync(join(wurzel, "sub"));
+      for (const f of ["z.test.ts", "sub/a.test.ts", "hilfe.ts", "sub/b.test.ts.snap"]) writeFileSync(join(wurzel, f), "");
+      const ordner = wurzel.replace(/\\/g, "/");
+      expect((gfModule as { waechterDateien: (o: string) => string[] }).waechterDateien(ordner)).toEqual([`${ordner}/sub/a.test.ts`, `${ordner}/z.test.ts`]);
+    } finally {
+      rmSync(wurzel, { recursive: true, force: true });
+    }
+  });
+
+  test("die Standard-Zugriffe von main tragen den echten waechterDateien", () => {
+    const z = (gfModule as { standardZugriffe: () => { waechterDateien: unknown } }).standardZugriffe();
+    expect(z.waechterDateien).toBe((gfModule as { waechterDateien: unknown }).waechterDateien);
+  });
+
+  test("Eingabe in umgekehrter Reihenfolge kommt sortiert heraus", () => {
+    expect(wf.waechterDateien("t", () => ["b.test.ts", "a.test.ts"])).toEqual(["t/a.test.ts", "t/b.test.ts"]);
   });
 });

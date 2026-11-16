@@ -31,7 +31,8 @@
  *     und nimmt die Datei aus diesem Lauf heraus (ADR 0027). Ohne Logs im Fenster gibt es keine Punkte, nie eine 0 (`waechterLuecke` nennt den Grund).
  *     `--waechter-dir <ordner>` gibt statt des Berichts den Messpunkte-Export (`waechterExport`: je Lauf und Testdatei unter dem Ordner 1 oder 0, Quelle `gate-fundquote`) aus.
  *
- * Grenzen: nur Claude-Transkripte (Codex-Sitzungen werden nicht gelesen; die CI-Quelle gilt für beide Laufzeiten); Hintergrund- und
+ * Grenzen: die Wächter-Fänge (Regel 7) erkennt nur Vitest-Ausgabe (bei anderen Testläufern ist der Export eine Lücke, nie 0); ein rotes `verify:kompakt` im CI-Log zählt als unvollständig und liefert keine Fänge;
+ * nur Claude-Transkripte (Codex-Sitzungen werden nicht gelesen; die CI-Quelle gilt für beide Laufzeiten); Hintergrund- und
  * pre-push-Läufe fehlen; ein fremdes npm-Skript, das selbst Gate-Skripte ruft, kann Rot vortäuschen; das PowerShell-Tool zählt nur
  * über die Summenzeile (sein Exit-Status ist nicht belegt; ein rotes `verify:kompakt` ohne `Exit code`-Präfix gilt als abgebrochen);
  * rote Summenzeilen nach einer Kettenänderung fallen heraus; eine Ad-hoc-`&&`-Kette ohne Kettenkopf (`npm run a && npm run b`) zählt
@@ -352,7 +353,8 @@ const BLOCK_ZEILEN = 25;
  * Vitest-Summe (der Lauf zählt für die Quote); `faenge` sind Dateien mit mindestens einem roten Test ohne Ausschlussgrund; `ausgeschlossen` sind
  * `{ datei, grund }` für Dateien, deren Rot ganz auf Zeitlimit, Abbruch oder Infrastruktur beruht (kein Fang, aber auch kein „nicht gefangen“). Pur.
  */
-export function faengeAusText(zeilen) {
+export function faengeAusText(rohZeilen) {
+  const zeilen = rohZeilen.map(sauber);
   const vitest = zeilen.some((z) => VITEST_SUMME.test(z));
   const faenge = new Set();
   const grund = new Map();

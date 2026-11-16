@@ -268,6 +268,11 @@ describe("Zeilenart verfall (factory#607)", () => {
     ["ungültiges Datum", [verfall({ aufgenommen: "2026-02-30" })], /aufgenommen: Datum/],
     ["leeres ziel", [verfall({ ziel: " " })], /ziel: Pfad oder Anker/],
     ["ungültige id", [verfall({ id: "Gross_X" })], /id: nur/],
+    ["id mit Unterstrich", [verfall({ id: "x_y" })], /id: nur/],
+    ["id mit Fremdzeichen am Anfang", [verfall({ id: "Xa" })], /id: nur/],
+    ["id mit Fremdzeichen am Ende", [verfall({ id: "aX" })], /id: nur/],
+    ["ungültiges ablauf-Datum", [verfall({ ablauf: "2027-13-01" })], /ablauf: Datum/],
+    ["durch-Id mit Unterstrich", [verfall({ id: "w_a-x" }), regel({ durch: ["w_a"] })], /durch: nicht leere Liste/],
     ["durch bei einem Wächter (Pfad ohne Anker)", [verfall({ durch: ["w-a"] })], /durch: nur bei Regeln/],
     ["durch leer", [verfall(), regel({ durch: [] })], /durch: nicht leere Liste/],
     ["durch kein Array", [verfall(), regel({ durch: "w-a" })], /durch: nicht leere Liste/],
@@ -316,6 +321,15 @@ describe("Fangquote je Wächter und Regel (factory#607)", () => {
     expect(lib.fangquote(zeilen[0], zeilen, [pt("1", 1, "test/harness/a.test.ts", "2026-11-15")]).luecke).toMatch(/keine Messpunkte/); // vor aufgenommen
     expect(lib.fangquote(zeilen[0], zeilen, [pt("1", 1, "test/harness/a.test.ts", "2027-05-17")]).luecke).toMatch(/keine Messpunkte/); // nach ablauf
     expect(lib.fangquote(zeilen[0], zeilen, [pt("1", 1, "test/harness/anderer.test.ts")]).luecke).toMatch(/keine Messpunkte/);
+  });
+
+  it("die Fenstergrenzen aufgenommen und ablauf zählen beide mit", () => {
+    expect(lib.fangquote(zeilen[0], zeilen, [pt("1", 1, "test/harness/a.test.ts", "2026-11-16")])).toMatchObject({ laeufe: 1 });
+    expect(lib.fangquote(zeilen[0], zeilen, [pt("1", 1, "test/harness/a.test.ts", "2027-05-16")])).toMatchObject({ laeufe: 1 });
+  });
+
+  it("ein Punkt einer anderen Messgröße mit gleichem parameter zählt nicht", () => {
+    expect(lib.fangquote(zeilen[0], zeilen, [{ ...pt("1", 1), messgroesse: "ci-fix-runden" }]).luecke).toMatch(/keine Messpunkte/);
   });
 
   it("Regel: Fang, wenn mindestens einer der Wächter in durch im Lauf rot war", () => {
