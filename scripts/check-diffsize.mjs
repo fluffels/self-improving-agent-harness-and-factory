@@ -51,8 +51,9 @@
  *
  * Sammelticket-PR (factory#358): Ein Override gilt für EINE Zeile eines Sammeltickets, nie für die ganze Auswahl. Trägt
  * der PR-Titel den Titel eines Sammeltickets und ist ein Override-Grund aktiv, muss dieser Grund genau eine Zeile
- * (`L<n>`) nennen, sonst rot (`sammelOverrideFehler`). Lokal ohne Ereignis-Datei (`GITHUB_EVENT_PATH` fehlt, factory#402 L5) kennt der Lauf den Titel nicht und
- * wertet vorsorglich den Grund allein: nennt er mehrere verschiedene Zeilen `L<n>`, ist er rot (`sammelOverrideLokal`); ein
+ * (`L<n>`) nennen, sonst rot (`sammelOverrideFehler`). Lokal ohne Ereignis-Datei (`GITHUB_EVENT_PATH` fehlt, factory#402 L5) holt der Lauf den Titel des Tickets
+ * aus der Branch-Nummer (`gh issue view`, `sammelOverrideLokalMitTitel`) und urteilt wie die CI; ohne Nummer oder bei Ladefehler (fail-open, Hinweis „Titel nicht prüfbar“)
+ * wertet er vorsorglich den Grund allein: nennt er mehrere verschiedene Zeilen `L<n>`, ist er rot (`sammelOverrideLokal`); ein
  * Nicht-Sammelticket mit Zeilenliste im Grund ist damit lokal rot, in der CI grün (Abhilfe steht in der Meldung). Ein Ereignis ohne PR (push auf main, workflow_dispatch) wird nie lokal gewertet. Grenzen: der Titel
  * kommt aus dem Ereignis (`GITHUB_EVENT_PATH`); geprüft wird nur der aktive jüngste Grund; ein
  * unlesbares PR-Ereignis ist rot (fail-closed). Der PR-Titel ist Fremdtext: nur lineare Muster, er steht nie in
@@ -70,6 +71,8 @@ import { istDirektaufruf } from "./direktaufruf.mjs";
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { enthaeltSammelticketTitel } from "./sammelticket-titel.mjs";
+import { ghJson } from "./gh-cli.mjs";
+import { ladeTicketNamen } from "./ticket-namen.mjs";
 import { resolveBase } from "./check-basis.mjs";
 import { umgebungsWert } from "./projekt-config-lib.mjs";
 import { ladeCommitZeilen, ladeCommitZeilenOderBeende, meldeUngueltigeOverrides, sliceOverride, staleOverrideHinweis, versetzteOverrideHinweis } from "./slice-override.mjs";
@@ -301,13 +304,47 @@ export function sammelOverrideFehler(titel, grund) {
   );
 }
 
-/** Prüft den aktiven Override-Grund gegen den PR-Titel (null = ok oder nicht prüfbar, sonst die Meldung). */
-function sammelOverrideUrteil(env, lies, reason) {
-  if (reason === null) return null;
-  const e = prTitelAusEreignis(env, lies);
-  if (e === null) return env.GITHUB_EVENT_PATH ? null : sammelOverrideLokal(reason); // nur ohne Ereignis-Datei (lokal); ein Nicht-PR-Ereignis der CI bleibt ungeprüft
-  return "fehler" in e ? e.fehler : sammelOverrideFehler(e.titel, reason);
+/** Titel eines Tickets über `gh issue view <nr> --json title` (Timeout, `exec`-Naht von gh-cli.mjs); wirft bei Fehler. */
+export function ladeTicketTitel(nr, exec) {
+  return ghJson(["issue", "view", String(nr), "--json", "title"], { timeout: 15000, ...(exec ? { exec } : {}) }).title;
 }
+
+/**
+ * Lokales Urteil mit Titel (L8): Ticketnummer aus dem Branch (`ticketAus`), Titel über `ladeTitel(nr)`, dann dieselbe Prüfung wie die CI
+ * (`sammelOverrideFehler`). Ohne Nummer oder bei einem Ladefehler (fail-open) gilt `sammelOverrideLokal` plus Hinweis „Titel nicht prüfbar“.
+ * Liefert `{ meldung, hinweis }` (je string|null).
+ */
+export function sammelOverrideLokalMitTitel(grund, { branch, ticketAus, ladeTitel }) {
+  const lokal = () => ({ meldung: sammelOverrideLokal(grund), hinweis: "Hinweis: Ticket-Titel nicht prüfbar, Sammelticket-Override nur vorsorglich geprüft." });
+  try {
+    const nr = ticketAus(String(branch ?? ""));
+    if (nr === null || nr === undefined) return lokal();
+    return { meldung: sammelOverrideFehler(ladeTitel(nr), grund), hinweis: null };
+  } catch {
+    return lokal();
+  }
+}
+
+/** Prüft den aktiven Override-Grund gegen den PR-Titel: `{ meldung, hinweis }` (meldung null = ok oder nicht prüfbar). */
+function sammelOverrideUrteil(env, lies, reason, lokalDeps) {
+  if (reason === null) return { meldung: null, hinweis: null };
+  const e = prTitelAusEreignis(env, lies);
+  if (e === null) return env.GITHUB_EVENT_PATH ? { meldung: null, hinweis: null } : sammelOverrideLokalMitTitel(reason, lokalDeps()); // nur ohne Ereignis-Datei (lokal); ein Nicht-PR-Ereignis der CI bleibt ungeprüft
+  return { meldung: "fehler" in e ? e.fehler : sammelOverrideFehler(e.titel, reason), hinweis: null };
+}
+
+/** Abhängigkeiten des lokalen Titel-Urteils: Branch aus git, Ticketnummer über die Projekt-Namen, Titel über gh. Ein Ladefehler der Namen lässt `ticketAus` werfen (fail-open). */
+const lokalDepsAus = (git, ladeTitel) => () => ({
+  branch: (() => {
+    try {
+      return git(["rev-parse", "--abbrev-ref", "HEAD"]).trim();
+    } catch {
+      return null;
+    }
+  })(),
+  ticketAus: (b) => ladeTicketNamen().ticketAus(b),
+  ladeTitel: ladeTitel ?? ladeTicketTitel,
+});
 
 /** Zeilen einer numstat-Datei, die zum Slice zählen (ohne `GEN:`-Anteil). */
 const zaehlZeilen = (f) => f.added + f.deleted - (f.gen ?? 0);
@@ -315,7 +352,7 @@ const zaehlZeilen = (f) => f.added + f.deleted - (f.gen ?? 0);
 /** Führt die komplette Prüfung aus (Basis auflösen → Diff messen → bewerten →
  *  Override/stale einordnen). `runGit`/`env` injizierbar für den Test. Rückgabe
  *  ist ein strukturiertes Ergebnis; das CLI rendert es nur noch. */
-export function checkDiffSize({ runGit, env = process.env, docgenWurzeln, zeilen = ladeCommitZeilen(), lies = (p) => readFileSync(p, "utf8") } = {}) {
+export function checkDiffSize({ runGit, env = process.env, docgenWurzeln, zeilen = ladeCommitZeilen(), lies = (p) => readFileSync(p, "utf8"), ladeTitel } = {}) {
   const git = runGit ?? ((args) => execFileSync("git", args, { encoding: "utf8" }));
   const thresholds = readThresholds(env);
   const base = resolveBase(git, env);
@@ -375,7 +412,7 @@ export function checkDiffSize({ runGit, env = process.env, docgenWurzeln, zeilen
     reason,
     allowed: over && reason !== null, // bewusst durchgelassen
     stale: !over && reason !== null, // Override unnötig → melden
-    sammelOverride: sammelOverrideUrteil(env, lies, reason),
+    ...(({ meldung, hinweis }) => ({ sammelOverride: meldung, sammelOverrideHinweis: hinweis }))(sammelOverrideUrteil(env, lies, reason, lokalDepsAus(git, ladeTitel))),
     invalidOverrides: invalid,
     versetzteOverrides: versetzt,
   };
@@ -415,6 +452,7 @@ function main() {
 
   meldeUngueltigeOverrides(r.invalidOverrides, { dim });
 
+  if (r.sammelOverrideHinweis) console.error(dim(r.sammelOverrideHinweis));
   if (r.sammelOverride) {
     console.error(red(`✖ check:diffsize: ${r.sammelOverride}`));
     process.exit(1);

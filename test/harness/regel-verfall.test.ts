@@ -1,6 +1,7 @@
 /* @harness-waechter – Fitness-Function, im geschützten test/harness/ (factory#608, Regel-Verfall 2/4 von factory#517). */
 import { describe, it, expect } from "vitest";
-import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
@@ -17,6 +18,7 @@ const lib = libModul as unknown as {
   fettRegeln: (t: string) => { titel: string; anker: string }[];
   ankerAus: (t: string, fett?: boolean) => Set<string>;
   plusTage: (d: string, n: number) => string;
+  regelId: (anker: string) => string;
   fehlendeZeilen: (o: { zeilen: Zeile[]; waechterPfade: string[]; agentsText: string; heute: string }) => Zeile[];
   pruefeAbdeckung: (o: { zeilen: Zeile[]; waechterPfade: string[]; agentsText: string }) => string[];
   pruefeAusnahmen: (a: unknown[], existiert: (z: string) => boolean) => string[];
@@ -43,8 +45,8 @@ const skript = skriptModul as unknown as {
   pflichtChecks: (nr: number, gh: (a: string[]) => string) => unknown;
   fremdtextTeile: (nr: number, gh: (a: string[]) => string) => { vertraut: boolean; text: string }[];
   streichAnlegen: (k: Kand, o: { fenster: { von: string; bis: string }; heute: string }, io: { git: (a: string[]) => string; gh: (a: string[]) => string; wurzel: string }) => string;
-  zielExistiert: (z: string) => boolean;
-  parseArgs: (a: string[]) => { fehler?: string };
+  zielExistiert: (z: string, wurzel?: string) => boolean;
+  parseArgs: (a: string[]) => { fehler?: string; exporte: string[]; json: boolean };
   ausfuehren: (a: Record<string, unknown>, d?: Record<string, unknown>) => { exitCode: number; text: string };
 };
 
@@ -326,6 +328,30 @@ describe("Regel-Verfall: Lücken der Erstfassung (Review Runde 1)", () => {
     expect(skript.zielExistiert("README.md#kein-secret-key-im-agentenlauf")).toBe(false);
   });
 
+  it("zielExistiert: README-Anker nur als Überschrift, beide Richtungen an einer Fixture-Wurzel", () => {
+    const wurzel = mkdtempSync(join(tmpdir(), "regel-verfall-"));
+    writeFileSync(join(wurzel, "README.md"), "# Titel\n\n## Vorhandener Abschnitt\n\n- **Fette Regel:** nur Fließtext\n");
+    expect(skript.zielExistiert("README.md#vorhandener-abschnitt", wurzel)).toBe(true);
+    expect(skript.zielExistiert("README.md#fehlender-abschnitt", wurzel)).toBe(false);
+    expect(skript.zielExistiert("README.md#fette-regel", wurzel)).toBe(false);
+  });
+
+  it("regelId kürzt den Anker (kurzId): Mehrfach-Bindestriche, Akzente, ß, 40 Zeichen, Randstriche", () => {
+    expect(lib.regelId("-assignee--sofort---weiter")).toBe("verfall-agents-assignee-sofort-weiter");
+    expect(lib.regelId("größe-ändern")).toBe("verfall-agents-grosse-andern");
+    expect(lib.regelId(`${"a".repeat(39)}-bbb`)).toBe(`verfall-agents-${"a".repeat(39)}`);
+  });
+
+  it("parseArgs liest --export (mehrfach) und --json", () => {
+    const a = skript.parseArgs(["--kandidaten", "--export", "a.json", "--export", "b.json", "--json"]);
+    expect(a.fehler).toBeUndefined();
+    expect(a.exporte).toEqual(["a.json", "b.json"]);
+    expect(a.json).toBe(true);
+    const b = skript.parseArgs(["--kandidaten"]);
+    expect(b.exporte).toEqual([]);
+    expect(b.json).toBe(false);
+  });
+
   it("--kandidaten: Export und --heute wirken, --json gibt JSON, ungültige Zeilen und Exporte sind Exit 1, ein unbekanntes Flag Exit 2", () => {
     const reg = JSON.stringify({ version: 1, zeilen: [zeile("verfall-routine", ROUTINE)] });
     const export1 = JSON.stringify({ art: "fangquote-messpunkte", quelle: "gate-fundquote", punkte: [punkt(ROUTINE, "2026-02-10", "l1", 0)] });
@@ -598,6 +624,11 @@ describe("Regel-Verfall: Streich-PR und Widerspruchsfrist (factory#610)", () => 
       const fehler = skript.ausfuehren({ faelligeMergen: true }, { ...d, gh: (a: string[]) => { if (a[1] === "merge") throw new Error("nicht mergbar"); return a[1] === "list" ? liste : ""; } });
       expect(fehler.exitCode).toBe(1);
       expect(fehler.text).toContain("nicht gemergt");
+      const nurKommentar = skript.ausfuehren({ faelligeMergen: true }, { ...d, gh: (a: string[]) => { if (a[1] === "comment") throw new Error("kein Kommentar"); return a[1] === "list" ? liste : ""; } });
+      expect(nurKommentar.exitCode).toBe(1);
+      expect(nurKommentar.text).toContain("gemergt (Audit-Kommentar fehlgeschlagen: kein Kommentar)");
+      expect(nurKommentar.text).not.toContain("nicht gemergt");
+      expect(nurKommentar.text).toContain("Leitplanken-Änderung selbst gemergt");
       expect(skript.ausfuehren({ faelligeMergen: true }, { ...d, fremdtext: () => { throw new Error("x"); }, gh: (a: string[]) => (a[1] === "list" ? liste : "") }).exitCode).toBe(1);
     });
 

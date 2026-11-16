@@ -662,6 +662,10 @@ describe("Sammel-Override (factory#358): Override nur für eine einzelne Zeile e
     prTitelAusEreignis: (env: Env, lies: (pfad: string) => string) => Ereignis;
     sammelOverrideFehler: (titel: string | null, grund: string) => string | null;
     sammelOverrideLokal: (grund: string) => string | null;
+    sammelOverrideLokalMitTitel: (
+      grund: string,
+      deps: { branch: string | null; ticketAus: (b: string) => number | null; ladeTitel: (nr: number) => string },
+    ) => { meldung: string | null; hinweis: string | null };
   };
   const SAMMEL = `${FREMD.praefixe.commitZeile}9 Harness-Härtung (gesammelt): L44, L45 (factory#9)`;
   const lies = (inhalt: string) => () => inhalt;
@@ -734,6 +738,20 @@ describe("Sammel-Override (factory#358): Override nur für eine einzelne Zeile e
     assert.equal(m.sammelOverrideLokal("breit, kein Zeilenbezug"), null, "keine Zeilenmarke");
   });
 
+  test("sammelOverrideLokalMitTitel (L8): urteilt mit dem Ticket-Titel wie die CI, sonst fail-open mit Hinweis", () => {
+    const ticketAus = (b: string) => (/^feature\/x-(\d+)-/.exec(b)?.[1] ? Number(/^feature\/x-(\d+)-/.exec(b)?.[1]) : null);
+    const dep = (titel: string) => ({ branch: "feature/x-9-slug", ticketAus, ladeTitel: () => titel });
+    assert.equal(typeof m.sammelOverrideLokalMitTitel("braucht Platz", dep(SAMMEL)).meldung, "string", "Sammelticket ohne L<n> rot");
+    assert.equal(m.sammelOverrideLokalMitTitel("L44 braucht Platz", dep(SAMMEL)).meldung, null, "genau ein L<n> grün");
+    assert.equal(m.sammelOverrideLokalMitTitel("braucht Platz", dep("Normales Ticket")).meldung, null, "kein Sammelticket grün");
+    const wirft = m.sammelOverrideLokalMitTitel("L1 und L2", { ...dep(SAMMEL), ladeTitel: () => { throw new Error("gh weg"); } });
+    assert.equal(typeof wirft.meldung, "string", "Lader wirft: wie bisher (mehrere Zeilen rot)");
+    assert.match(wirft.hinweis ?? "", /nicht prüfbar/);
+    const keinBezug = m.sammelOverrideLokalMitTitel("L1", { ...dep(SAMMEL), branch: "main" });
+    assert.equal(keinBezug.meldung, null);
+    assert.match(keinBezug.hinweis ?? "", /nicht prüfbar/);
+  });
+
   test("checkDiffSize ohne PR-Ereignis: Mehrfach-Override → sammelOverride gesetzt, eine Zeile oder kein Override → null", () => {
     const OVER = ["1\t1\ta", "1\t1\tb", "1\t1\tc"].join("\n");
     const git =
@@ -750,6 +768,28 @@ describe("Sammel-Override (factory#358): Override nur für eine einzelne Zeile e
     assert.equal(typeof lauf(`chore: x\n\n${OVERRIDE_KEY}: #317 L1 bis L7 breit, auch L8\n`).sammelOverride, "string");
     assert.equal(lauf(`chore: x\n\n${OVERRIDE_KEY}: #317 L44 breit\n`).sammelOverride, null, "eine Zeile");
     assert.equal(lauf("").sammelOverride, null, "kein Override");
+  });
+
+  test("checkDiffSize ohne PR-Ereignis (L8): Titel über die Branch-Nummer, Lader wirft → Hinweis statt Absturz", () => {
+    const OVER = ["1\t1\ta", "1\t1\tb", "1\t1\tc"].join("\n");
+    const branch = `${projektConfig().praefixe.branch}9-slug`;
+    const git: RunGit = (a) => {
+      if (a[0] === "merge-base" && a[2] === "origin/main") return "BASE\n";
+      if (a[0] === "merge-base") throw new Error("keine Basis");
+      if (a[0] === "rev-parse") return `${branch}\n`;
+      if (a[0] === "diff") return OVER;
+      if (a[0] === "log") return `chore: x\n\n${OVERRIDE_KEY}: #317 L1 bis L7 breit\n`;
+      throw new Error("unerwartet: " + a.join(" "));
+    };
+    const lauf = (ladeTitel: (nr: number) => string) =>
+      checkDiffSizeRoh({ zeilen: ZEILEN, runGit: git, env: { FACTORY_DIFFSIZE_MAX_FILES: "2", FACTORY_DIFFSIZE_MAX_LINES: "2" }, ladeTitel } as never);
+    const sammel = lauf(() => SAMMEL);
+    assert.equal(typeof sammel.sammelOverride, "string", "Sammelticket-Titel + Mehrfach-Override rot");
+    assert.equal(lauf(() => "Normales Ticket").sammelOverride, null, "kein Sammelticket grün");
+    const wirft = lauf(() => {
+      throw new Error("gh weg");
+    });
+    assert.match(String((wirft as { sammelOverrideHinweis?: string }).sammelOverrideHinweis), /nicht prüfbar/);
   });
 
   test("checkDiffSize: Override über das Sammelticket → sammelOverride gesetzt, sonst null", () => {

@@ -225,11 +225,19 @@ function faelligeMergenModus(args, d) {
   for (const pr of offeneStreichPRs(d, "number,createdAt,labels,body")) {
     try {
       const ent = mergeEntscheidung({ labels: pr.labels.map((l) => l.name), teile: d.fremdtext(pr.number), checks: d.checks(pr.number), angelegt: pr.createdAt, jetzt: d.jetzt() });
+      let zusatz = "";
       if (ent.merge && !args.trocken) {
         d.gh(["pr", "merge", String(pr.number), "--squash", "--delete-branch"]);
-        d.gh(["pr", "comment", String(pr.number), "--body", auditKommentar(zielAusBody(pr.body))]);
+        const kommentar = auditKommentar(zielAusBody(pr.body));
+        try {
+          d.gh(["pr", "comment", String(pr.number), "--body", kommentar]);
+        } catch (err) {
+          fehler += 1;
+          zusatz = ` (Audit-Kommentar fehlgeschlagen: ${err.message})\n  Kommentar von Hand posten:\n${kommentar}`;
+        }
       }
-      zeilen.push(`- #${pr.number}: ${ent.merge ? (args.trocken ? "Trocken, würde mergen" : "gemergt") : `nicht gemergt (${ent.grund})`}`);
+      const ergebnis = args.trocken ? "Trocken, würde mergen" : "gemergt";
+      zeilen.push(`- #${pr.number}: ${ent.merge ? ergebnis : `nicht gemergt (${ent.grund})`}${zusatz}`);
     } catch (err) {
       fehler += 1;
       zeilen.push(`- #${pr.number}: nicht gemergt (Fehler: ${err.message})`);

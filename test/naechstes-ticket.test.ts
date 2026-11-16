@@ -32,7 +32,7 @@ import * as boardLib from "../scripts/board-lib.mjs";
 
 type Fenster = { k: number; agent: string; nach: number };
 type Stand = { closedAt: string | null; n: number } | { fehler: string };
-type Eingabe = { repo?: string; items: unknown[]; offene: Set<number>; fuellstand?: (nr: number) => number | { fehler: string }; config?: unknown; refs?: string[]; worktrees?: string[]; prHeads?: string[]; owner?: string; namen?: unknown; messfenster?: (f: Fenster, wartend: number) => Stand };
+type Eingabe = { repo?: string; items: unknown[]; offene: Set<number>; fuellstand?: (nr: number) => number | { fehler: string }; config?: unknown; refs?: string[]; worktrees?: string[]; prHeads?: string[]; owner?: string; namen?: unknown; heute?: Date; messfenster?: (f: Fenster, wartend: number) => Stand };
 type Ergebnis = { ticket: { nr: number; titel: string } | null; uebersprungen: { nr: number; grund: string }[] };
 type ZweiBoards = Omit<Eingabe, "items"> & { produkt: unknown[]; factory: unknown[] };
 type Io = { lade: () => ZweiBoards; ladeEinzeln?: (nr: number) => Eingabe & { item: unknown }; owner: string; namen?: unknown; config?: unknown; hartAb?: number; existiert?: (wurzel: string) => boolean };
@@ -47,6 +47,8 @@ const N = raw as unknown as {
   messfensterZeilen: (b: string) => (Fenster | { fehler: string })[];
   ticketsImFenster: (l: { start: number; ticket: number | null }[], o: { closedAt: string; ohneTicket: number }) => number;
   messfensterGrund: (f: Fenster, s: Stand) => string;
+  datumssperreZeilen: (b: string) => string[];
+  datumssperreGrund: (datum: string, heute: Date) => string;
   messfensterLader: (o: { dir?: string; holeIssue?: (nr: number) => { state: string; closed_at: string | null }; ladeNamen?: () => unknown }) => (f: Fenster, wartend: number) => Stand;
 };
 
@@ -438,6 +440,45 @@ describe("waehleNaechstes mit Messfenster (#1589)", () => {
     expect(r.out).toContain("unlesbar");
     expect(r.out).not.toContain("GEHEIM");
     expect(N.fuehreAus(["--bereich", "produkt"], { owner: OWNER, namen: NAMEN, ...REPO_IO, lade: () => zweiBoards(eingabe), config: CFG }).out).not.toContain("GEHEIM");
+  });
+});
+
+describe("Datumssperre (factory#629)", () => {
+  const HEUTE = new Date("2026-11-16T10:00:00Z");
+  const ZEILE = "Frühestens: 2026-11-30";
+  const UNLESBAR = "Datumssperre unlesbar (erwartet „Frühestens: YYYY-MM-DD“)";
+  test("datumssperreZeilen: nur Zeilenanfang oder Listenpunkt, Fließtext zählt nicht", () => {
+    expect(N.datumssperreZeilen("nichts")).toEqual([]);
+    expect(N.datumssperreZeilen(null as unknown as string)).toEqual([]);
+    expect(N.datumssperreZeilen("Ein Issue mit der Zeile `Frühestens: 2026-11-30` im Text")).toEqual([]);
+    expect(N.datumssperreZeilen(ZEILE)).toEqual(["2026-11-30"]);
+    expect(N.datumssperreZeilen("* Frühestens: 2026-11-30")).toEqual(["2026-11-30"]);
+    expect(N.datumssperreZeilen("x\r\n- frühestens: 2026-11-30 \r\ny")).toEqual(["2026-11-30"]);
+    expect(N.datumssperreZeilen("Frühestens: morgen")).toEqual(["morgen"]);
+  });
+  test("datumssperreGrund: vor dem Datum gesperrt, am Datum und danach frei", () => {
+    expect(N.datumssperreGrund("2026-11-30", HEUTE)).toBe("Datumssperre bis 2026-11-30");
+    expect(N.datumssperreGrund("2026-11-17", HEUTE)).toBe("Datumssperre bis 2026-11-17");
+    expect(N.datumssperreGrund("2026-11-16", HEUTE)).toBe("");
+    expect(N.datumssperreGrund("2026-11-01", HEUTE)).toBe("");
+  });
+  test("datumssperreGrund: unlesbar oder ungültiges Datum sperrt (fail-closed)", () => {
+    for (const d of ["morgen", "", "2026-13-01", "2026-02-30", "30.11.2026"]) expect(N.datumssperreGrund(d, HEUTE)).toBe(UNLESBAR);
+  });
+  test("Auswahl: gesperrtes Ticket übersprungen; am Datum frei; mehrere Zeilen: späteste gilt; Fließtext ohne Wirkung", () => {
+    const r = frei([item(1, { body: ZEILE }), item(2)], { heute: HEUTE });
+    expect(r.ticket?.nr).toBe(2);
+    expect(r.uebersprungen[0]).toMatchObject({ nr: 1, grund: "Datumssperre bis 2026-11-30" });
+    expect(frei([item(1, { body: ZEILE })], { heute: new Date("2026-11-30T00:00:00Z") }).ticket?.nr).toBe(1);
+    const m = frei([item(1, { body: "Frühestens: 2026-11-30\nFrühestens: 2026-12-24\nFrühestens: 2026-11-01" })], { heute: HEUTE });
+    expect(m.uebersprungen[0].grund).toBe("Datumssperre bis 2026-12-24");
+    expect(frei([item(1, { body: "Frühestens: kaputt" }), item(2)], { heute: HEUTE }).uebersprungen[0].grund).toBe(UNLESBAR);
+    expect(frei([item(1, { body: "im Fließtext `Frühestens: 2099-01-01` genannt" })], { heute: HEUTE }).ticket?.nr).toBe(1);
+  });
+  test("--ticket: pruefeTicket liefert den Grund, nach dem Datum frei", () => {
+    const pruefe = (heute: Date) => N.pruefeTicket({ item: N.itemAusIssue(item(7, { body: ZEILE }).content), offene: new Set(), owner: OWNER, namen: NAMEN, repo: FREMD.repo, config: CFG, heute });
+    expect(pruefe(HEUTE).uebersprungen[0].grund).toBe("Datumssperre bis 2026-11-30");
+    expect(pruefe(new Date("2026-12-01T00:00:00Z")).ticket?.nr).toBe(7);
   });
 });
 
@@ -1006,6 +1047,11 @@ describe("--maengel: freie vertraute Tickets mit Spezifikations-Mangel in Board-
     expect(zeilen[2]).toMatch(/^#2\tT2: /);
     expect(r.out).not.toContain("GEHEIM");
     expect(r.out).not.toContain("#4");
+  });
+  test("Datumssperre (factory#629) berührt die Mängelliste nicht: Ticket mit Mangel und künftiger Sperre erscheint", () => {
+    const r = lauf([roh(3, { body: `${OHNE_NEGATIV}\nFrühestens: 2099-01-01` })]);
+    expect(r.out.split("\n")[0]).toBe("1 Ticket mit Mangel");
+    expect(r.out).toMatch(/^#3\t/m);
   });
   test("ohne Mangel: Exit 0 und `0 Tickets mit Mangel`", () => {
     const r = lauf([item(1)]);

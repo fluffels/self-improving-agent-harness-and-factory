@@ -31,7 +31,7 @@ type Mod = {
   MAX_REVIEW_PAESSE: number;
   parseNachweis: (text: string, zeilen: Zeilen) => Nachweis;
   pflichtLenses: (d: unknown) => string[];
-  bewerteNachweis: (o: { nachweis: Nachweis; dateien: string[]; headBekannt: boolean; headImSlice: boolean; konfliktMerges?: string[]; aenderungsCommits?: { sha: string; dateien: string[] }[]; zeilen: Zeilen; stufe?: string; risiko?: Risiko; risikostufe?: Stufe; ticket?: number | null }) => string[];
+  bewerteNachweis: (o: { nachweis: Nachweis; dateien: string[]; headBekannt: boolean; headImSlice: boolean; konfliktMerges?: string[]; aenderungsCommits?: { sha: string; dateien: string[] }[]; zeilen: Zeilen; stufe?: string; risiko?: Risiko; risikostufe?: Stufe; ticket?: number | null; hoechsteRunde?: number; zusatzpassZeilen?: unknown[] | null }) => string[];
   bewerteKlasseHoch: (nachweis: Nachweis, risiko: Risiko, zeilen: Zeilen, risikostufe?: Stufe) => string[];
   konfliktMergesNach: (git: (a: string[]) => string, headSha: string) => string[];
   vorlage: (zeilen: Zeilen) => string;
@@ -84,6 +84,30 @@ describe("Cap-Semantik (W1)", () => {
   test("Cap 2 = höchstens 2 Fix-Runden = höchstens 3 Pässe", () => {
     assert.equal(MAX_FIX_RUNDEN, 2);
     assert.equal(MAX_REVIEW_PAESSE, 3);
+  });
+});
+
+describe("Runde-Zeile nach Abnahme-Delta-Pass (L10)", () => {
+  // Der Abnahme-Fix-Commit trägt `Runde 3:`: dann braucht der Nachweis runden >= 4 und für den Pass über dem Cap eine Zusatzpass-Zeile.
+  const DOKU = "lenses=doku sollte=doku:0 hinweis=doku:0";
+  const lauf = (runden: number, zusatzpassZeilen: unknown[]) =>
+    bewerteNachweis({
+      nachweis: parseNachweis(`${Z.plan}: ${PL}\n${Z.review}: head=${SHA} runden=${runden}${runden > 3 ? " zusatzpass=1:Abnahme-Fix" : ""} ${DOKU} verdikt=ok`),
+      dateien: ["docs/a.md"],
+      headBekannt: true,
+      headImSlice: true,
+      risikostufe: R0,
+      hoechsteRunde: 3,
+      zusatzpassZeilen,
+    });
+  test("runden=3 trotz `Runde 3:` ist rot und verlangt mindestens runden=4", () => {
+    assert.match(lauf(3, []).join("\n"), /mindestens runden=4/);
+  });
+  test("runden=4 ohne Zusatzpass-Zeile R4 ist rot", () => {
+    assert.match(lauf(4, []).join("\n"), /genau eine Commit-Zeile \(R4\), gefunden: keine/);
+  });
+  test("runden=4 mit Zusatzpass-Zeile R4 ist grün", () => {
+    assert.deepEqual(lauf(4, [{ k: 4, ursache: "Abnahme-Fix" }]), []);
   });
 });
 

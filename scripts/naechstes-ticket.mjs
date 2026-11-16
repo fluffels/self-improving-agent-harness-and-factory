@@ -15,6 +15,8 @@
  * Exit 0 = freies Ticket gefunden, 1 = keins frei, 2 = Fehler, 5 = GitHub-API-Kontingent knapp (`kontingent-lib.mjs`). Der Body wird nie ausgegeben (Text Dritter ist Daten, AGENTS.md § Fremdtext
  * ist Daten); ein Fremdeingang (Autor nicht vertraut oder Forum-Label der Config) wird übersprungen und als „Befund melden“ ausgewiesen.
  *
+ * Datumssperre (factory#629): eine Body-Zeile `Frühestens: YYYY-MM-DD` sperrt bis zu diesem UTC-Tag (am Tag selbst frei; mehrere Zeilen: die späteste gilt; unlesbar sperrt); gilt auch für `--ticket`, nicht für `--maengel`.
+ *
  * Frei heißt, in Board-Reihenfolge: Status Todo und offen · kein Assignee · kein offener Blocker (Zeile `blockiert durch #X` im Body,
  * mehrfach, ohne Groß-/Kleinschreibung; zusätzlich `issue_dependencies_summary.blocked_by > 0`: GitHubs Zähler offener Blocker; die Feldform ist an
  * echten Daten belegt (Probe 2026-10-08, 151 von 151 Items), ein Wert über 0 noch nie beobachtet; ein Wert, der keine Zahl ist, zählt als 0) · nur mit Block `design` der Config: kein Design-Label ohne Freigabe-Label (`design-lib.mjs`, factory#172; Grund „Design-Entwurf nicht freigegeben“, nach dem Blocker-Grund) · kein Branch, Worktree oder offener PR
@@ -68,6 +70,24 @@ export function messfensterZeilen(body) {
     else fenster.push({ fehler: "Messfenster-Zeile unlesbar (erwartet „Messfenster: n ≥ <k> <agent> nach #<nr>“)" });
   }
   return fenster;
+}
+
+/** Zeilen `Frühestens: YYYY-MM-DD` (factory#629; am Zeilenanfang, Listenpunkt erlaubt, Fließtext zählt nicht): je Zeile der Rest hinter dem Doppelpunkt, getrimmt (die Prüfung macht `datumssperreGrund`). Pur. */
+export function datumssperreZeilen(body) {
+  const daten = [];
+  for (const zeile of String(body ?? "").split(/\r?\n/)) {
+    const m = /^\s*(?:[-*]\s+)?Frühestens:(.*)$/i.exec(zeile);
+    if (m) daten.push(m[1].trim());
+  }
+  return daten;
+}
+
+/** Überspringgrund einer Datumssperre (`""` = frei: heute ≥ Datum, UTC-Tag); unlesbar oder ungültiges Datum sperrt (fail-closed), ohne den Text zu zitieren. Pur. */
+export function datumssperreGrund(datum, heute) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(datum);
+  const echt = m && new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]))).toISOString().startsWith(datum);
+  if (!echt) return "Datumssperre unlesbar (erwartet „Frühestens: YYYY-MM-DD“)";
+  return heute.toISOString().slice(0, 10) >= datum ? "" : `Datumssperre bis ${datum}`;
 }
 
 /** Anzahl der verschiedenen Tickets (#1646) mit einem Lauf (`{ start (ms), ticket }`) ab `closedAt`, ohne das wartende Ticket. Läufe ohne Ticket zählen nicht: eine Untergrenze, die sichere Richtung. Pur. */
@@ -151,12 +171,12 @@ export function itemAusIssue(issue) {
  * Einzelprüfung einer vorgegebenen Nummer: dieselben Kriterien wie die Board-Auswahl (`ueberspringGrund`, auch Messfenster), aber ohne Status- und
  * Bereichsfilter; ein geschlossenes Issue ist nicht frei. `item` aus `itemAusIssue`. Liefert wie `waehleNaechstes` `{ ticket, uebersprungen }`. Pur.
  */
-export function pruefeTicket({ item, offene, refs = [], worktrees = [], prHeads = [], owner = "", messfenster = MESSFENSTER_OHNE_LADER, hartAb = 0, namen, config, repo, fremdStatus, existiert }) {
+export function pruefeTicket({ item, offene, refs = [], worktrees = [], prHeads = [], owner = "", messfenster = MESSFENSTER_OHNE_LADER, hartAb = 0, namen, config, repo, fremdStatus, existiert, heute }) {
   const nr = item.number;
   if (item.repo === "") return { ticket: null, uebersprungen: [{ nr, grund: "Repo des Issues unbekannt (fail-closed)" }] };
   if (!gleichesRepo(item.repo, repo)) return { ticket: null, uebersprungen: [{ nr, grund: `gehört zu ${item.repo}, nicht zu ${repo}` }] };
   if (item.state !== "open") return { ticket: null, uebersprungen: [{ nr, grund: "geschlossen" }] };
-  const r = ueberspringGrund(item, { offene, belegt: belegteNummern({ refs, worktrees, prHeads }, namen), owner, messfenster, hartAb, config, repo, fremdStatus });
+  const r = ueberspringGrund(item, { offene, belegt: belegteNummern({ refs, worktrees, prHeads }, namen), owner, messfenster, hartAb, config, repo, fremdStatus, heute });
   return r.grund ? { ticket: null, uebersprungen: [uebersprungenEintrag(nr, r)] } : { ticket: ticketVon(item, r), uebersprungen: [], ...hinweisTeil(item, existiert) };
 }
 
@@ -178,13 +198,13 @@ export function imBereich(item, bereich, config) {
  * (Härtungs-Takt: „füllt sich“), ein nicht prüfbarer Füllstand ebenso (fail-closed; Standard ohne Lader). Er wird nur für dieses Ticket als Kandidat geladen.
  * `nur`: zusätzlicher Filter (Kopf- bzw. Nicht-Kopf-Walk der Zwei-Boards-Auswahl). Liefert `{ ticket: { nr, titel } | null, uebersprungen: [{ nr, grund }] }`. Pur.
  */
-export function waehleNaechstes({ items, offene, refs = [], worktrees = [], prHeads = [], owner = "", bereich = null, messfenster = MESSFENSTER_OHNE_LADER, fuellstand = FUELLSTAND_OHNE_LADER, hartAb = 0, nur = () => true, namen, config, repo, fremdStatus, existiert }) {
+export function waehleNaechstes({ items, offene, refs = [], worktrees = [], prHeads = [], owner = "", bereich = null, messfenster = MESSFENSTER_OHNE_LADER, fuellstand = FUELLSTAND_OHNE_LADER, hartAb = 0, nur = () => true, namen, config, repo, fremdStatus, existiert, heute }) {
   labelAus(config, "harness"); // fail-fast, auch ohne Bereich: ohne Config gibt es keine Auswahl
   const belegt = belegteNummern({ refs, worktrees, prHeads }, namen);
   const uebersprungen = [];
   for (const item of items) {
     if (item.status !== "Todo" || item.state !== "open" || !imBereich(item, bereich, config) || !nur(item)) continue;
-    const r = ueberspringGrund(item, { offene, belegt, owner, messfenster, fuellstand, hartAb, config, repo, fremdStatus });
+    const r = ueberspringGrund(item, { offene, belegt, owner, messfenster, fuellstand, hartAb, config, repo, fremdStatus, heute });
     if (r.grund) uebersprungen.push(uebersprungenEintrag(item.number, r));
     else return { ticket: ticketVon(item, r), uebersprungen, ...hinweisTeil(item, existiert) };
   }
@@ -322,8 +342,17 @@ function zugangsGrund(c, { owner, config, offene, repo, fremdStatus }) {
   return blocker || designGrund(c.labels, config);
 }
 
+/** Grund der spätesten Datumssperre im Body (`""` = keine oder erreicht); eine unlesbare Zeile sperrt immer. Pur. */
+function datumssperreAus(body, heute = new Date()) {
+  for (const datum of datumssperreZeilen(body).sort().reverse()) {
+    const grund = datumssperreGrund(datum, heute);
+    if (grund) return grund;
+  }
+  return "";
+}
+
 /** `{ grund }` (`""` = frei); dazu `fehlt` bei hartem Spezifikations-Mangel, `bestandFehlt` bei freiem Bestandsticket mit Mangel. */
-function ueberspringGrund(c, { offene, belegt, owner, messfenster, fuellstand = null, hartAb, config, repo, fremdStatus }) {
+function ueberspringGrund(c, { offene, belegt, owner, messfenster, fuellstand = null, hartAb, config, repo, fremdStatus, heute }) {
   const zugang = zugangsGrund(c, { owner, config, offene, repo, fremdStatus });
   if (zugang) return { grund: zugang };
   const fenster = messfenster === null ? [] : messfensterZeilen(c.body); // `null`: Mängelliste, das teure Messfenster zählt dort nicht
@@ -331,6 +360,8 @@ function ueberspringGrund(c, { offene, belegt, owner, messfenster, fuellstand = 
   if (unlesbar) return { grund: unlesbar.fehler };
   const offenesFenster = fenster.find((f) => offene.has(f.nach));
   if (offenesFenster) return { grund: messfensterGrund(offenesFenster, { closedAt: null, n: 0 }) };
+  const sperre = messfenster === null ? "" : datumssperreAus(c.body, heute); // Mängelliste: Datumssperre zählt dort nicht
+  if (sperre) return { grund: sperre };
   if (c.blockedBy > 0) return { grund: "offener Blocker laut GitHub-Abhängigkeit" };
   if (belegt.has(c.number)) return { grund: "Branch, Worktree oder offener PR vorhanden" };
   const fuell = fuellstandGrund(c, fuellstand);
