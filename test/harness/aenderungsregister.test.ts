@@ -298,6 +298,25 @@ describe("Zeilenart verfall (factory#607)", () => {
   });
 });
 
+describe("Feld eingefroren bei Wächter-Zeilen (factory#611)", () => {
+  it("ein Wächter mit eingefroren-Datum ist gültig (Gegenbeweis)", () => {
+    expect(lib.pruefeRegister([verfall({ eingefroren: "2026-11-20" })])).toEqual([]);
+    expect(lib.pruefeRegister([verfall({ eingefroren: "2026-11-16" })]), "am Aufnahmetag erlaubt").toEqual([]);
+  });
+
+  const faelle: [string, Zeile[], RegExp][] = [
+    ["ungültiges Datum", [verfall({ eingefroren: "2026-02-30" })], /eingefroren: Datum JJJJ-MM-TT/],
+    ["kein Datum", [verfall({ eingefroren: true })], /eingefroren: Datum JJJJ-MM-TT/],
+    ["bei einer Regel (Anker #)", [verfall(), regel({ eingefroren: "2026-11-20" })], /eingefroren: nur bei Wächtern/],
+    ["vor aufgenommen", [verfall({ eingefroren: "2026-11-15" })], /eingefroren: nicht vor aufgenommen/],
+    ["Glob im Ziel", [verfall({ ziel: "test/harness/*.test.ts", eingefroren: "2026-11-20" })], /eingefroren: nur bei einem einzelnen Wächter/],
+    ["Ziel ohne test/harness-Wächterpfad", [verfall({ ziel: "scripts/x.mjs", eingefroren: "2026-11-20" })], /eingefroren: nur bei einem einzelnen Wächter/],
+  ];
+  it.each(faelle)("%s ist rot", (_n, zeilen, muster) => {
+    expect(lib.pruefeRegister(zeilen).join("\n")).toMatch(muster);
+  });
+});
+
 describe("Fangquote je Wächter und Regel (factory#607)", () => {
   const pt = (einheitId: string, wert: number, parameter = "test/harness/a.test.ts", tag = "2026-12-01"): Zeile => ({ messgroesse: "fangquote", parameter, zeitpunkt: `${tag}T10:00:00.000Z`, einheitId, wert });
   const zeilen = [verfall(), regel()];

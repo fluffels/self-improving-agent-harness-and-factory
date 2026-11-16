@@ -1976,6 +1976,14 @@
       "aufgenommen": "2026-11-16",
       "ablauf": "2026-12-16",
       "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-waechter-einfrieren",
+      "art": "verfall",
+      "ziel": "test/harness/waechter-einfrieren.test.ts",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2026-12-16",
+      "messgroesse": "fangquote"
     }
   ]
 }

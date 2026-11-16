@@ -145,7 +145,7 @@ const pruefeObjekte = (z, p) => {
   return f;
 };
 
-/** Pflichtfelder der Zeilenart `verfall` (factory#607); `durch` ist optional und nur bei Regeln erlaubt. */
+/** Pflichtfelder der Zeilenart `verfall` (factory#607); `durch` ist optional und nur bei Regeln erlaubt, `eingefroren` (Datum) optional und nur bei einem einzelnen Wächter (factory#611). */
 export const VERFALL_PFLICHTFELDER = ["id", "art", "ziel", "aufgenommen", "ablauf", "messgroesse"];
 
 /** Pur: ist `ziel` eine Regel (Anker mit `#`) und kein Wächter (Pfad)? */
@@ -158,10 +158,23 @@ const pruefeVerfallDurch = (z, p) => {
   return ok ? [] : [`${p}durch: nicht leere Liste von Ids (nur [a-z0-9-]) erwartet`];
 };
 
+/** Ein einzelner Wächter unter test/harness/ (kein Anker, kein Glob): nur so ein Ziel darf eingefroren werden (factory#611). */
+const EINZELWAECHTER = /^test\/harness\/[^#*?[\]{}/]+\.test\.ts$/;
+
+const pruefeEingefroren = (z, p) => {
+  if (z.eingefroren === undefined) return [];
+  if (!istDatum(z.eingefroren)) return [`${p}eingefroren: Datum JJJJ-MM-TT erwartet`];
+  if (istRegelZiel(z.ziel)) return [`${p}eingefroren: nur bei Wächtern erlaubt (ziel ohne Anker #)`];
+  const f = [];
+  if (!(typeof z.ziel === "string" && EINZELWAECHTER.test(z.ziel))) f.push(`${p}eingefroren: nur bei einem einzelnen Wächter test/harness/<name>.test.ts (kein Glob)`);
+  if (istDatum(z.aufgenommen) && z.eingefroren < z.aufgenommen) f.push(`${p}eingefroren: nicht vor aufgenommen`);
+  return f;
+};
+
 const pruefeVerfallFelder = (z, p) => {
   const f = [];
   for (const feld of VERFALL_PFLICHTFELDER) if (z[feld] === undefined) f.push(`${p}Pflichtfeld ${feld} fehlt`);
-  const unbekannt = Object.keys(z).filter((k) => !VERFALL_PFLICHTFELDER.includes(k) && k !== "durch");
+  const unbekannt = Object.keys(z).filter((k) => !VERFALL_PFLICHTFELDER.includes(k) && k !== "durch" && k !== "eingefroren");
   if (unbekannt.length > 0) f.push(`${p}unbekannte Felder ${unbekannt.join(", ")}`);
   return f;
 };
@@ -173,7 +186,7 @@ const pruefeVerfall = (z, p) => {
   for (const feld of ["aufgenommen", "ablauf"]) if (z[feld] !== undefined && !istDatum(z[feld])) f.push(`${p}${feld}: Datum JJJJ-MM-TT erwartet`);
   if (istDatum(z.aufgenommen) && istDatum(z.ablauf) && z.ablauf <= z.aufgenommen) f.push(`${p}ablauf: muss nach aufgenommen liegen`);
   if (z.messgroesse !== undefined && z.messgroesse !== "fangquote") f.push(`${p}messgroesse: bei art verfall nur fangquote erwartet`);
-  return [...f, ...pruefeVerfallDurch(z, p)];
+  return [...f, ...pruefeVerfallDurch(z, p), ...pruefeEingefroren(z, p)];
 };
 
 /** Jede Id in `durch` nennt eine Verfall-Zeile mit Wächter-Ziel (Pfad ohne Anker). */

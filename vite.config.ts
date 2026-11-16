@@ -1,5 +1,13 @@
-import { defineConfig } from "vitest/config";
+import { configDefaults, defineConfig } from "vitest/config";
 import { availableParallelism } from "node:os";
+import { readFileSync } from "node:fs";
+
+// Eingefrorene Wächter (factory#611): einzige Quelle ist das Änderungsregister (Verfall-Zeile mit Feld `eingefroren`). Die Datei bleibt erhalten, läuft aber
+// nicht mehr in verify. Wächter dieser Liste: test/harness/waechter-einfrieren.test.ts (Sicherheits-Ausnahmen, Durch-Wächter, verteilte und Selbstschutz-Wächter
+// dürfen nie darin stehen; exclude muss genau Standardliste plus Register sein).
+const eingefroren = (
+  JSON.parse(readFileSync(new URL(".github/aenderungsregister.json", import.meta.url), "utf8")) as { zeilen: { art?: string; ziel?: string; eingefroren?: string }[] }
+).zeilen.flatMap((z) => (z.art === "verfall" && z.eingefroren !== undefined && typeof z.ziel === "string" ? [z.ziel] : []));
 
 // Nur die Test-Konfiguration: das Factory-Repo hat keinen Build. Die Tests laufen auf Node, die Worker-Zahl ist lokal begrenzt,
 // damit parallele Läufe von Lenses und anderen Worktrees die Git-lastigen Tests nicht ins Zeitlimit treiben.
@@ -7,6 +15,7 @@ export default defineConfig({
   test: {
     environment: "node",
     include: ["test/**/*.test.ts"],
+    exclude: [...configDefaults.exclude, ...eingefroren],
     // Zugangs-Variablen (LANGFUSE_*, GH_TOKEN, GITHUB_TOKEN) entfernt das Setup aus process.env, damit kein Prozess-Test einen echten Zugang erbt (Wächter: test/harness/test-umgebung.test.ts).
     // Die gh-Attrappe (PATH-Vorrang, Exit 1 mit "gh in Vitest gesperrt (Naht injizieren)") fängt jeden unbemerkten Netzaufruf eines Tests ab (factory#560; Wächter: test/gh-sperre.test.ts, test/harness/test-umgebung.test.ts).
     setupFiles: ["test/support/zugaenge-entfernen.ts", "test/support/gh-sperre-setup.ts"],
