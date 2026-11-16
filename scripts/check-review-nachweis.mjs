@@ -39,16 +39,16 @@
  * Nachweis entsteht erst danach (Vorbild: check-festgefahren.mjs). Lokal:
  *   node scripts/check-review-nachweis.mjs
  *
- * Größenstufe (factory#271): der Wächter berechnet sie aus dem Diff (`groessenstufe-lib.mjs`, nie vom Umsetzer behauptet). Nur bei `S` genügen
- * `<praefixe.commitZeile>Plan: <Planer> — skizze`, `Plan: ohne — klein: <Begründung>` und bei Code-Diff `lenses=kombiniert` statt der drei Code-Brillen;
- * bei `voll` sind diese Varianten rot, `klein` ohne Begründung immer. Die Risikoklasse hoch (Pfadmuster der Projekt-Config `risiko.hoch`, sonst Standardliste,
- * factory#333) ist nie `S`; die Doku-Regel (nur `*.md`) steht nur in `groessenstufe-lib.mjs` (`istDokuDiff`). Der Nachweis bleibt Pflicht, nur die Besetzung ist kleiner.
+ * Kombi-Lens-Grenze (factory#271, factory#529): der Wächter berechnet sie aus dem Diff (`groessenstufe-lib.mjs`, nie vom Umsetzer behauptet). Nur unter der Grenze (Ausgabe `KOMBI: ja` von `node scripts/risikostufe.mjs`)
+ * genügt bei Code-Diff `lenses=kombiniert` statt der drei Code-Brillen; darüber ist es rot. Die Skizzen- und die Klein-Form der Plan-Zeile sind entfernt (factory#529): sie sind bei jeder Stufe rot, mit Hinweis auf
+ * `<praefixe.commitZeile>Plan: ohne — stufe <0|1>` bzw. den Planer-Plan. Die Risikoklasse hoch (Pfadmuster der Projekt-Config `risiko.hoch`, sonst Standardliste,
+ * factory#333) liegt nie unter der Grenze; die Doku-Regel (nur `*.md`) steht nur in `groessenstufe-lib.mjs` (`istDokuDiff`). Der Nachweis bleibt Pflicht, nur die Besetzung ist kleiner.
  * Bei Risikoklasse hoch verlangt `bewerteKlasseHoch` zusätzlich die Zeile `<praefixe.commitZeile>Bedrohungen:` (vier Teile, kein leerer) und die Brille `sicherheit` in `lenses` (factory#334); bei `normal` und `doku` entfällt beides.
  *
  * Risikostufe (factory#526): der Wächter rechnet sie selbst aus dem Diff (`risikostufe-lib.mjs`, nicht berechenbar = Stufe 2). Stufe 0: `Plan: ohne — stufe 0` und `Review: ohne — stufe 0`;
- * Stufe 1: `Plan: ohne — stufe 1`, der Review braucht den Runde-1-Satz (doku, kombiniert nur bei Größenstufe S, sonst die drei Code-Brillen) und höchstens `runden=2` (mit `zusatzpass` mehr);
+ * Stufe 1: `Plan: ohne — stufe 1`, der Review braucht den Runde-1-Satz (doku, kombiniert nur unter der Kombi-Lens-Grenze, sonst die drei Code-Brillen) und höchstens `runden=2` (mit `zusatzpass` mehr);
  * Stufe 2: Planer-Plan, `Bedrohungen:`-Zeile, voller Review mit `sicherheit`. Eine Zeile `stufe 0` oder `stufe 1` ist rot, sobald die berechnete Stufe höher ist (Meldung mit Stufe und Pfad); ein vollerer Ablauf ist immer grün.
- * Die alten Größenstufe-S-Formen (`skizze`, `ohne — klein:`, `lenses=kombiniert`) gelten nur bei berechneter Risikostufe ≤ 1.
+ * `lenses=kombiniert` gilt nur bei berechneter Risikostufe ≤ 1 unter der Kombi-Lens-Grenze.
  *
  * Mit `--config <pfad>` liest der Wächter eine andere Projekt-Config (Test, fremdes Projekt), sonst die des Repos.
  *
@@ -87,9 +87,9 @@ export const vorlage = (zeilen) =>
   `blocker=architektur:<n>,requirement-treue:<n>,test-adaequanz:<n> ` +
   `sollte=architektur:<n>,requirement-treue:<n>,test-adaequanz:<n> hinweis=architektur:<n>,requirement-treue:<n>,test-adaequanz:<n> arm=<vollablauf|schlank> verdikt=ok  ` +
   `(arm= nur bei Ticket-Branches: Ticketnummer durch 4 teilbar ⇒ vollablauf, sonst schlank; bei reinem Markdown-Diff: lenses=doku blocker=doku:<n> sollte=doku:<n> hinweis=doku:<n>)\n` +
-  `Nur bei Größenstufe S (node scripts/groessenstufe.mjs): ${zeilen.plan}: ${zeilen.planer} — skizze | ${zeilen.plan}: ohne — klein: <Begründung>; ` +
+  `Nur unter der Kombi-Lens-Grenze (Zeile KOMBI: ja von node scripts/risikostufe.mjs): ` +
   `bei Code-Diff lenses=kombiniert blocker=kombiniert:<n> sollte=kombiniert:<n> hinweis=kombiniert:<n> teilbrillen=architektur:<a>,requirement-treue:<r>,test-adaequanz:<t> (Summe = <n>)\n` +
-  `Bei Risikoklasse hoch (Zeile RISIKO von node scripts/groessenstufe.mjs): lenses=…,sicherheit blocker=…,sicherheit:<n> sollte=…,sicherheit:<n> hinweis=…,sicherheit:<n> und ` +
+  `Bei Risikoklasse hoch (Zeile RISIKO von node scripts/risikostufe.mjs): lenses=…,sicherheit blocker=…,sicherheit:<n> sollte=…,sicherheit:<n> hinweis=…,sicherheit:<n> und ` +
   `${zeilen.bedrohungen}: daten=… | grenzen=… | missbrauch=… | datenschutz=… (wörtlich aus dem Plan)\n` +
   `Nach Risikostufe (node scripts/risikostufe.mjs, factory#526): Stufe 0 ${zeilen.plan}: ohne — stufe 0 und ${zeilen.review}: ohne — stufe 0; Stufe 1 ${zeilen.plan}: ohne — stufe 1 (Review wie oben, höchstens runden=2); ` +
   `Stufe 2 Planer-Plan, ${zeilen.bedrohungen}-Zeile und lenses mit sicherheit`;
@@ -292,30 +292,28 @@ function bewerteRundenAbgleich({ review, hoechste, zusatzpassZeilen, zeilen, ris
   return fehler;
 }
 
-/** Plan-Zeile gegen die Größenstufe (factory#271): `skizze` und `ohne — klein: <Begründung>` nur bei `S`, `klein` ohne Begründung nie; jeder andere Grund bleibt wie bisher. Pure. */
-function bewertePlan(plan, stufe, zeilen, risikostufe) {
+/** Plan-Zeile gegen die Risikostufe: die entfernten Skizzen- und Klein-Formen sind immer rot (factory#529); jeder andere Grund bleibt wie bisher. Pure. */
+function bewertePlan(plan, zeilen, risikostufe) {
   const P = zeilen.plan;
   if (!plan) return [`${P}-Zeile fehlt (Planungspass nicht nachgewiesen).`];
   if (plan.art === "ungueltig") {
-    return [`${P} ungültig: "${plan.zeile}" (erlaubt: "${zeilen.planer}", "${zeilen.planer} — skizze" oder "ohne — <Begründung>").`];
+    return [`${P} ungültig: "${plan.zeile}" (erlaubt: "${zeilen.planer}" oder "ohne — <Begründung>", Stufen-Form "ohne — stufe <0|1>").`];
   }
   const sg = plan.art === "ohne" ? stufeGrund(plan.grund) : null;
   if (sg) return stufenAusnahmeFehler(P, `ohne — ${plan.grund}`, sg.stufe, risikostufe);
-  const groesse = bewerteGroessenForm(plan, stufe, zeilen);
+  const groesse = bewerteGroessenForm(plan, zeilen);
   if (groesse.length > 0 || risikostufe.stufe < 2 || plan.art === "planer") return groesse;
-  return [`${P}: bei Risikostufe 2 ist nur der Planer-Plan gültig (${plan.art === "skizze" ? "skizze" : `ohne — ${plan.grund}`} ist rot); berechnet: ${risikostufe.gruende[0] ?? "-"} (Pfad ${risikoPfad(risikostufe)}).`];
+  return [`${P}: bei Risikostufe 2 ist nur der Planer-Plan gültig (${plan.art === "skizze" ? "die entfernte Skizzen-Form" : `ohne — ${plan.grund}`} ist rot); berechnet: ${risikostufe.gruende[0] ?? "-"} (Pfad ${risikoPfad(risikostufe)}).`];
 }
 
-/** Die S-Formen des Plans (`skizze`, `ohne — klein: …`) gegen die Größenstufe; jeder andere Grund bleibt wie bisher. Pure. */
-function bewerteGroessenForm(plan, stufe, zeilen) {
-  const P = zeilen.plan;
-  const klein = plan.art === "ohne" ? kleinGrund(plan.grund) : null;
-  if (klein?.art === "klein-ohne-begruendung") return [`${P}: "ohne — klein" braucht eine Begründung ("ohne — klein: <Begründung>").`];
-  const art = plan.art === "skizze" ? "skizze" : klein ? "ohne — klein" : null;
-  return art !== null && stufe !== "S" ? [`${P}: "${art}" gilt nur bei Größenstufe S (berechnet aus dem Diff: ${stufe}); hier ist der volle Planer-Lauf nötig.`] : [];
+/** Die entfernten Formen der Plan-Zeile (Skizze, Klein; factory#529) sind bei jeder Stufe rot, mit Hinweis auf die Stufen-Form. Wird weiter erkannt, damit die Meldung hilft. Pure. */
+function bewerteGroessenForm(plan, zeilen) {
+  const art = plan.art === "skizze" ? "Skizzen-Form" : plan.art === "ohne" && kleinGrund(plan.grund) !== null ? "Klein-Form" : null;
+  if (art === null) return [];
+  return [`${zeilen.plan}: die ${art} ist entfernt (factory#529); erlaubt: "ohne — stufe <0|1>" (Risikostufe 0 oder 1 laut node scripts/risikostufe.mjs) oder der Planer-Plan "${zeilen.planer}".`];
 }
 
-/** Lens-Satz der Runde 1 gegen die Diff-Art und die Größenstufe: die Pflicht-Brillen oder der volle Code-Satz; bei `S` und Code-Diff genügt `kombiniert` (factory#271). Pure. */
+/** Lens-Satz der Runde 1 gegen die Diff-Art und die Kombi-Lens-Grenze: die Pflicht-Brillen oder der volle Code-Satz; unter der Grenze und bei Code-Diff genügt `kombiniert` (factory#271, factory#529). Pure. */
 function bewerteLensSatz(review, dateien, stufe, zeilen, risikostufe) {
   const R = zeilen.review;
   const pflicht = pflichtLenses(dateien);
@@ -323,7 +321,7 @@ function bewerteLensSatz(review, dateien, stufe, zeilen, risikostufe) {
   const codeVoll = CODE_LENSES.every((l) => review.lenses.includes(l));
   const kombi = review.lenses.includes(KOMBI_LENS);
   if (fehlend.length === 0 || codeVoll || (kombi && stufe === "S" && pflicht.length > 1 && risikostufe.stufe <= 1)) return [];
-  const kombiHinweis = kombi ? ` ${KOMBI_LENS} genügt nur bei Größenstufe S mit Code-Diff und Risikostufe ≤ 1 (berechnet aus dem Diff: ${stufe}, Risikostufe ${risikostufe.stufe}).` : "";
+  const kombiHinweis = kombi ? ` ${KOMBI_LENS} genügt nur unter der Kombi-Lens-Grenze (KOMBI: ja) mit Code-Diff und Risikostufe ≤ 1 (berechnet aus dem Diff: ${stufe === "S" ? "KOMBI: ja" : "KOMBI: nein"}, Risikostufe ${risikostufe.stufe}).` : "";
   return [
     `${R}: lenses fehlt ${fehlend.join(", ")} (Pflicht für diese Diff-Art: ${pflicht.join(", ")}).${kombiHinweis} ` +
       `Erwartet: lenses=${pflicht.join(",")} (kleingeschrieben, ASCII, ae/oe/ue statt Umlaute).`,
@@ -372,7 +370,7 @@ export function bewerteNachweis({ nachweis, dateien, headBekannt, headImSlice, k
   const R = zeilen.review;
   const fehler = bewerteNachReview(nachweis, konfliktMerges, aenderungsCommits);
   const { plan, review } = nachweis;
-  fehler.push(...bewertePlan(plan, stufe, zeilen, risikostufe), ...bewerteKlasseHoch(nachweis, risiko, zeilen, risikostufe));
+  fehler.push(...bewertePlan(plan, zeilen, risikostufe), ...bewerteKlasseHoch(nachweis, risiko, zeilen, risikostufe));
   if (!review) {
     fehler.push(`${R}-Zeile fehlt (Review-Konvergenz nicht nachgewiesen).`);
     return fehler;

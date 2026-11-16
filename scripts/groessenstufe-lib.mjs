@@ -1,9 +1,9 @@
-// Kein Shebang, kein Direktaufruf: Lib der Größenstufe (factory#271). Das Einstiegsskript `groessenstufe.mjs` ruft sie auf, ebenso die
-// Nachweis-Wächter (Konvention #1398: Einstiegsskripte importieren nicht voneinander; der Glob /scripts/*-lib.mjs gehört in protected-paths).
+// Kein Shebang, kein Direktaufruf: Lib der Kombi-Lens- und der Trivial-Grenze (factory#271, seit factory#529 keine eigene Größenstufe mehr). Das Einstiegsskript `risikostufe.mjs` gibt die Zeilen `RISIKO:`, `SWEEP:` und `KOMBI:` aus,
+// ebenso rechnen die Nachweis-Wächter hier (Konvention #1398: Einstiegsskripte importieren nicht voneinander; der Glob /scripts/*-lib.mjs gehört in protected-paths). Der Name der Datei und `GROESSENSTUFE_S` bleiben aus Kompatibilität.
 /**
- * Größenstufe eines Diffs (factory#271): die eine Stelle (SSOT) für „klein“. Gleiche Pflicht, kleinere Besetzung: Stufe `S` darf mit
- * Planer-Skizze (oder `Plan: ohne — klein: <Begründung>`), einer Kombi-Lens statt drei Brillen und ohne Abnahme bei nicht beobachtbarem
- * Verhalten auskommen; alles andere ist `voll`. Die Stufe wird aus dem Diff berechnet (Umsetzer und Wächter rechnen dasselbe), nie behauptet.
+ * Kombi-Lens- und Trivial-Grenze eines Diffs (factory#271, factory#529): die eine Stelle (SSOT) für „klein“. Gleiche Pflicht, kleinere Besetzung: unter der Grenze (intern Stufe `S`) darf bei Risikostufe ≤ 1
+ * eine Kombi-Lens statt drei Brillen laufen (`KOMBI: ja`), mit Sweep `stichprobe` gilt sie als Trivial-Grenze der Risikostufe 0; alles andere ist `voll`. Die Grenze wird aus dem Diff berechnet (Umsetzer und Wächter
+ * rechnen dasselbe), nie behauptet. Planer-Skizze sowie Klein-Formen der Nachweis-Zeilen gibt es nicht mehr.
  *
  * Kriterium `S`, alle Bedingungen gemeinsam:
  *  - höchstens `GROESSENSTUFE_S.maxDateien` Dateien und `GROESSENSTUFE_S.maxZeilen` Zeilen (hinzugefügt + gelöscht laut

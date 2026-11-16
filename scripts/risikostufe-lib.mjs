@@ -8,7 +8,7 @@
  *     Groß-/Kleinschreibung egal). Eine Projekt-Config ersetzt sie nie.
  *  3. Ein Pfad trifft die Leitplanken-Gruppe `gate` aus `.github/protected-paths.json`; fehlt die Gruppe, gelten alle Leitplanken.
  *  4. Risikoklasse hoch (`bestimmeRisikoklasse`, Muster der Projekt-Config bzw. Standardliste).
- *  5. Stufe 0 nur bei (A) reinem `*.md`-Diff ohne Leitplanken- oder Grundschutz-Pfad oder (B) Größenstufe S mit Sweep `stichprobe` (nur Doku und Testdateien außerhalb von `test/harness/`).
+ *  5. Stufe 0 nur bei (A) reinem `*.md`-Diff ohne Leitplanken- oder Grundschutz-Pfad oder (B) Trivial-Grenze (`GROESSENSTUFE_S`, Sweep `stichprobe`: nur Doku und Testdateien außerhalb von `test/harness/`).
  *  6. Sonst Stufe 1 (Produktionscode ist nie Stufe 0, Leitplanken-Markdown mindestens Stufe 1).
  *
  * Der Abschnittsname steht in `sprache.spezifikation.pfade` der Projekt-Config (deutsch „Pfade“); fehlt der Schlüssel, ist `--ticket` Stufe 2 (fail-closed).
@@ -131,22 +131,29 @@ function ausloeserPfad(pfade, geschuetzt) {
   return geschuetzt[0]?.pfad ?? code ?? pfade[0];
 }
 
+/** Die Zusatzfelder jeder Antwort (factory#529): `risiko` (Risikoklasse), `sweep` (Sweep-Tiefe der Test-Lens), `kombi` (`{zulaessig, gruende}`: unter der Kombi-Lens-Grenze). Fail-closed: hoch, voll, nein mit demselben Grund. Pur. */
+function zusatzFelder(grund, groesse) {
+  if (grund !== null || groesse === null) return { risiko: { klasse: "hoch", quelle: "Projekt-Config", treffer: [], gruende: [grund] }, sweep: { tiefe: "voll", gruende: [grund] }, kombi: { zulaessig: false, gruende: [grund] } };
+  return { risiko: groesse.risiko, sweep: groesse.sweep, kombi: { zulaessig: groesse.stufe === "S", gruende: groesse.gruende } };
+}
+
 /**
  * Bestimmt die Risikostufe. `eintraege`: `[{pfad, zeilen}]` (`zeilen` `null` = binär; bei `prognose` darf es fehlen); `basis`: `ladeStufe2Basis`; `leitplanken`: `{gate: stufe2Leitplanken, alle: alleLeitplanken}`;
- * `risiko`: `risikoMusterAus`. Liefert `{stufe, gruende, treffer: [{pfad, muster, liste}], pfade}`, bei Stufe 1 zusätzlich `ausloeser` (der auslösende Pfad). Pur.
+ * `risiko`: `risikoMusterAus`. Liefert `{stufe, gruende, treffer: [{pfad, muster, liste}], pfade, risiko, sweep, kombi}` (die drei letzten: `zusatzFelder`), bei Stufe 1 zusätzlich `ausloeser` (der auslösende Pfad). Pur.
  */
 export function bestimmeRisikostufe({ eintraege, basis, leitplanken, risiko, prognose = false }) {
   const grund = failClosedGrund({ eintraege, basis, leitplanken, risiko, prognose });
-  if (grund !== null) return { stufe: 2, gruende: [grund], treffer: [], pfade: [] };
+  if (grund !== null) return { stufe: 2, gruende: [grund], treffer: [], pfade: [], ...zusatzFelder(grund, null) };
+  const groesse = bestimmeGroessenstufe({ eintraege, muster: leitplanken.alle, prognose, risiko });
+  const zusatz = zusatzFelder(null, groesse);
   const pfade = eintraege.map((e) => e.pfad);
   const t2 = stufe2Treffer(pfade, { basis, leitplanken, risiko, prognose });
-  if (t2.length > 0) return { stufe: 2, gruende: t2.map((t) => `${t.pfad} trifft ${t.muster} (${t.liste})`), treffer: t2, pfade };
+  if (t2.length > 0) return { stufe: 2, gruende: t2.map((t) => `${t.pfad} trifft ${t.muster} (${t.liste})`), treffer: t2, pfade, ...zusatz };
   const geschuetzt = treffer(pfade, [...leitplanken.alle, ...GRUNDSCHUTZ], "schutz", { prognose });
-  if (istDokuDiff(pfade) && geschuetzt.length === 0) return { stufe: 0, gruende: ["nur *.md ohne Leitplanken- oder Grundschutz-Pfad"], treffer: [], pfade };
-  const groesse = bestimmeGroessenstufe({ eintraege, muster: leitplanken.alle, prognose, risiko });
-  if (groesse.stufe === "S" && groesse.sweep.tiefe === "stichprobe") return { stufe: 0, gruende: ["Größenstufe S, nur Doku und Testdateien außerhalb von test/harness/"], treffer: [], pfade };
+  if (istDokuDiff(pfade) && geschuetzt.length === 0) return { stufe: 0, gruende: ["nur *.md ohne Leitplanken- oder Grundschutz-Pfad"], treffer: [], pfade, ...zusatz };
+  if (zusatz.kombi.zulaessig && groesse.sweep.tiefe === "stichprobe") return { stufe: 0, gruende: ["Trivial-Grenze, nur Doku und Testdateien außerhalb von test/harness/"], treffer: [], pfade, ...zusatz };
   const gruende = ohneDubletten([...(groesse.sweep.tiefe === "voll" ? groesse.sweep.gruende : []), ...groesse.gruende]);
-  return { stufe: 1, gruende, treffer: [], pfade, ausloeser: ausloeserPfad(pfade, geschuetzt) };
+  return { stufe: 1, gruende, treffer: [], pfade, ausloeser: ausloeserPfad(pfade, geschuetzt), ...zusatz };
 }
 
 const normPfad = (p) => p.replace(/\\/g, "/").replace(/^\.\//, "").replace(/^\/+/, "");
@@ -190,7 +197,7 @@ export function ladeEingaenge({ ladeBasis = () => ladeStufe2Basis(), ladeText = 
   return { fehler, basis, leitplanken, risiko };
 }
 
-export const zwei = (grund) => ({ stufe: 2, gruende: [grund], treffer: [], pfade: [] });
+export const zwei = (grund) => ({ stufe: 2, gruende: [grund], treffer: [], pfade: [], ...zusatzFelder(grund, null) });
 
 /** Die Risikostufe des Diffs `base...head` (mit `zweiPunkt`: `base..head`, für einen Commit `sha^..sha`) über die injizierte git-Funktion; jeder Fehler ist Stufe 2 mit Grund. `core.quotepath=off` hält Umlaut-Pfade unquotiert. */
 export function risikostufeAusGit(git, base, head = "HEAD", { ladeBasis, ladeText, ladeRisiko, ladeRisikoBasis = () => risikoDerBasis(git, base), zweiPunkt = false } = {}) {

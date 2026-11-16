@@ -988,7 +988,7 @@ describe("check-review-nachweis CLI mit --config (#1741)", { timeout: 60_000 }, 
     assert.match(r.stderr, /--config braucht einen Pfad/);
   });
 
-  test("Risiko-Muster der --config gelten (factory#333): Ein-Zeilen-Diff unter src/auth mit skizze/kombiniert ist ohne Block rot, mit risiko.hoch ohne Treffer grün", () => {
+  test("Risiko-Muster der --config gelten (factory#333): Ein-Zeilen-Diff unter src/auth mit kombiniert ist ohne Block rot, mit risiko.hoch ohne Treffer grün", () => {
     const d = mkdir();
     const git = (...a: string[]) => execFileSync("git", ["-c", "user.name=t", "-c", "user.email=t@example.org", "-c", "commit.gpgsign=false", ...a], { cwd: d, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
     git("init", "-q", "-b", "main");
@@ -1003,17 +1003,17 @@ describe("check-review-nachweis CLI mit --config (#1741)", { timeout: 60_000 }, 
     git("add", "-A");
     git("commit", "-q", "-m", "umsetzung");
     const reviewt = git("rev-parse", "HEAD").trim();
-    git("commit", "-q", "--allow-empty", "-m", "Nachweis", "-m", `ZD-Plan: demo-planer — skizze\nZD-Review: head=${reviewt} runden=1 lenses=kombiniert blocker=kombiniert:0 sollte=kombiniert:0 hinweis=kombiniert:0 verdikt=ok`);
+    git("commit", "-q", "--allow-empty", "-m", "Nachweis", "-m", `ZD-Plan: demo-planer\nZD-Review: head=${reviewt} runden=1 lenses=kombiniert blocker=kombiniert:0 sollte=kombiniert:0 hinweis=kombiniert:0 verdikt=ok`);
     const ohne = join(d, "ohne.json");
     writeFileSync(ohne, JSON.stringify(echteConfig()));
     const mit = join(d, "mit.json");
     writeFileSync(mit, JSON.stringify({ ...echteConfig(), risiko: { hoch: ["/geheim/"] } }));
     const rot = lauf(d, ["--config", ohne], { FACTORY_DIFF_BASE: basis });
     assert.equal(rot.status, 1, rot.stdout + rot.stderr);
-    assert.match(rot.stderr, /nur bei Größenstufe S/);
+    assert.match(rot.stderr, /kombiniert genügt nur unter der Kombi-Lens-Grenze/);
     const gruen = lauf(d, ["--config", mit], { FACTORY_DIFF_BASE: basis });
     assert.equal(gruen.status, 0, gruen.stdout + gruen.stderr);
-    assert.match(gruen.stdout, /Größenstufe: S/);
+    assert.match(gruen.stdout, /Kombi-Lens-Grenze: eingehalten/);
   });
 
   test("mit der Config ZD- zählen ZD-Zeilen im Repo (Exit 0), die Zeilen einer anderen Config nicht (Exit 1)", () => {
@@ -1038,7 +1038,7 @@ describe("check-review-nachweis CLI mit --config (#1741)", { timeout: 60_000 }, 
     const gruen = lauf(d, ["--config", pfad], { FACTORY_DIFF_BASE: basis });
     assert.equal(gruen.status, 0, gruen.stdout + gruen.stderr);
     assert.match(gruen.stdout, /Nachweis ok/);
-    assert.match(gruen.stdout, /Größenstufe: (S|voll)/);
+    assert.match(gruen.stdout, /Kombi-Lens-Grenze: (eingehalten|überschritten)/);
   });
 
   test("CLI-Lauf bei Rot: Exit 1, Meldung nennt das fehlende Pflichtfeld, die Vorlage trägt sollte= und hinweis= (factory#530)", () => {
@@ -1055,7 +1055,7 @@ describe("check-review-nachweis CLI mit --config (#1741)", { timeout: 60_000 }, 
     const reviewt = git("rev-parse", "HEAD").trim();
     const pfad = join(d, "c.json");
     writeFileSync(pfad, JSON.stringify(echteConfig()));
-    git("commit", "-q", "--allow-empty", "-m", "Nachweis", "-m", `ZD-Plan: demo-planer — skizze\nZD-Review: head=${reviewt} runden=1 lenses=kombiniert blocker=kombiniert:0 verdikt=ok`);
+    git("commit", "-q", "--allow-empty", "-m", "Nachweis", "-m", `ZD-Plan: demo-planer\nZD-Review: head=${reviewt} runden=1 lenses=kombiniert blocker=kombiniert:0 verdikt=ok`);
     const rot = lauf(d, ["--config", pfad], { FACTORY_DIFF_BASE: basis });
     assert.equal(rot.status, 1, rot.stdout + rot.stderr);
     assert.match(rot.stderr, /sollte= fehlt \(Pflicht, factory#530\)/);
@@ -1078,7 +1078,7 @@ describe("check-review-nachweis CLI mit --config (#1741)", { timeout: 60_000 }, 
     const reviewt = git("rev-parse", "HEAD").trim();
     const pfad = join(d, "c.json");
     writeFileSync(pfad, JSON.stringify(echteConfig()));
-    const nachweis = (review: string) => git("commit", "-q", "--allow-empty", "-m", "Nachweis", "-m", `ZD-Plan: demo-planer — skizze\nZD-Review: head=${reviewt} runden=1 ${review} ${S0("kombiniert")} verdikt=ok`);
+    const nachweis = (review: string) => git("commit", "-q", "--allow-empty", "-m", "Nachweis", "-m", `ZD-Plan: demo-planer\nZD-Review: head=${reviewt} runden=1 ${review} ${S0("kombiniert")} verdikt=ok`);
     nachweis("lenses=kombiniert");
     const ohneBeides = lauf(d, ["--config", pfad], { FACTORY_DIFF_BASE: basis });
     assert.equal(ohneBeides.status, 0, ohneBeides.stdout + ohneBeides.stderr);
@@ -1094,7 +1094,7 @@ describe("check-review-nachweis CLI mit --config (#1741)", { timeout: 60_000 }, 
     assert.doesNotMatch(voll.stdout, /Hinweis:/);
   });
 
-  test("Override-Lauf nennt die Größenstufe ebenfalls (factory#402 L26)", () => {
+  test("Override-Lauf nennt die Kombi-Lens-Grenze ebenfalls (factory#402 L26)", () => {
     const d = mkdir();
     const git = (...a: string[]) => execFileSync("git", ["-c", "user.name=t", "-c", "user.email=t@example.org", "-c", "commit.gpgsign=false", ...a], { cwd: d, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
     git("init", "-q", "-b", "main");
@@ -1109,7 +1109,7 @@ describe("check-review-nachweis CLI mit --config (#1741)", { timeout: 60_000 }, 
     const r = lauf(d, ["--config", pfad], { FACTORY_DIFF_BASE: basis });
     assert.equal(r.status, 0, r.stdout + r.stderr);
     assert.match(r.stdout, /geduldet/);
-    assert.match(r.stdout, /Größenstufe: (S|voll)/);
+    assert.match(r.stdout, /Kombi-Lens-Grenze: (eingehalten|überschritten)/);
   });
 });
 
@@ -1356,7 +1356,7 @@ describe("Risikostufe: die Wächter rechnen nach (factory#526)", () => {
     rot(bew(text(PL, voll(2, sicher)), R2), /Bedrohungen-Zeile fehlt.*Risikostufe 2.*package\.json/);
     rot(bew(text(PL, voll(2), true), R2), /lenses fehlt sicherheit.*Risikostufe 2/);
     rot(bew(text("ohne — Doku-Fix", voll(2, sicher), true), R2), /Risikostufe 2 ist nur der Planer-Plan gültig|nur der Planer-Plan/);
-    rot(bew(text(`${PL} — skizze`, voll(2, sicher), true), R2, { stufe: "S" }), /nur der Planer-Plan/);
+    rot(bew(text(`${PL} — skizze`, voll(2, sicher), true), R2, { stufe: "S" }), /Skizzen-Form ist entfernt/);
   });
   test("K4: ein vollerer Ablauf als nötig ist bei jeder Stufe grün", () => {
     for (const r of [R0, R1]) assert.deepEqual(bew(text(PL, voll(2)), r), []);
@@ -1395,13 +1395,17 @@ describe("Risikostufe: die Wächter rechnen nach (factory#526)", () => {
     assert.equal(t.risikostufe.stufe, 2);
     assert.match(t.fehler.join("\n"), /Leitplanken kaputt/);
   });
-  test("K7: die alten S-Formen gelten nur bei berechneter Stufe ≤ 1", () => {
+  test("K7: kombiniert gilt nur unter der Kombi-Lens-Grenze bei Stufe ≤ 1; die Altformen Skizze und Klein sind bei jeder Stufe rot (K2)", () => {
     const kombi = `head=${SHA} runden=1 lenses=kombiniert blocker=kombiniert:0 sollte=kombiniert:0 hinweis=kombiniert:0 teilbrillen=architektur:0,requirement-treue:0,test-adaequanz:0 verdikt=ok`;
-    assert.deepEqual(bew(text(`${PL} — skizze`, kombi), R1, { stufe: "S" }), []);
-    assert.deepEqual(bew(text("ohne — klein: Tippfehler", kombi), R1, { stufe: "S" }), []);
+    assert.deepEqual(bew(text(PL, kombi), R1, { stufe: "S" }), []);
+    rot(bew(text(PL, kombi), R1, { stufe: "voll" }), /kombiniert genügt nur unter der Kombi-Lens-Grenze.*KOMBI: nein/);
+    for (const r of [R0, R1, R2]) {
+      rot(bew(text(`${PL} — skizze`, kombi), r, { stufe: "S" }), /Skizzen-Form ist entfernt.*ohne — stufe <0\|1>/);
+      rot(bew(text("ohne — klein: Tippfehler", kombi), r, { stufe: "S" }), /Klein-Form ist entfernt.*ohne — stufe <0\|1>/);
+    }
     const sicher = `${DREI},sicherheit`;
-    rot(bew(text(`${PL} — skizze`, voll(2, sicher), true), R2, { stufe: "S" }), /nur der Planer-Plan/);
-    rot(bew(text("ohne — klein: Tippfehler", voll(2, sicher), true), R2, { stufe: "S" }), /nur der Planer-Plan/);
+    rot(bew(text(`${PL} — skizze`, voll(2, sicher), true), R2, { stufe: "S" }), /Skizzen-Form ist entfernt/);
+    rot(bew(text("ohne — klein: Tippfehler", voll(2, sicher), true), R2, { stufe: "S" }), /Klein-Form ist entfernt/);
     rot(bew(text(PL, `${kombi.replace("lenses=kombiniert", "lenses=kombiniert,sicherheit")}`, true), R2, { stufe: "S" }), /lenses fehlt/);
   });
   test("Stufe-2-Pflicht über bewerteKlasseHoch: Risikostufe 2 allein genügt, Stufe 1 verlangt nichts", () => {

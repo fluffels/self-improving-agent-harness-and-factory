@@ -1,16 +1,13 @@
-/* Größenstufe (factory#271): Stufe S (klein) wird aus dem Diff berechnet; die Nachweis-Wächter akzeptieren nur dann die kleinere Besetzung.
- * Logik aus scripts/groessenstufe-lib.mjs, scripts/groessenstufe.mjs, check-review-nachweis.mjs und check-abnahme-nachweis.mjs importiert;
+/* Kombi-Lens- und Trivial-Grenze (factory#271, seit factory#529 ohne eigene Größenstufe): die Grenze (intern `S`) wird aus dem Diff berechnet; die Nachweis-Wächter akzeptieren nur darunter die Kombi-Lens.
+ * Die Altformen Skizze und Klein sind entfernt und werden mit Hinweis auf die Stufen-Form abgewiesen (Kriterium 2). Logik aus scripts/groessenstufe-lib.mjs, check-review-nachweis.mjs und check-abnahme-nachweis.mjs importiert;
  * die Wächter laufen gegen ein echtes git-Repo im Temp-Ordner (Verdrahtung: der Wächter rechnet die Stufe selbst, der Umsetzer behauptet sie nie). */
 import { afterEach, describe, expect, test } from "vitest";
-import { execFileSync, spawnSync } from "node:child_process";
+import { execFileSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as libRaw from "../scripts/groessenstufe-lib.mjs";
-// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
-import * as cliRaw from "../scripts/groessenstufe.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as reviewRaw from "../scripts/check-review-nachweis.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
@@ -35,7 +32,6 @@ const lib = libRaw as unknown as {
   groessenstufeAusGit: (git: (a: string[]) => string, base: string, head?: string, o?: { ladeMuster?: () => string[]; zweiPunkt?: boolean }) => Ergebnis;
   ladeLeitplankenMuster: (quelle?: string) => string[];
 };
-const cli = cliRaw as unknown as { laufe: (argv: string[], o?: { git?: (a: string[]) => string; ladeMuster?: () => string[]; ladeRisiko?: () => unknown; env?: Record<string, string> }) => { code: number; ausgabe: string } };
 const nl = nlRaw as unknown as { kleinGrund: (g: string) => { art: string; begruendung?: string } | null; parseNachweis: (t: string, z: unknown) => { plan: { art: string; grund?: string } | null; review: { lenses: string[] } | null } };
 type Zeilen = { plan: string; planer: string; review: string; abnahme: string; praefix: string };
 const { commitZeilen } = sliceRaw as unknown as { commitZeilen: (p: string, pl: string) => Zeilen };
@@ -178,92 +174,6 @@ describe("parseNumstatNoRenames und groessenstufeAusGit", () => {
   });
 });
 
-describe("CLI groessenstufe.mjs", () => {
-  const git = (a: string[]) => {
-    if (a[0] === "rev-parse") return "b".repeat(40);
-    return "2\t1\tdocs/a.md\n";
-  };
-  const o = { git, ladeMuster: () => MUSTER, env: { FACTORY_DIFF_BASE: "b".repeat(40) } };
-  test("ohne Argument: Diff gegen die Basis; Ausgabe STUFE: S, Exit 0", () => {
-    expect(cli.laufe([], o)).toEqual({ code: 0, ausgabe: "STUFE: S\nRISIKO: doku — nur *.md\nSWEEP: stichprobe — nur Doku und Testdateien, Risikoklasse nicht hoch" });
-  });
-  test("--commit rechnet <sha>^..<sha>", () => {
-    const aufrufe: string[] = [];
-    cli.laufe(["--commit", "abc1234"], { ...o, git: (a) => (a[0] === "show" ? "" : aufrufe.push(a.join(" ")), "1\t0\tdocs/a.md\n") });
-    expect(aufrufe).toEqual(["-c core.quotepath=off diff --numstat --no-renames abc1234^..abc1234"]);
-  });
-  test("--pfade ist die Prognose; ein geschützter Pfad gibt voll samt Grund, --json liefert das Objekt", () => {
-    expect(cli.laufe(["--pfade", "docs/x.md", "docs/y.md"], o).ausgabe).toBe("STUFE: S\nRISIKO: doku — nur *.md\nSWEEP: stichprobe — nur Doku und Testdateien, Risikoklasse nicht hoch");
-    expect(cli.laufe(["--pfade", "docs/x.md", "scripts/y.mjs"], o).ausgabe).toMatch(/^STUFE: voll — scripts\/y\.mjs liegt in einem geschützten Pfad/);
-    expect(JSON.parse(cli.laufe(["--pfade", "scripts/y.mjs", "--json"], o).ausgabe)).toMatchObject({ stufe: "voll" });
-  });
-  test("--pfade normalisiert Backslashes und ./: ein geschützter Pfad in Windows-Schreibweise ist voll", () => {
-    expect(cli.laufe(["--pfade", ".\\scripts\\x.mjs"], o).ausgabe).toMatch(/^STUFE: voll/);
-    expect(cli.laufe(["--pfade", "./scripts/x.mjs"], o).ausgabe).toMatch(/^STUFE: voll/);
-    expect(cli.laufe(["--pfade", "./docs/x.md"], o).ausgabe).toBe("STUFE: S\nRISIKO: doku — nur *.md\nSWEEP: stichprobe — nur Doku und Testdateien, Risikoklasse nicht hoch");
-  });
-  test("als Prozess: STUFE-Zeile mit Exit 0, Aufruf-Fehler mit Exit 2 und Aufrufzeile", () => {
-    const skript = fileURLToPath(new URL("../scripts/groessenstufe.mjs", import.meta.url));
-    expect(execFileSync("node", [skript, "--pfade", "docs/x.md"], { encoding: "utf8" }).trim()).toBe("STUFE: S\nRISIKO: doku — nur *.md\nSWEEP: stichprobe — nur Doku und Testdateien, Risikoklasse nicht hoch");
-    const fehler = spawnSync("node", [skript, "--unbekannt"], { encoding: "utf8" });
-    expect(fehler.status).toBe(2);
-    expect(fehler.stderr).toMatch(/Aufruf: node scripts\/groessenstufe\.mjs/);
-  });
-  describe("RISIKO-Zeile (factory#333)", () => {
-    const STD = lib.risikoMusterAus({});
-    const mit = { ...o, ladeRisiko: () => STD };
-    test("ohne Argument, --commit und --pfade: zweite Zeile RISIKO", () => {
-      const authGit = () => "1\t0\tsrc/auth/x.ts\n";
-      expect(cli.laufe([], { ...mit, git: (a) => (a[0] === "rev-parse" ? "b".repeat(40) : authGit()) }).ausgabe).toBe(
-        "STUFE: voll — Risikoklasse hoch: src/auth/x.ts trifft *auth* (Standardliste)\nRISIKO: hoch — src/auth/x.ts trifft *auth* (Standardliste)\nSWEEP: voll — src/auth/x.ts trifft *auth* (Standardliste)",
-      );
-      expect(cli.laufe(["--commit", "abc"], { ...mit, git: authGit }).ausgabe).toMatch(/\nRISIKO: hoch — src\/auth\/x\.ts trifft \*auth\*/);
-      expect(cli.laufe(["--pfade", "src/a.ts"], mit).ausgabe).toBe("STUFE: S\nRISIKO: normal — kein Pfad trifft ein Risiko-Muster (Standardliste)\nSWEEP: voll — src/a.ts ist Code oder Konfiguration");
-    });
-    test("--json trägt risiko mit allen Treffern, der Text höchstens fünf plus Zahl der weiteren", () => {
-      const j = JSON.parse(cli.laufe(["--pfade", "src/auth/x.ts", "--json"], mit).ausgabe) as { risiko: unknown };
-      expect(j.risiko).toMatchObject({ klasse: "hoch", quelle: "Standardliste", treffer: [{ pfad: "src/auth/x.ts", muster: "*auth*" }] });
-      const viele = Array.from({ length: 7 }, (_, i) => `src/auth/${i}.ts`);
-      const zeile = cli.laufe(["--pfade", ...viele], mit).ausgabe.split("\n")[1];
-      expect(zeile).toMatch(/RISIKO: hoch — .*\(\+2 weitere\)$/);
-      expect(zeile.split("; ")).toHaveLength(5);
-      expect((JSON.parse(cli.laufe(["--pfade", ...viele, "--json"], mit).ausgabe) as { risiko: { treffer: unknown[] } }).risiko.treffer).toHaveLength(7);
-    });
-    test("Textfenster: genau 5 Gründe ohne weitere, 6 mit (+1 weitere)", () => {
-      const pfade = (n: number) => Array.from({ length: n }, (_, i) => `src/auth/${i}.ts`);
-      expect(cli.laufe(["--pfade", ...pfade(5)], mit).ausgabe.split("\n")[1]).not.toMatch(/weitere/);
-      expect(cli.laufe(["--pfade", ...pfade(6)], mit).ausgabe.split("\n")[1]).toMatch(/\(\+1 weitere\)$/);
-    });
-    test("fail-closed-Zweige tragen RISIKO: hoch (Schutzliste nicht ladbar, keine Basis)", () => {
-      const wirft = () => { throw new Error("x"); };
-      expect(cli.laufe(["--pfade", "src/a.ts"], { ...mit, ladeMuster: wirft }).ausgabe).toMatch(/\nRISIKO: hoch — Schutzliste nicht ladbar/);
-      expect(cli.laufe([], { ...mit, git: () => "", env: {} }).ausgabe).toMatch(/\nRISIKO: hoch — keine Vergleichs-Basis/);
-    });
-    test("als Prozess ohne Injektion: Standardliste der Repo-Config, hoch bei src/auth/x.ts", () => {
-      const skript = fileURLToPath(new URL("../scripts/groessenstufe.mjs", import.meta.url));
-      const aus = execFileSync("node", [skript, "--pfade", "src/auth/x.ts"], { encoding: "utf8" });
-      expect(aus).toMatch(/\nRISIKO: hoch — src\/auth\/x\.ts trifft \*auth\* \(Standardliste\)/);
-    });
-    test("ein Ladefehler der Risiko-Muster ist hoch (fail-closed), kein Absturz", () => {
-      const r = cli.laufe(["--pfade", "src/a.ts"], { ...o, ladeRisiko: () => { throw new Error("kaputt"); } });
-      expect(r.code).toBe(0);
-      expect(r.ausgabe).toMatch(/^STUFE: voll — Risikoklasse hoch: Projekt-Config nicht ladbar: kaputt\nRISIKO: hoch/);
-      const c = cli.laufe(["--commit", "abc"], { ...o, git: () => "1\t0\tsrc/a.ts\n", ladeRisiko: () => { throw new Error("kaputt"); } });
-      expect(c.ausgabe).toMatch(/\nRISIKO: hoch — Projekt-Config nicht ladbar: kaputt/);
-    });
-  });
-  test("Aufruf-Fehler: Exit 2; keine Basis und Ladefehler: voll statt Absturz", () => {
-    expect(cli.laufe(["--pfade"], o).code).toBe(2);
-    expect(cli.laufe(["--commit"], o).code).toBe(2);
-    expect(cli.laufe(["--unbekannt"], o).code).toBe(2);
-    expect(cli.laufe(["docs/x.md"], o).code).toBe(2);
-    expect(cli.laufe(["--commit", "abc", "docs/x.md"], o).code).toBe(2);
-    expect(cli.laufe(["--commit", "abc", "--pfade", "docs/x.md"], o).code).toBe(2);
-    expect(cli.laufe([], { ...o, git: () => "", env: {} }).ausgabe).toMatch(/voll — keine Vergleichs-Basis/);
-    expect(cli.laufe(["--pfade", "docs/x.md"], { ...o, ladeMuster: () => { throw new Error("x"); } }).ausgabe).toMatch(/voll — Schutzliste nicht ladbar/);
-  });
-});
-
 describe("kleinGrund und parseNachweis: skizze und ohne — klein", () => {
   test("klein mit Begründung, ohne Begründung, anderer Grund", () => {
     expect(nl.kleinGrund("klein: Status-Zeile")).toEqual({ art: "klein", begruendung: "Status-Zeile" });
@@ -322,9 +232,19 @@ describe("check-review-nachweis rechnet die Stufe selbst (K3, K4, K5)", () => {
   const KLEIN = { "src/a.ts": "export const a = 1;\n" };
   const DREI = "architektur,requirement-treue,test-adaequanz";
 
-  test("S mit Code: kombiniert, Skizze und ohne — klein sind grün", () => {
-    expect(pruefe(KLEIN, nach(`${PL} — skizze`, "kombiniert")).fehler).toEqual([]);
-    expect(pruefe(KLEIN, nach("ohne — klein: Ein-Zeilen-Änderung", "kombiniert")).fehler).toEqual([]);
+  test("unter der Grenze: kombiniert ist grün; Skizze und ohne — klein sind entfernt und rot, mit Hinweis auf die Stufen-Form (K2)", () => {
+    expect(pruefe(KLEIN, nach(PL, "kombiniert")).fehler).toEqual([]);
+    const skizze = pruefe(KLEIN, nach(`${PL} — skizze`, "kombiniert")).fehler.join("\n");
+    expect(skizze).toMatch(/Skizzen-Form ist entfernt/);
+    expect(skizze).toMatch(/ohne — stufe <0\|1>/);
+    const klein = pruefe(KLEIN, nach("ohne — klein: Ein-Zeilen-Änderung", "kombiniert")).fehler.join("\n");
+    expect(klein).toMatch(/Klein-Form ist entfernt/);
+    expect(klein).toMatch(/ohne — stufe <0\|1>/);
+  });
+  test("die Altformen sind auch mit anderem Strich und ohne Begründung rot (Hinweis bleibt)", () => {
+    for (const plan of [`${PL} - skizze`, `${PL} – skizze`, `${PL} —— skizze`, "ohne — klein", "ohne — klein:  x"]) {
+      expect(pruefe(KLEIN, nach(plan, "kombiniert")).fehler.join("\n"), plan).toMatch(/ist entfernt.*ohne — stufe <0\|1>/);
+    }
   });
   test("S: der volle Satz und der volle Planer bleiben grün", () => {
     expect(pruefe(KLEIN, nach(PL, DREI)).fehler).toEqual([]);
@@ -334,39 +254,40 @@ describe("check-review-nachweis rechnet die Stufe selbst (K3, K4, K5)", () => {
     expect(pruefe(md, nach(PL, "doku")).fehler).toEqual([]);
     expect(pruefe(md, nach(PL, "kombiniert")).fehler.join()).toMatch(/lenses fehlt doku/);
   });
-  test("voll (4 Dateien): kombiniert, skizze und ohne — klein sind rot", () => {
+  test("über der Grenze (4 Dateien): kombiniert ist rot und nennt KOMBI, die Altformen sind rot", () => {
     const gross = { "src/a.ts": "1\n", "src/b.ts": "1\n", "src/c.ts": "1\n", "src/d.ts": "1\n" };
     const f = pruefe(gross, nach(`${PL} — skizze`, "kombiniert")).fehler.join("\n");
-    expect(f).toMatch(/lenses fehlt .*kombiniert genügt nur bei Größenstufe S/);
-    expect(f).toMatch(/"skizze" gilt nur bei Größenstufe S/);
-    expect(pruefe(gross, nach("ohne — klein: x", DREI)).fehler.join()).toMatch(/"ohne — klein" gilt nur bei Größenstufe S/);
+    expect(f).toMatch(/lenses fehlt .*kombiniert genügt nur unter der Kombi-Lens-Grenze \(KOMBI: ja\).*KOMBI: nein/);
+    expect(f).toMatch(/Skizzen-Form ist entfernt/);
+    expect(pruefe(gross, nach("ohne — klein: x", DREI)).fehler.join()).toMatch(/Klein-Form ist entfernt/);
     expect(pruefe(gross, nach(PL, DREI)).fehler).toEqual([]);
   });
-  test("K5 Ende-zu-Ende: eine Zeile in einem Gate- oder Agenten-Pfad ist voll, kombiniert und skizze sind rot", () => {
+  test("K5 Ende-zu-Ende: eine Zeile in einem Gate- oder Agenten-Pfad liegt über der Grenze, kombiniert und skizze sind rot", () => {
     for (const pfad of ["scripts/check-x.mjs", ".claude/agents/x.md", ".github/workflows/x.yml", "AGENTS.md"]) {
       const f = pruefe({ [pfad]: "x\n" }, nach(`${PL} — skizze`, "kombiniert")).fehler.join("\n");
-      expect(f, pfad).toMatch(/gilt nur bei Größenstufe S/);
-      expect(f, pfad).toMatch(/kombiniert genügt nur bei Größenstufe S/);
+      expect(f, pfad).toMatch(/Skizzen-Form ist entfernt/);
+      expect(f, pfad).toMatch(/kombiniert genügt nur unter der Kombi-Lens-Grenze/);
     }
   });
-  test("eine ungültige Plan-Zeile nennt die Skizze als erlaubte Form", () => {
-    expect(pruefe(KLEIN, nach("murks", DREI)).fehler.join()).toMatch(/ungültig: "murks" \(erlaubt: .*— skizze/);
+  test("eine ungültige Plan-Zeile nennt die Stufen-Form, nicht mehr die Skizze", () => {
+    const f = pruefe(KLEIN, nach("murks", DREI)).fehler.join();
+    expect(f).toMatch(/ungültig: "murks" \(erlaubt: .*ohne — stufe <0\|1>/);
+    expect(f).not.toMatch(/skizze/);
   });
-  test("klein ohne Begründung ist auch bei S rot; ein anderer Grund bleibt bei voll grün", () => {
-    expect(pruefe(KLEIN, nach("ohne — klein", "kombiniert")).fehler.join()).toMatch(/braucht eine Begründung/);
+  test("ein anderer Grund bleibt bei Stufe 1 grün", () => {
     expect(pruefe({ "scripts/x.mjs": "x\n" }, nach("ohne — Revert eines PR", DREI)).fehler).toEqual([]);
   });
-  test("K4: wächst der Diff nach einem S-Nachweis, wird der Nachweis rot", () => {
-    const { git, base } = repo(KLEIN, nach(`${PL} — skizze`, "kombiniert"));
+  test("K4: wächst der Diff nach einem kombiniert-Nachweis über die Grenze, wird der Nachweis rot", () => {
+    const { git, base } = repo(KLEIN, nach(PL, "kombiniert"));
     const r = (reviewRaw as { checkReviewNachweis: (o: unknown) => { ok: boolean; fehler: string[] } }).checkReviewNachweis;
     expect(r({ runGit: git, env: { FACTORY_DIFF_BASE: base }, ladeZeilen: () => Z }).ok).toBe(true);
-    // gleicher Nachweis, aber 4 Dateien im Diff: die Stufe wird neu berechnet
-    const { git: git2, base: base2 } = repo({ ...KLEIN, "src/b.ts": "1\n", "src/c.ts": "1\n", "src/d.ts": "1\n" }, nach(`${PL} — skizze`, "kombiniert"));
+    // gleicher Nachweis, aber 4 Dateien im Diff: die Grenze wird neu berechnet
+    const { git: git2, base: base2 } = repo({ ...KLEIN, "src/b.ts": "1\n", "src/c.ts": "1\n", "src/d.ts": "1\n" }, nach(PL, "kombiniert"));
     expect(r({ runGit: git2, env: { FACTORY_DIFF_BASE: base2 }, ladeZeilen: () => Z }).ok).toBe(false);
   });
 });
 
-describe("check-abnahme-nachweis: entfaellt — klein nur bei berechnetem S (K3)", () => {
+describe("check-abnahme-nachweis: die entfernte Klein-Form ist bei jeder Stufe rot, mit Hinweis auf die Stufen-Form (K2)", () => {
   const CONFIG = { repo: FREMD.repo, praefixe: { commitZeile: FREMD.praefixe.commitZeile }, agenten: { planer: PL }, sprache: echteSprache() };
   const AK = "## Akzeptanzkriterien\n1. eins\n2. zwei\n";
   const pruefe = (aenderungen: Record<string, string>, abnahme: string, body = AK) => {
@@ -380,18 +301,20 @@ describe("check-abnahme-nachweis: entfaellt — klein nur bei berechnetem S (K3)
   };
   const KLEIN = { "docs/a.md": "# a\n" };
 
-  test("S: entfaellt — klein: <Begründung> ist mit Kriterien grün", () => {
-    expect(pruefe(KLEIN, "entfaellt — klein: nichts zu beobachten").fehler).toEqual([]);
+  test("entfaellt — klein: <Begründung> ist mit Kriterien rot, auch unter der Grenze, und nennt die Stufen-Form", () => {
+    const f = pruefe(KLEIN, "entfaellt — klein: nichts zu beobachten");
+    expect(f.ok).toBe(false);
+    expect(f.fehler.join()).toMatch(/nicht erlaubt.*Klein-Form ist entfernt.*entfaellt — stufe <0\|1>/);
   });
-  test("voll: dieselbe Zeile ist mit Kriterien rot (Gate-Pfad mit einer Zeile, Diff über der Grenze)", () => {
-    expect(pruefe({ "scripts/check-x.mjs": "x\n" }, "entfaellt — klein: nichts zu beobachten").fehler.join()).toMatch(/nicht erlaubt.*nur bei Größenstufe S.*voll/);
+  test("dieselbe Zeile ist über der Grenze (Gate-Pfad, Diff über der Zeilengrenze) ebenso rot", () => {
+    expect(pruefe({ "scripts/check-x.mjs": "x\n" }, "entfaellt — klein: nichts zu beobachten").fehler.join()).toMatch(/Klein-Form ist entfernt/);
     expect(pruefe({ "docs/a.md": "x\n".repeat(61) }, "entfaellt — klein: nichts zu beobachten").ok).toBe(false);
   });
-  test("S: ein anderer entfaellt-Grund und klein ohne Begründung bleiben mit Kriterien rot", () => {
+  test("ein anderer entfaellt-Grund nennt die Klein-Form nicht, klein ohne Begründung bleibt rot", () => {
     const f = pruefe(KLEIN, "entfaellt — nicht nötig").fehler.join();
     expect(f).toMatch(/nicht erlaubt/);
-    expect(f).not.toMatch(/Ausnahme/);
-    expect(pruefe(KLEIN, "entfaellt — klein").fehler.join()).toMatch(/Ausnahme.*mit Begründung/);
+    expect(f).not.toMatch(/Klein-Form/);
+    expect(pruefe(KLEIN, "entfaellt — klein").fehler.join()).toMatch(/Klein-Form ist entfernt/);
     expect(pruefe(KLEIN, "entfaellt — klein").ok).toBe(false);
   });
   test("ohne Kriterien bleibt entfaellt bei jeder Stufe grün", () => {
@@ -470,12 +393,8 @@ describe("Sweep-Tiefe (factory#272)", () => {
     for (const p of ["test/a.test.ts", "test/a.spec.js", "test/a.test.mjs", "test/a.spec.cts"]) expect(tiefe([p]), p).toBe("stichprobe");
     for (const p of ["test/a.test.ts.bak", "test/atest.ts", "test/a.tests.ts", "test/a.test.tsx", "test/a.test-ts", "test/a.test.json", "test/a.test"]) expect(tiefe([p]), p).toBe("voll");
   });
-  test("die injizierte Risikoliste wirkt über bestimmeGroessenstufe und die CLI (Verdrahtung, kein Default)", () => {
+  test("die injizierte Risikoliste wirkt über bestimmeGroessenstufe (Verdrahtung, kein Default)", () => {
     const eigen = lib.risikoMusterAus({ risiko: { hoch: ["*billing*"] } });
-    const o = { git: () => "b".repeat(40), ladeMuster: () => MUSTER, env: { FACTORY_DIFF_BASE: "b".repeat(40) } };
-    const pfade = ["--pfade", "test/billing.test.ts", "docs/a.md"];
-    expect(cli.laufe(pfade, { ...o, ladeRisiko: () => eigen }).ausgabe).toMatch(/\nSWEEP: voll — /);
-    expect(cli.laufe(pfade, { ...o, ladeRisiko: () => lib.risikoMusterAus({}) }).ausgabe).toMatch(/\nSWEEP: stichprobe — /);
     const e = [eins("test/billing.test.ts"), eins("docs/a.md")];
     expect(lib.bestimmeGroessenstufe({ eintraege: e, muster: MUSTER, risiko: eigen } as never)).toMatchObject({ sweep: { tiefe: "voll" } });
   });
@@ -494,17 +413,5 @@ describe("Sweep-Tiefe (factory#272)", () => {
     };
     expect(lib.groessenstufeAusGit(() => "1\t0\tdocs/a.md\n", "b", "HEAD", { ladeMuster: wirft })).toMatchObject({ sweep: { tiefe: "voll" } });
     expect(lib.groessenstufeAusGit(wirft, "b", "HEAD", { ladeMuster: () => MUSTER })).toMatchObject({ sweep: { tiefe: "voll" } });
-  });
-  test("CLI: dritte Zeile SWEEP, JSON-Feld sweep, fail-closed-Zweige voll", () => {
-    const o = { git: () => "b".repeat(40), ladeMuster: () => MUSTER, env: { FACTORY_DIFF_BASE: "b".repeat(40) } };
-    expect(cli.laufe(["--pfade", "scripts/x.mjs", "test/x.test.ts"], o).ausgabe).toMatch(/\nSWEEP: voll — scripts\/x\.mjs ist Code oder Konfiguration$/);
-    expect(cli.laufe(["--pfade", "test/harness/x.test.ts"], o).ausgabe).toMatch(/\nSWEEP: voll — test\/harness\/x\.test\.ts ist ein Wächter-Test/);
-    expect(JSON.parse(cli.laufe(["--pfade", "docs/x.md", "--json"], o).ausgabe)).toMatchObject({ sweep: { tiefe: "stichprobe" } });
-    const wirft = () => {
-      throw new Error("kaputt");
-    };
-    expect(cli.laufe(["--pfade", "docs/a.md"], { ...o, ladeMuster: wirft }).ausgabe).toMatch(/\nSWEEP: voll — Schutzliste nicht ladbar/);
-    expect(cli.laufe([], { ...o, git: () => "", env: {} }).ausgabe).toMatch(/\nSWEEP: voll — keine Vergleichs-Basis/);
-    expect((cliRaw as unknown as { sweepZeile: (e: object) => string }).sweepZeile({})).toBe("SWEEP: voll — nicht berechnet");
   });
 });

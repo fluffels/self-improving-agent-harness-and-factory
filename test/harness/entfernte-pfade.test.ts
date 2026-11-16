@@ -33,6 +33,9 @@
  * der Gruppen, Zeile mit der Ankerzahl, Probe-Protokoll-Feld, Warnungs-Funktionen) in allen Textdateien, das bloße Wort nur in den aktiven Anweisungstexten. Bewusste Grenze: freie Umschreibungen werden nicht gescannt,
  * das bloße Wort in Messberichten (`docs/` außer Glossar) bleibt erlaubt.
  *
+ * Dazu (factory#529): die Größenstufe S ist zurückgebaut (aufgegangen in Risikostufe 0/1, Fortschreibung zu ADR 0027): `RESTE_GROESSENSTUFE_S` scannt das entfernte Skript, die Zeile `STUFE: S` und die Altformen der Nachweis-Zeilen.
+ * Bewusste Grenze: `groessenstufe-lib.mjs` und `GROESSENSTUFE_S` behalten ihren Namen (Kombi-Lens- und Trivial-Grenze); Wächter-Tests mit Altform-Fixtures stehen in `AUSNAHMEN_GROESSENSTUFE_S`.
+ *
  * Ein künftiger harmloser Gebrauch eines dieser Wörter braucht einen Eintrag in `REGEL_AUSNAHMEN`.
  *
  * Dazu (#1748): die Agenten-Dateien heißen nach der Rolle (`factory-planer.md` usw.), das Ticket-Skill-Verzeichnis `factory-ticket/`; die alten
@@ -156,6 +159,7 @@ export const ENTFERNTE_DATEIEN: { pfad: string; grund: string }[] = [
   { pfad: "scripts/lens-arm.mjs", grund: "A/B Kern je Rolle beendet (factory#236, ADR 0035)" },
   { pfad: "scripts/lens-arm-lib.mjs", grund: "A/B Kern je Rolle beendet (factory#236, ADR 0035)" },
   { pfad: "test/harness/lens-arm.test.ts", grund: "A/B Kern je Rolle beendet (factory#236, ADR 0035)" },
+  { pfad: "scripts/groessenstufe.mjs", grund: "aufgegangen in Risikostufe 0/1 (factory#529)" },
 ];
 
 /** Meldungen für wieder angelegte entfernte Dateien; leer = sauber. */
@@ -602,5 +606,66 @@ describe("Kein Selbstcheck der Test-Adäquanz im Umsetzer (factory#531)", () => 
 
   test("jede Regel hat einen Fix", () => {
     for (const r of [...RESTE_SELBSTCHECK, ...RESTE_SELBSTCHECK_WORT]) assert.ok(r.fix.length > 10, `Regel ${r.name} ohne Fix`);
+  });
+});
+
+// ---- Größenstufe S zurückgebaut (factory#529) ----
+
+/** Namen der zurückgebauten Größenstufe S; geschlossen, je Regel ein Beispiel im Negativfall-Test. Grenze: `groessenstufe-lib.mjs` und die Wörter „Größenstufe“/„Skizze“ allein bleiben erlaubt. */
+export const RESTE_GROESSENSTUFE_S: Rest[] = [
+  { name: "groessenstufe.mjs", muster: /\bgroessenstufe\.mjs\b/, fix: "das Skript ist entfernt: `RISIKO:`, `SWEEP:` und `KOMBI:` gibt `node scripts/risikostufe.mjs` aus (factory#529)" },
+  { name: "STUFE: S", muster: /(?<![A-ZÄÖÜ])STUFE: S\b/, fix: "die Größenstufe S gibt es nicht mehr: die Grenze lebt als `KOMBI: ja|nein` und Risikostufe 0/1 in `node scripts/risikostufe.mjs` (factory#529)" },
+  { name: "Plan-Form skizze", muster: /—+\s*skizze\b/, fix: "die Skizzen-Form ist entfernt: `Plan: ohne — stufe <0|1>` (Risikostufe 0/1) oder `Plan: <planer>` (factory#529)" },
+  { name: "Plan-Form klein", muster: /ohne\s*—+\s*klein\s*:/, fix: "die Klein-Form ist entfernt: `Plan: ohne — stufe <0|1>` (factory#529)" },
+  { name: "Abnahme-Form klein", muster: /entfaellt\s*—+\s*klein\s*:/, fix: "die Klein-Form ist entfernt: `Abnahme: entfaellt — stufe <0|1>` (factory#529)" },
+];
+
+/** Wächter-Tests füttern die Altform absichtlich, damit die Nachweis-Wächter sie abweisen (Kriterium 2). */
+export const AUSNAHMEN_GROESSENSTUFE_S = [
+  ...AUSNAHMEN,
+  ...["test/review-nachweis.test.ts", "test/abnahme-nachweis.test.ts", "test/groessenstufe.test.ts", "test/risikoklasse.test.ts"].map((praefix) => ({ praefix, grund: "füttert die Altform, damit der Wächter sie abweist (Kriterium 2, factory#529)" })),
+];
+
+describe("Keine Reste der Größenstufe S (factory#529)", () => {
+  const stufeS = (inhalt: string, pfad = "docs/x.md") => findeReste([{ pfad, inhalt }], RESTE_GROESSENSTUFE_S, AUSNAHMEN_GROESSENSTUFE_S);
+
+  test("das Repo ist frei von Resten außerhalb der begründeten Ausnahmen", () => {
+    const treffer = findeReste(getrackteTextdateien(), RESTE_GROESSENSTUFE_S, AUSNAHMEN_GROESSENSTUFE_S);
+    assert.deepEqual(treffer, [], `${meldungMitFix(treffer, RESTE_GROESSENSTUFE_S)}\nTreffer: ${treffer.join(", ")}`);
+  });
+
+  test.each([
+    ["groessenstufe.mjs", "node scripts/groessenstufe.mjs --json"],
+    ["STUFE: S", "STUFE: S"],
+    ["STUFE: S", "SKIZZE · STUFE: S (Prognose)"],
+    ["Plan-Form skizze", "ZZ-Plan: demo-planer — skizze"],
+    ["Plan-Form skizze", "Plan: x —— skizze"],
+    ["Plan-Form klein", "Plan: ohne — klein: Tippfehler"],
+    ["Plan-Form klein", "Plan: ohne —klein : Tippfehler"],
+    ["Abnahme-Form klein", "Abnahme: entfaellt — klein: Doku"],
+  ])("Negativfall: %s wird gefunden (%s)", (name, text) => {
+    assert.deepEqual(stufeS(`a\n${text}\nb`), [`docs/x.md:2: ${name}`]);
+  });
+
+  test("Negativfall: harmlose Nachbarn lösen nicht aus", () => {
+    const nachbarn = ["scripts/groessenstufe-lib.mjs", "RISIKOSTUFE: 2", "Plan: ohne — stufe 1", "Abnahme: entfaellt — stufe 0", "eine Skizze des Plans", "STUFE: voll", "RISIKOSTUFE: S", "Plan: ohne — klein"];
+    assert.deepEqual(stufeS(nachbarn.join("\n")), []);
+  });
+
+  test("Ausnahmen: ADRs und Wächter mit Altform-Fixtures dürfen die Namen tragen, andere Pfade nicht", () => {
+    assert.deepEqual(stufeS("STUFE: S", "docs/adr/fortschreibungen/0027-529-groessenstufe-s-aufgegangen.md"), []);
+    assert.deepEqual(stufeS("Plan: ohne — klein: x", "test/review-nachweis.test.ts"), []);
+    assert.equal(stufeS("STUFE: S", "scripts/risikostufe.mjs").length, 1);
+  });
+
+  test("Schnappschuss-Blöcke dürfen die Namen tragen (Messbasis in docs/model-routing.md)", () => {
+    assert.deepEqual(stufeS(`${SCHNAPPSCHUSS_START}\nStand 2026-11-11\nSTUFE: S\n${SCHNAPPSCHUSS_ENDE}`), []);
+  });
+
+  test("jede Regel hat einen Fix, und kein Fix nennt die Altform selbst", () => {
+    for (const r of RESTE_GROESSENSTUFE_S) {
+      assert.ok(r.fix.length > 10, `Regel ${r.name} ohne Fix`);
+      assert.deepEqual(findeReste([{ pfad: "docs/x.md", inhalt: r.fix }], RESTE_GROESSENSTUFE_S, []), [], `Fix von ${r.name} trägt die Altform`);
+    }
   });
 });

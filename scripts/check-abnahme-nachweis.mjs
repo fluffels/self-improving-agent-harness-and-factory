@@ -12,9 +12,8 @@
  *  - head-Regel: `head` liegt im Slice, ist gleich oder Nachfahre des Review-head, danach nur leere Commits und konfliktfreie Merges;
  *  - die Spur: der jüngste vertraute Kommentar mit Abnahme-Marker auf dem PR trägt gleichen head, Durchgang == `durchgaenge`, gleiches Urteil;
  *  - Risikostufe (factory#526): `entfaellt — stufe 0` und `entfaellt — stufe 1` sind auch bei einem Ticket mit Kriterien grün, solange die aus dem Diff berechnete Risikostufe (`risikostufe-lib.mjs`, nicht berechenbar = 2)
- *    nicht höher ist; sonst rot mit berechneter Stufe und Pfad (auch ohne Kriterien). `entfaellt — klein:` gilt nur bei berechneter Risikostufe ≤ 1. Stufe 2 bleibt wie bisher (Abnahme bei Kriterien).
- *  - `entfaellt` ist nur grün, wenn das Ticket keine Kriterien hat oder kein Ticket verknüpft ist; mit Kriterien genügt `entfaellt — klein: <Begründung>` bei berechneter
- *    Größenstufe S (factory#271, `groessenstufe-lib.mjs`: aus dem Diff gerechnet, nie behauptet; Risikoklasse hoch ist nie S), wenn sich nichts beobachten lässt; bei `voll` bleibt es rot.
+ *    nicht höher ist; sonst rot mit berechneter Stufe und Pfad (auch ohne Kriterien). Stufe 2 bleibt wie bisher (Abnahme bei Kriterien).
+ *  - `entfaellt` ist nur grün, wenn das Ticket keine Kriterien hat oder kein Ticket verknüpft ist; mit Kriterien genügt nur `entfaellt — stufe <0|1>`. Die Klein-Form ist entfernt (factory#529) und bei jeder Stufe rot, mit Hinweis auf die Stufen-Form.
  *
  * Das Ticket ist die einzige Schließ-Referenz im PR-Body (Umgebungsvariable `FACTORY_PR_BODY`, alle GitHub-Schlüsselwörter zählen); mehrere sind rot.
  * Ein Entwurfs-PR wird nur berichtet: maßgeblich ist der Lauf nach `ready_for_review`. Den Entwurfs-Status liest der Wächter live vom PR (`repos/<repo>/pulls/<nr>`, ein Rerun trägt sonst den veralteten Ereigniswert); `FACTORY_PR_DRAFT` gilt nur ohne PR-Nummer, ein fehlgeschlagener Abruf ist rot. Jeder git- oder gh-Fehler ist rot
@@ -56,7 +55,7 @@ const menge = (urteil) => urteil.map((u) => `${u.k}:${u.wert}`).sort().join(",")
 
 /** Die Vorlage für die Fehlerausgabe (Format: Factory-Seite [docs/agent-harness.md §3a](../docs/agent-harness.md#3a-langfassung-der-harten-regeln-ausgelagert-aus-agentsmd)). */
 const vorlage = (zeilen) =>
-  `${zeilen.abnahme}: head=<sha> durchgaenge=<n> urteil=K1:erfuellt,…   |   ${zeilen.abnahme}: entfaellt — <Grund>   |   Größenstufe S: ${zeilen.abnahme}: entfaellt — klein: <Begründung>   |   Risikostufe 0 oder 1 (node scripts/risikostufe.mjs): ${zeilen.abnahme}: entfaellt — stufe <0|1>`;
+  `${zeilen.abnahme}: head=<sha> durchgaenge=<n> urteil=K1:erfuellt,…   |   ${zeilen.abnahme}: entfaellt — <Grund>   |   Risikostufe 0 oder 1 (node scripts/risikostufe.mjs): ${zeilen.abnahme}: entfaellt — stufe <0|1>`;
 
 /** Urteil je Kriterium gegen die Kriterien des Tickets (`[{k, nachMerge}]`) und gegen `erfuellt`; `nach-merge` gilt nur an einem Nach-Merge-Kriterium. */
 function bewerteUrteil(urteil, liste, nachMerge) {
@@ -115,11 +114,9 @@ function bewerteSpur(a, marker) {
   return fehler;
 }
 
-/** `entfaellt` bei einem Ticket mit Kriterien: nur `klein: <Begründung>` bei berechneter Größenstufe S (factory#271). Pure. */
-function bewerteEntfaellt(a, ticket, stufe, zeilen, risikostufe) {
-  const klein = kleinGrund(a.grund);
-  if (klein?.art === "klein" && stufe === "S" && risikostufe.stufe <= 1) return [];
-  const ausnahme = klein ? ` (die Ausnahme "entfaellt — klein: <Begründung>" gilt nur bei Größenstufe S mit Begründung und Risikostufe ≤ 1; berechnet aus dem Diff: ${stufe}, Risikostufe ${risikostufe.stufe})` : "";
+/** `entfaellt` bei einem Ticket mit Kriterien: nie ohne Stufen-Form; die entfernte Klein-Form (factory#529) wird erkannt und mit Hinweis auf `entfaellt — stufe <n>` abgewiesen. Pure. */
+function bewerteEntfaellt(a, ticket, zeilen) {
+  const ausnahme = kleinGrund(a.grund) !== null ? " (die Klein-Form ist entfernt, factory#529; erlaubt: \"entfaellt — stufe <0|1>\" bei berechneter Risikostufe 0 oder 1)" : "";
   return [`${zeilen.abnahme}: entfaellt ist bei Ticket #${ticket.nr} mit ${ticket.kriterien.length} Akzeptanzkriterien nicht erlaubt${ausnahme}.`];
 }
 
@@ -127,18 +124,17 @@ function bewerteEntfaellt(a, ticket, stufe, zeilen, risikostufe) {
  * Bewertet den Abnahme-Nachweis; liefert `fehler[]` (leer = grün). Pur.
  * `reviewOverride` (bool): eine gültige Review-Override-Zeile steht im Slice, Cap- und Review-head-Vergleich entfallen.
  * `szenarioDurchgaenge` (Zahl, Standard 0): Durchgänge nur mit `ursache=szenario` (`zaehleSzenarioDurchgaenge`), sie zählen nicht gegen das Cap.
- * `stufe` (`"S"` | `"voll"`, Standard `voll`): die aus dem Diff berechnete Größenstufe, nur für `entfaellt — klein: …` relevant.
- * `risikostufe` (`{stufe, gruende, treffer, pfade}`, Standard Stufe 2, fail-closed): die berechnete Risikostufe für `entfaellt — stufe <n>` und `klein` (factory#526).
+ * `risikostufe` (`{stufe, gruende, treffer, pfade}`, Standard Stufe 2, fail-closed): die berechnete Risikostufe für `entfaellt — stufe <n>` (factory#526).
  * `ticket` = `{nr, kriterien: <Liste aus kriterien()>, nachMerge: <Präfix aus sprache.spezifikation>}` oder `null` (kein Ticket verknüpft), `marker` = Ergebnis von `vertrauterMarker`.
  */
-export function bewerteAbnahme({ nachweis, ticket, marker, abnahmeHead, zeilen, reviewOverride = false, stufe = "voll", szenarioDurchgaenge = 0, risikostufe = zwei("Risikostufe nicht übergeben (fail-closed)") }) {
+export function bewerteAbnahme({ nachweis, ticket, marker, abnahmeHead, zeilen, reviewOverride = false, szenarioDurchgaenge = 0, risikostufe = zwei("Risikostufe nicht übergeben (fail-closed)") }) {
   const a = nachweis.abnahme;
   if (!a) return [`${zeilen.abnahme}: Zeile fehlt. Ablauf: node scripts/abnahme.mjs kriterien <nr>; Vorlage: ${vorlage(zeilen)}`];
   if (a.art === "ungueltig") return [`${zeilen.abnahme}: ungültig (${a.grund ? `${a.grund}: ` : ""}${a.zeile}). Vorlage: ${vorlage(zeilen)}`];
   if (a.art === "entfaellt") {
     const sg = stufeGrund(a.grund);
     if (sg) return stufenAusnahmeFehler(zeilen.abnahme, `entfaellt — ${a.grund}`, sg.stufe, risikostufe);
-    return ticket && ticket.kriterien.length > 0 ? bewerteEntfaellt(a, ticket, stufe, zeilen, risikostufe) : [];
+    return ticket && ticket.kriterien.length > 0 ? bewerteEntfaellt(a, ticket, zeilen) : [];
   }
   if (!ticket) return [`${zeilen.abnahme}: ein Urteil braucht ein verknüpftes Ticket (Schließ-Referenz im PR-Body).`];
   return [...bewerteUrteil(a.urteil, ticket.kriterien, ticket.nachMerge), ...bewerteHead(a, nachweis.review, abnahmeHead, reviewOverride, szenarioDurchgaenge), ...bewerteSpur(a, marker)];
@@ -182,7 +178,7 @@ export function checkAbnahmeNachweis({ runGit, gh = (a) => ghJson(a), env = proc
   if (!base) return { ok: false, fehler: ["Keine Vergleichs-Basis auflösbar (flacher Checkout?): Abnahme-Nachweis nicht prüfbar."], invalid: [] };
   let fehler;
   let rov = { reason: null, invalid: [] };
-  let stufe = null; // einmal berechnet: Anzeige (factory#402 L26) und Bewertung von `entfaellt — klein` (factory#271, nur dort zählt sie)
+  let stufe = null; // einmal berechnet: nur die Anzeige der Kombi-Lens-Grenze (factory#402 L26), keine Bewertung
   let risikostufe = null; // einmal berechnet (factory#526): Anzeige und Bewertung von `entfaellt`
   let entwurf = false; // erst der Live-Abruf (oder der Ereigniswert ohne PR-Nummer) setzt ihn; ein Fehler davor bleibt streng
   try {
@@ -220,7 +216,7 @@ export function entwurfLive({ gh, env, repo }) {
   return pr.draft;
 }
 
-/** Größenstufe für die Anzeige (factory#402 L26) und die Bewertung von `entfaellt — klein` (factory#271); `groessenstufeAusGit` ist fail-closed (git- und Ladefehler ergeben `voll`) und wirft nicht. */
+/** Kombi-Lens-Grenze (`S` = unter der Grenze) für die Anzeige (factory#402 L26); `groessenstufeAusGit` ist fail-closed (git- und Ladefehler ergeben `voll`) und wirft nicht. */
 const anzeigeStufe = (git, base, config) => groessenstufeAusGit(git, base, "HEAD", { ladeRisiko: () => risikoMusterAus(config) }).stufe;
 
 /** Der eigentliche Ablauf nach Override-Prüfung; wirft bei git- oder gh-Fehlern (der Aufrufer wertet das als rot). */
