@@ -28,6 +28,10 @@ Ein frischer, unabhängiger Reviewer ohne Vorgeschichte prüft jeden Planteil, n
 
 Ergebnis je Planteil: `bestätigt`, `bedingt` (der Plan wird nachgezogen, der Teil erneut geprüft) oder `abgelehnt` (mit Grund). Ein Durchgang je Teil, ein zweiter nur nach `bedingt`; ein dritter ist ein Formfehler. Jeder Spawn zählt ins Lauf-Budget (`BUDGET_USD` im Skill), die Budgetprüfung vor jedem Spawn gilt auch hier.
 
+## Zuordnung zum Skript
+
+Die Pflichtteile der Vorlage sind Markdown für den Reviewer; das Skript liest den Plan als JSON. Zuordnung: ein Rückbau-Kandidat wird ein Teil `art: "zeile"` mit `tragweite: "rueckbau-lockerung"` (öffentliche Zeile mit Klasse und Beleg, nicht als Ticket), eine Umstellung ein Teil mit der Tragweite ihres Falls laut Tabelle, ein Ticketentwurf ein Teil `art: "ticket"` oder `"probe-ticket"` (mit `vorabBewertung`). Hat Teil 6 gelaufen, trägt der Plan `teil6: true`: ohne lesbare Freigabeliste legt das Skript dann nichts an. Das Folge-Ticket hat kein Urteil; seine Quellen werden entschärft (keine Links, keine Erwähnungen) und als Daten gekennzeichnet.
+
 ## Review-Datei
 
 Der Hauptchat schreibt die Urteile in eine JSON-Datei im Scratchpad, den Plan daneben (Formate: Kopf von `scripts/token-analyse-tickets-lib.mjs`; die Kennung des Reviewers ist die agentId seines Spawns, die des Plans die Session-ID des Hauptchats):

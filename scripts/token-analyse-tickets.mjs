@@ -108,6 +108,7 @@ function vorbereiten(args, env, d) {
   if (formfehler.length > 0) return { fehler: `Eingabe fehlerhaft, nichts angelegt:\n${formfehler.map((f) => `  - ${f}`).join("\n")}` };
   const liste = ladeListe(env);
   if (liste.fehler) return { fehler: `${liste.fehler}: nichts angelegt` };
+  if (liste.hinweis && plan.teil6 === true) return { fehler: "Teil 6 lief, aber keine Freigabeliste lesbar (FACTORY_ANALYSE_FREIGABE): Namensprüfung nicht möglich, nichts angelegt" };
   const ablage = ablageFehler(env, abhaengigkeiten({ repoWurzel: d.repoWurzel, worktrees: d.worktrees }), (liste.pfade ?? []).map(realMitVorfahr));
   if (ablage.fehler) return { fehler: ablage.fehler.replace("abgebrochen, nichts geschrieben", "nichts angelegt") };
   return { kontext: { plan, review, namen: liste.pfade ?? [], ablage: ablage.ablage } };
@@ -120,8 +121,8 @@ function planeProtokoll(k, d) {
   return { pfad, alle: alle.wert, neu: !existsSync(pfad), mein: alle.wert[k.plan.lauf] ?? { teile: {}, folge: null } };
 }
 
-function schnappschuss(ablage) {
-  const name = letzterSchnappschuss(readdirSync(ablage));
+function schnappschuss(ablage, datum) {
+  const name = letzterSchnappschuss(readdirSync(ablage).filter((n) => n.startsWith(`analyse-${datum}`)));
   return name ? join(ablage, name.replace(/\.json$/, ".md")) : null;
 }
 
@@ -169,8 +170,8 @@ function planen(review, env, d) {
   const ergebnisse = urteileJeTeil(k.plan, k.review);
   const p = planeProtokoll(k, d);
   if (p.fehler) return p;
-  const md = schnappschuss(k.ablage);
-  if (md === null) return { fehler: "Kein Analyse-Schnappschuss in der Ablage: nichts angelegt" };
+  const md = schnappschuss(k.ablage, k.plan.datum);
+  if (md === null) return { fehler: "Kein Analyse-Schnappschuss zum Datum des Plans in der Ablage: nichts angelegt" };
   const dublette = folgeVorhanden(k, p, d);
   if (dublette.fehler) return dublette;
   const liste = aktionen(k.plan, ergebnisse, p.mein, dublette.nummer);

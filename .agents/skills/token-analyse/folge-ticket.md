@@ -13,4 +13,4 @@ Prüfpunkte, je mit Beleg zu beantworten:
 - fehlender Analysebereich
 - eingebaute Claude-Code-Befehle
 
-Quellen sind die Abschnitte `## Unsicherheiten` der Teilberichte und der Bericht der Webrecherche (Teil 5); der Hauptchat trägt sie im Plan unter `folge` ein (`unsicherheiten`, `recherche`), verallgemeinert und ohne Namen, Pfade und Inhalte. Ein Prüfpunkt ohne Beleg gilt als nicht geprüft, nie als „nichts vergessen“.
+Quellen sind die Abschnitte `## Unsicherheiten` der Teilberichte und der Bericht der Webrecherche (Teil 5); der Hauptchat trägt sie im Plan unter `folge` ein (`unsicherheiten`, `recherche`), verallgemeinert und ohne Namen, Pfade und Inhalte. Grenze: die Dubletten-Suche gilt dem Titel mit Datum, ein zweiter Lauf am selben Tag legt also kein eigenes an. Ein Prüfpunkt ohne Beleg gilt als nicht geprüft, nie als „nichts vergessen“.
