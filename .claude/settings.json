@@ -2,7 +2,7 @@
   "statusLine": { "type": "command", "command": "node scripts/statusline.mjs" },
   "model": "sonnet",
   "env": {
-    "CC_LANGFUSE_TRACE_TAGS": "factory"
+    "CC_LANGFUSE_TRACE_TAGS": "factory,self-improving-agent-harness-and-factory"
   },
   "enabledPlugins": {
     "langfuse-observability@langfuse-observability": true,

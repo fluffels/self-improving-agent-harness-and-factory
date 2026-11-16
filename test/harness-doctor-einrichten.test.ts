@@ -90,6 +90,8 @@ const neuerRoot = (workflow: string | null = WORKFLOW): string => {
   writeFileSync(join(root, "ruleset.json"), JSON.stringify({ name: "main-schutz", requiredChecks: ["CI"], bypassActors: [] }));
   mkdirSync(join(root, ".factory"), { recursive: true });
   writeFileSync(cfgPfad(root), JSON.stringify(CONFIG));
+  mkdirSync(join(root, ".claude"), { recursive: true });
+  writeFileSync(join(root, ".claude", "settings.json"), JSON.stringify({ env: { CC_LANGFUSE_TRACE_TAGS: "demo" } })); // Repo-Tag des Fixtures (factory#523)
   writeFileSync(join(root, ".factory", "besitz.json"), JSON.stringify({ version: 1, eintraege: [] })); // ohne lesbares Manifest wäre der Lauf nicht prüfbar (factory#117)
   return root;
 };

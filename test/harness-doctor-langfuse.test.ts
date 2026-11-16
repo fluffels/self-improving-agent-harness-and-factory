@@ -2,7 +2,7 @@
  * "Langfuse nicht erreichbar" (starten) von "MCP-Verbindung der Session getrennt" (neu verbinden). */
 import { describe, expect, test } from "vitest";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
-import { langfusePunkt as raw } from "../scripts/harness-doctor-langfuse.mjs";
+import { langfusePunkt as raw, repoTagPunkt as rawRepoTag } from "../scripts/harness-doctor-langfuse.mjs";
 
 interface Ergebnis { punkt: string; ok: boolean; nichtPruefbar?: boolean; befund?: string; fix?: string }
 const punkt = raw as (lf: { status?: number | null; stdout?: string; stderr?: string }) => Ergebnis;
@@ -76,5 +76,40 @@ describe("Langfuse-Punkt (langfusePunkt)", () => {
   });
   test("JSON ohne Objekt: nicht prüfbar", () => {
     for (const s of ["null", "42", "true", '"text"']) expect(punkt({ status: 0, stdout: s }).nichtPruefbar, s).toBe(true);
+  });
+});
+
+describe("Repo-Tag-Punkt (repoTagPunkt, factory#523)", () => {
+  const tag = rawRepoTag as (a: { settingsText?: string | null; repoName: string }) => Ergebnis;
+  const mit = (wert: unknown) => tag({ settingsText: JSON.stringify({ env: { CC_LANGFUSE_TRACE_TAGS: wert } }), repoName: "mein-repo" });
+  test("Repo-Name unter den Tags: OK", () => {
+    expect(mit("projekt,mein-repo").ok).toBe(true);
+  });
+  test("Leerzeichen um das Komma ändern nichts", () => {
+    expect(mit(" projekt , mein-repo ").ok).toBe(true);
+  });
+  test("Repo-Name fehlt: Lücke mit Repo-Name und Fix", () => {
+    const x = mit("projekt");
+    expect(x.ok).toBe(false);
+    expect(x.nichtPruefbar).toBeUndefined();
+    expect(x.befund).toContain("mein-repo");
+    expect(x.fix).toContain("env.CC_LANGFUSE_TRACE_TAGS");
+    expect(x.fix).toContain("mein-repo");
+    expect(x.fix).toContain("neu starten");
+  });
+  test("nur ein Teilstring des Repo-Namens zählt nicht", () => {
+    expect(mit("mein-repo-x").ok).toBe(false);
+    expect(mit("mein").ok).toBe(false);
+  });
+  test("Wert kein Text oder fehlend: Lücke", () => {
+    expect(mit(5).ok).toBe(false);
+    expect(tag({ settingsText: JSON.stringify({}), repoName: "mein-repo" }).ok).toBe(false);
+  });
+  test("Settings fehlen oder kein JSON: nicht prüfbar mit Fix", () => {
+    for (const settingsText of [null, undefined, "kein json", "42", "[]", "null"]) {
+      const x = tag({ settingsText, repoName: "mein-repo" });
+      expect(x.nichtPruefbar).toBe(true);
+      expect(x.fix).toContain(".claude/settings.json");
+    }
   });
 });

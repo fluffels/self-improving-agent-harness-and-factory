@@ -7,14 +7,14 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import { fehlerText } from "./gh-cli.mjs";
 import { factorySeiteIn } from "./factory-seite.mjs";
-import { altEnvName, boardPfad, ladeProjektConfig, PROJEKT_CONFIG } from "./projekt-config-lib.mjs";
+import { altEnvName, boardPfad, ladeProjektConfig, PROJEKT_CONFIG, repoName } from "./projekt-config-lib.mjs";
 import { spracheMaengel } from "./spezifikation-lib.mjs";
 import { ladeRulesetSpiegel } from "./docs-gen/ruleset-spiegel.mjs";
 import { MANIFEST_PFAD, manifestAusText, pflichtChecksFehler, wirdVerteilt } from "./besitz-lib.mjs";
 import { GRENZE_PRIVAT, LINK_ACTIONS, LINK_RULESET, pruefeSicherheit } from "./harness-doctor-sicherheit.mjs";
 import { ausFehler as ausFehlerRoh, gut, luecke, nichtPruefbar } from "./harness-doctor-ergebnis.mjs";
 import { pinPunkt, rulesetPunkte } from "./harness-doctor-ruleset.mjs";
-import { langfusePunkt } from "./harness-doctor-langfuse.mjs";
+import { langfusePunkt, repoTagPunkt } from "./harness-doctor-langfuse.mjs";
 import { istWorkflowDatei } from "./workflow-blockform.mjs";
 import { manifestKenntModule, MODUL_STANDARD, modulFormFehler, modulWahl } from "./modul-wahl-lib.mjs";
 
@@ -393,6 +393,9 @@ export function konfigFehlerText(e, rootDir = "") {
   return text.includes("Fix:") ? text : `${text}\nFix: Ruleset-Spiegel laut rulesetSpiegel in der Projekt-Config reparieren (Vorlage der Quelle: ${factorySeiteIn(rootDir, RULESET_VORLAGE)}), dann erneut prüfen`;
 }
 
+const SETTINGS_PFAD = ".claude/settings.json";
+const dateiTextOderNull = (pfad) => (existsSync(pfad) ? readFileSync(pfad, "utf8") : null);
+
 /** Die lokalen Punkte (`Git-Hooks`, `Board-Vollständigkeit`, `Board-Ansicht`, factory#247/#490): leer ohne `lokal` (Wochenlauf, `--einrichten`), sonst `lokal({ rootDir, config })` (der Aufrufer verdrahtet die Punkte). */
 const lokalePunkte = ({ lokal, rootDir, config }) => (typeof lokal === "function" ? lokal({ rootDir, config }) : []);
 
@@ -414,6 +417,7 @@ export function pruefLauf({ rootDir, configPfad, gh, langfuse = null, mitWochenl
   const ergebnis = pruefe({ config, voraussetzungen, spiegel, gh, langfuse, umgebung });
   if (dateien) ergebnis.push(...dateien({ rootDir, config, spiegel, workflows, pflichtChecks: voraussetzungen.pflichtChecks }));
   ergebnis.push(...rulesetPunkte({ spiegel, repo: config.repo, lesen: rulesetLesen }), ...lokalePunkte({ lokal, rootDir, config }));
+  ergebnis.push(repoTagPunkt({ settingsText: dateiTextOderNull(join(rootDir, SETTINGS_PFAD)), repoName: repoName(config) })); // liest nur die Settings, braucht weder Token noch Langfuse (factory#523)
   return { config, ergebnis };
 }
 
