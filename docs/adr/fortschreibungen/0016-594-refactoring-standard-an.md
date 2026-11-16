@@ -1,0 +1,9 @@
+# Fortschreibung #594 (2026-11-16): Refactoring-Sammelticket standardmäßig an, Schlüssel `labels.refactoring`
+
+Löst die Entscheidung „Opt-in per Config“ aus [Fortschreibung #156](0016-156-codequalitaet-sammelticket.md) ab; Epic factory#568. Die Fortschreibung steht als Datei (siehe [Fortschreibung zu ADR 0013](0013-1860-fortschreibungen-als-dateien.md)).
+
+- **Entscheidung (Standard an):** Im Bezieher ist das Sammelticket „Refactoring (gesammelt)“ immer vorhanden (Nachfolger beim Claim wie beim Harness-Ticket). Der Schlüssel `labels.refactoring` ist ein Label-String oder `false`; nur `false` schaltet ab, `true` ist ein Fehler der Config-Prüfung. Grund: ein Opt-in ließ das Ticket in den meisten Beziehern nie entstehen, Code-Befunde außerhalb des Slices gingen verloren.
+- **Entscheidung (Label ohne Schlüssel):** kein Label (`label: null`); Erkennung, Füllstand und Nachfolger laufen über den Titel (`SUCHTITEL`), das Ticket liegt auf dem Produkt-Board des eigenen Repos (Präzedenz: Langfuse-Sammelticket im Bezieher, factory#195).
+- **Entscheidung (Fabrik):** Standard-an gilt nur im Bezieher. Das Produkt-Board der Fabrik führt ein fremdes Repo, [ADR 0031](../0031-fabrik-ohne-zugriff-auf-bezieher.md) verbietet das Schreiben dort; ohne ausdrücklichen Schlüssel legt die Fabrik nichts an (Exit 0, ohne gh-Aufruf).
+- **Entscheidung (Alias und Migration):** `labels.codequalitaet` und die Art `codequalitaet` gelten im Übergang als Alias (`refactoring` vor `codequalitaet`); `projektConfigHinweise` meldet das Umbenennen, `sammelticket-anlegen.mjs` gibt den Hinweis auf stderr aus. Die Migration steht als `SIH-Bezieher-Migration:`-Zeile im Besitz-Commit, die der Tag-Takt sammelt; der Sync fasst `.factory/projekt.json` (Projekt-Besitz) nicht an. Ein Doctor-Punkt folgt in factory#597.
+- **Re-Evaluierung:** wenn der Alias `codequalitaet` entfernt wird (nach der Migration der Bezieher).

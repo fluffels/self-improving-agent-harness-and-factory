@@ -115,7 +115,7 @@ const WORKTREE_MUSTER = /^[A-Za-z0-9_-]+$/;
 export const AGENT_MUSTER = /^[^\s:-][^\s:]*$/;
 
 /** Optionale Label-Schlüssel: Skripte lesen sie mit Rückfall (fehlt der Schlüssel, entfällt das Feature); sie gehören nicht zu den Pflichtschlüsseln (`PFLICHT_LABELS` in `projekt-config-bloecke.mjs`). */
-export const OPTIONALE_LABELS = ["codequalitaet", "entscheidung"];
+export const OPTIONALE_LABELS = ["refactoring", "codequalitaet", "entscheidung"];
 /** Name des Kern-Ticket-Skills (Quelle `.agents/skills/<name>/`, Zeiger `.claude/skills/<name>/`): gilt immer, unabhängig von `agenten.ticketSkill` der Projekt-Config. */
 export const KERN_TICKET_SKILL = "factory";
 
@@ -170,10 +170,33 @@ export function labelAus(config, schluessel) {
   return wert;
 }
 
-/** Pur: das optionale Label zum Schlüssel `labels.<schluessel>` oder `null` (fehlt, kein String oder leer); wirft nie. Gegenstück zu `labelAus` für Schlüssel, die ein Projekt weglassen darf (`entscheidung`, `codequalitaet`). */
+/** Pur: das optionale Label zum Schlüssel `labels.<schluessel>` oder `null` (fehlt, kein String oder leer); wirft nie. Gegenstück zu `labelAus` für Schlüssel, die ein Projekt weglassen darf (`entscheidung`, `refactoring`). */
 export function optionalesLabel(config, schluessel) {
   const wert = config?.labels?.[schluessel];
   return typeof wert === "string" && wert.trim() !== "" ? wert : null;
+}
+
+/**
+ * Pur (factory#594): Einstellung des Refactoring-Sammeltickets. `labels.refactoring: false` schaltet es ab (`quelle: "aus"`); ein Label-String
+ * schaltet es mit diesem Label an (`refactoring` vor dem Alias `codequalitaet`). Ohne Schlüssel gilt Standard-an, aber nur im Bezieher
+ * (`bezieher`): dort ohne Label (`label: null`, Erkennung über den Titel); in der Fabrik ohne Schlüssel „aus“ (ADR 0031: das Produkt-Board führt dort
+ * ein fremdes Repo). Liefert `{ an, label, quelle }`, `quelle` ∈ `refactoring`, `codequalitaet`, `standard`, `aus`.
+ */
+export function refactoringEinstellung(config, { bezieher = false } = {}) {
+  if (config?.labels?.refactoring === false) return { an: false, label: null, quelle: "aus" };
+  for (const quelle of ["refactoring", "codequalitaet"]) {
+    const label = optionalesLabel(config, quelle);
+    if (label !== null) return { an: true, label, quelle };
+  }
+  return { an: bezieher, label: null, quelle: "standard" };
+}
+
+/** Pur (factory#594): Hinweise (keine Fehler) zur Config: das Alias `labels.codequalitaet` ist veraltet. Leer, wenn nichts zu sagen ist. */
+export function projektConfigHinweise(wert) {
+  const l = wert?.labels;
+  if (!istObjekt(l) || !Object.hasOwn(l, "codequalitaet")) return [];
+  if (Object.hasOwn(l, "refactoring")) return ["labels.codequalitaet ist veraltet und wird ignoriert, solange labels.refactoring gesetzt ist\nFix: labels.codequalitaet aus der Projekt-Config entfernen"];
+  return ["labels.codequalitaet ist veraltet (gilt im Übergang als Alias)\nFix: in labels.refactoring umbenennen; wer kein Refactoring-Sammelticket will, setzt labels.refactoring: false"];
 }
 
 /**
@@ -287,12 +310,12 @@ function pruefeInboxZiel(wert) {
   return [`labels.dependabotInbox "${label}" führt auf das Board von ${ziel}, nicht auf das eigene Repo ${wert.repo}\nFix: für labels.dependabotInbox ein Label setzen, das nicht auf ein fremdes Board führt (nicht labels.harness gleichsetzen, wenn das Factory-Board ein fremdes repo führt)`];
 }
 
-/** Pur (factory#156): optionales `labels.codequalitaet` (Opt-in Refactoring-Sammelticket „Refactoring (gesammelt)“) muss, wenn gesetzt, auf ein Produkt-Board führen (eigenes Repo, nicht Factory). */
+/** Pur (factory#156, #594): das wirksame Label des Refactoring-Sammeltickets (`labels.refactoring` vor dem Alias `labels.codequalitaet`) muss, wenn gesetzt, auf ein Produkt-Board führen (eigenes Repo, nicht Factory); `false` und fehlender Schlüssel sind kein Fehler. */
 function pruefeCodequalitaetZiel(wert) {
-  const label = wert.labels?.codequalitaet;
-  const rolle = label === undefined ? "produkt" : boardRolleFuer([label], wert);
+  const { label, quelle } = refactoringEinstellung(wert);
+  const rolle = label === null ? "produkt" : boardRolleFuer([label], wert);
   if (rolle === "produkt") return [];
-  return [`labels.codequalitaet "${label}" führt nicht auf ein Produkt-Board (Rolle ${rolle})
+  return [`labels.${quelle} "${label}" führt nicht auf ein Produkt-Board (Rolle ${rolle})
 Fix: ein Label setzen, das auf das Produkt-Board des eigenen Repos führt (nicht labels.harness gleichsetzen), oder den Schlüssel entfernen`];
 }
 

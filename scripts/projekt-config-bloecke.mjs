@@ -142,7 +142,8 @@ export function pruefeLabels(l) {
     if (!Object.hasOwn(l, k)) fehler.push(`labels.${k} fehlt (Pflichtschlüssel)`);
   }
   for (const [k, v] of Object.entries(l)) {
-    if (!istText(v)) fehler.push(`labels.${k} muss ein nicht-leerer String sein`);
+    if (k === "refactoring" && v === false) continue; // factory#594: ausdrücklich abgeschaltet
+    if (!istText(v)) fehler.push(k === "refactoring" ? `labels.refactoring muss ein nicht-leerer String (Label) oder false sein\nFix: Schlüssel weglassen (Standard: an), false (abgeschaltet) oder ein Label-String` : `labels.${k} muss ein nicht-leerer String sein`);
   }
   return fehler;
 }
