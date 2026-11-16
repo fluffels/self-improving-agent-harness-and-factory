@@ -136,3 +136,18 @@ describe("echtes Register und echte vite.config.ts", () => {
     ).toEqual([]);
   });
 });
+
+describe("vite.config.ts bleibt als Projektdatei beim Bezieher ladbar (Probe-Erstbezug)", () => {
+  const quelle = readFileSync(join(WURZEL, "vite.config.ts"), "utf8");
+
+  it("lädt die Fabrik-Lib weder per statischem Import noch per Literal (der Bündler löste es beim Bezieher ohne die Datei auf)", () => {
+    expect(quelle).not.toMatch(/import\s[^;]*from\s+"\.\/scripts\//);
+    expect(quelle).not.toMatch(/import\(\s*"\.\/scripts\//);
+    expect(quelle).toMatch(/import\(\/\* @vite-ignore \*\/ new URL\(lib, import\.meta\.url\)\.href\)/);
+  });
+
+  it("fällt ohne Register, Extraktionsliste oder Lib auf die Standardliste zurück (schaltet nie einen Test ab)", () => {
+    expect(quelle).toMatch(/noetig\.every\(\(p\) => existsSync\(new URL\(p, import\.meta\.url\)\)\)\) return \[\.\.\.configDefaults\.exclude\]/);
+    expect(quelle).toMatch(/const noetig = \[[^\]]*aenderungsregister\.json[^\]]*extraktion\.json[^\]]*lib\]/);
+  });
+});
