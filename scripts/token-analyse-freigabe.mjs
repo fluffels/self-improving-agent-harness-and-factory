@@ -151,7 +151,8 @@ export function fuehreFreigegebenAus(k, argv, freigegeben, deps = {}) {
 /** Lesender Befehl für „Bezieher k“ über die Allowlist (Teil 6); bei `git` setzt der Aufruf `-C <Wurzel>` selbst, der Aufrufer kennt keinen Pfad. */
 export function lesen(env, k, argv, deps) {
   const p = pruefen(env, deps);
-  if (!p.freigegeben?.some((x) => x.k === k)) return { code: 2, zeilen: [`${bezieherLabel(k)} nicht freigegeben`] };
+  if (p.code !== 0) return { code: p.code, zeilen: p.zeilen };
+  if (!p.freigegeben.some((x) => x.k === k)) return { code: 2, zeilen: [`${bezieherLabel(k)} nicht freigegeben`] };
   const wurzel = p.freigegeben.find((x) => x.k === k).wurzel;
   const voll = argv[0] === "git" ? ["git", "-C", wurzel, ...argv.slice(1)] : argv;
   const r = fuehreFreigegebenAus(k, voll, p.freigegeben, { runner: deps?.runner });

@@ -134,6 +134,7 @@ describe("Skill token-analyse (factory#518, factory#576)", () => {
     expect(budgetBefunde(gut, [])).not.toEqual([]);
     expect(budgetBefunde(gut.replace("kein weiterer Teil", ""), ["x-1"])).not.toEqual([]);
     expect(budgetBefunde(gut.replace("Abbruch", ""), ["x-1"])).not.toEqual([]);
+    expect(budgetBefunde(gut.replace("Langfuse ", ""), ["x-1"])).toContain("Quellzeile „Basis: …“ mit Langfuse und 2026-11-15 fehlt");
     expect(budgetBefunde(gut.replace("Basis:", "Notiz:"), ["x-1"])).toContain("Quellzeile „Basis: …“ mit Langfuse und 2026-11-15 fehlt");
   });
 
@@ -203,6 +204,7 @@ describe("Skill token-analyse (factory#518, factory#576)", () => {
       expect(routingBefunde(z.map((r) => [r[0], r[1], "`inherit`", r[3]]), skillInherit, fmInherit)).toContain("Teil 1: Effort inherit ungültig");
       // nur das Frontmatter weicht ab
       expect(routingBefunde(z, skill, { ...fm, "analyse-extern": { ...fm["analyse-extern"], effort: "medium" } }).join(" ")).toContain("weicht vom Frontmatter");
+      expect(routingBefunde(z, skill, { ...fm, "analyse-extern": { ...fm["analyse-extern"], model: "sonnet" } }).join(" ")).toContain("weicht vom Frontmatter");
       expect(routingBefunde([...z, ["7 Extra", "`sonnet`", "`medium`", "x"]], skill, fm)).not.toEqual([]);
       expect(routingBefunde(z.filter((r) => !r[0].startsWith("3")), skill, fm)).not.toEqual([]);
       expect(routingBefunde(z, skill.replace('model "opus", effort "medium"', 'model "sonnet", effort "medium"'), fm)).not.toEqual([]);

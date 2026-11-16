@@ -382,7 +382,29 @@ describe("lesen (Teil 6): nur über die Allowlist, ohne Pfad im Aufruf", () => {
     expect(cli.cli(["lesen", "9", "git", "ls-files"], s.env, d).code).toBe(2);
     expect(cli.cli(["lesen", "1", "cat", "a.txt"], s.env, d).code).toBe(2);
     expect(cli.cli(["lesen", "1", "git", "log", "--output=x"], s.env, d).code).toBe(2);
-    expect(cli.cli(["lesen", "1", "git"], s.env, d).code).toBe(2); // zu wenig Argumente: Aufrufhilfe
+    expect(cli.cli(["lesen", "1", "git"], s.env, d).zeilen[0]).toMatch(/abgelehnt/); // Länge 3: erst die Allowlist lehnt den fehlenden Unterbefehl ab
     expect(m.aufrufe).toEqual([]);
+  });
+  test("zu wenige Argumente, Nummer 0 oder Text: Aufrufhilfe, kein Prozess", () => {
+    const s = welt((w) => `${w.alpha}\n`);
+    const m = mitschnitt();
+    for (const argv of [["lesen", "1"], ["lesen", "0", "git", "ls-files"], ["lesen", "x", "git", "ls-files"]]) {
+      const r = cli.cli(argv, s.env, { ...s.deps, runner: m.runner });
+      expect([argv, r.code, r.zeilen[0]]).toEqual([argv, 2, expect.stringMatching(/^Aufruf: /)]);
+    }
+    expect(m.aufrufe).toEqual([]);
+  });
+  test("wc läuft unverändert über die Allowlist, ein Fehlerstatus wird Exit 1", () => {
+    const s = welt((w) => `${w.alpha}\n`);
+    const aufrufe: string[][] = [];
+    const runner = (argv: string[]) => (aufrufe.push(argv), { status: 1, stdout: "", stderr: "" });
+    const r = cli.cli(["lesen", "1", "wc", "-l", "a.txt"], s.env, { ...s.deps, runner });
+    expect(r.code).toBe(1);
+    expect(aufrufe).toEqual([["wc", "-l", "a.txt"]]);
+  });
+  test("bricht pruefen ab (Ablage fehlt), meldet lesen den Grund statt „nicht freigegeben“", () => {
+    const s = welt((w) => `${w.alpha}\n`);
+    const r = cli.cli(["lesen", "1", "git", "ls-files"], { ...s.env, FACTORY_ANALYSE_ABLAGE: "" }, s.deps);
+    expect([r.code, r.zeilen.join(" ")]).toEqual([1, expect.stringContaining("FACTORY_ANALYSE_ABLAGE")]);
   });
 });
