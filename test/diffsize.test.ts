@@ -662,6 +662,10 @@ describe("Sammel-Override (factory#358): Override nur für eine einzelne Zeile e
     prTitelAusEreignis: (env: Env, lies: (pfad: string) => string) => Ereignis;
     sammelOverrideFehler: (titel: string | null, grund: string) => string | null;
     sammelOverrideLokal: (grund: string) => string | null;
+    sammelOverrideLokalMitTitel: (
+      grund: string,
+      deps: { branch: string | null; ticketAus: (b: string) => number | null; ladeTitel: (nr: number) => string },
+    ) => { meldung: string | null; hinweis: string | null };
   };
   const SAMMEL = `${FREMD.praefixe.commitZeile}9 Harness-Härtung (gesammelt): L44, L45 (factory#9)`;
   const lies = (inhalt: string) => () => inhalt;
@@ -732,6 +736,20 @@ describe("Sammel-Override (factory#358): Override nur für eine einzelne Zeile e
     assert.equal(typeof m.sammelOverrideLokal("L12 und L1"), "string", "L12 und L1 sind zwei");
     assert.equal(m.sammelOverrideLokal(""), null, "kein Grund");
     assert.equal(m.sammelOverrideLokal("breit, kein Zeilenbezug"), null, "keine Zeilenmarke");
+  });
+
+  test("sammelOverrideLokalMitTitel (L8): urteilt mit dem Ticket-Titel wie die CI, sonst fail-open mit Hinweis", () => {
+    const ticketAus = (b: string) => (/^feature\/x-(\d+)-/.exec(b)?.[1] ? Number(/^feature\/x-(\d+)-/.exec(b)?.[1]) : null);
+    const dep = (titel: string) => ({ branch: "feature/x-9-slug", ticketAus, ladeTitel: () => titel });
+    assert.equal(typeof m.sammelOverrideLokalMitTitel("braucht Platz", dep(SAMMEL)).meldung, "string", "Sammelticket ohne L<n> rot");
+    assert.equal(m.sammelOverrideLokalMitTitel("L44 braucht Platz", dep(SAMMEL)).meldung, null, "genau ein L<n> grün");
+    assert.equal(m.sammelOverrideLokalMitTitel("braucht Platz", dep("Normales Ticket")).meldung, null, "kein Sammelticket grün");
+    const wirft = m.sammelOverrideLokalMitTitel("L1 und L2", { ...dep(SAMMEL), ladeTitel: () => { throw new Error("gh weg"); } });
+    assert.equal(typeof wirft.meldung, "string", "Lader wirft: wie bisher (mehrere Zeilen rot)");
+    assert.match(wirft.hinweis ?? "", /nicht prüfbar/);
+    const keinBezug = m.sammelOverrideLokalMitTitel("L1", { ...dep(SAMMEL), branch: "main" });
+    assert.equal(keinBezug.meldung, null);
+    assert.match(keinBezug.hinweis ?? "", /nicht prüfbar/);
   });
 
   test("checkDiffSize ohne PR-Ereignis: Mehrfach-Override → sammelOverride gesetzt, eine Zeile oder kein Override → null", () => {
