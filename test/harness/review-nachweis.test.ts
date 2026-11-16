@@ -42,7 +42,7 @@ const { MAX_FIX_RUNDEN, pflichtLenses } = raw as Mod;
 const { MAX_REVIEW_PAESSE, MAX_ZUSATZPAESSE } = nachweisLib as unknown as { MAX_REVIEW_PAESSE: number; MAX_ZUSATZPAESSE: number };
 const { MAX_RUNDEN } = kennzahlen as unknown as { MAX_RUNDEN: number };
 /** Zeilen der Fremd-Config; die Wrapper reichen sie durch. */
-const { commitZeilen } = sliceRaw as unknown as { commitZeilen: (p: string, pl: string) => { plan: string; review: string; reviewOverride: string } };
+const { commitZeilen } = sliceRaw as unknown as { commitZeilen: (p: string, pl: string) => { plan: string; review: string; zusatzpass: string; reviewOverride: string } };
 const PL = FREMD.agenten.planer;
 const Z = commitZeilen(FREMD.praefixe.commitZeile, PL);
 const parseNachweis = (t: string) => (raw as Mod).parseNachweis(t, Z);
