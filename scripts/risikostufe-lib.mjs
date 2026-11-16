@@ -30,7 +30,7 @@ export const ROLLEN_JE_STUFE = Object.freeze({
   2: Object.freeze(["planer", "holdout-szenario", "umsetzer", "lens", "holdout-abnahme"]),
 });
 
-export const meldung =(e) => (e instanceof Error ? e.message : String(e));
+export const meldung = (e) => (e instanceof Error ? e.message : String(e));
 const istText = (x) => typeof x === "string" && x.trim() !== "";
 
 /** Lädt die feste Stufe-2-Basis: `{kategorien: {name: muster[]}, muster}`; wirft bei fehlender Datei, kaputtem JSON, ungültiger oder leerer Kategorie und null Mustern. Die Text-Taste `beschreibung` wird ignoriert. */

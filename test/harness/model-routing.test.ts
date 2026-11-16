@@ -1167,14 +1167,14 @@ describe("Phasenmatrix je Risikostufe (factory#528)", () => {
   const rollen = ROLLEN_JE_STUFE as Record<string, readonly string[]>;
   const zeilen = (): StufenZeile[] => stufenZeilenAusDoku(liesMitProjektwerten(ROUTING_SSOT));
   const basis: StufenZeile[] = [
-    { stufe: "0", rolle: "umsetzer", alias: "sonnet", effort: "medium", ziel: "sih-umsetzer" },
-    { stufe: "1", rolle: "umsetzer", alias: "sonnet", effort: "medium", ziel: "sih-umsetzer" },
-    { stufe: "1", rolle: "lens", alias: "opus", effort: "medium", ziel: "sih-lens" },
+    { stufe: "0", rolle: "umsetzer", alias: "sonnet", effort: "medium", ziel: AG.umsetzer },
+    { stufe: "1", rolle: "umsetzer", alias: "sonnet", effort: "medium", ziel: AG.umsetzer },
+    { stufe: "1", rolle: "lens", alias: "opus", effort: "medium", ziel: AG.lens },
   ];
   const ag: StufenAgent[] = [
-    { name: "sih-umsetzer", model: "sonnet", effort: "medium" },
-    { name: "sih-lens", model: "opus", effort: "medium" },
-    { name: "sih-planer", model: "opus", effort: "medium" },
+    { name: AG.umsetzer, model: "sonnet", effort: "medium" },
+    { name: AG.lens, model: "opus", effort: "medium" },
+    { name: AG.planer, model: "opus", effort: "medium" },
   ];
   const konst = { 0: ["umsetzer"], 1: ["umsetzer", "lens"] };
   const mit = (z: Partial<StufenZeile>, i: number): StufenZeile[] => basis.map((b, k) => (k === i ? { ...b, ...z } : b));
@@ -1200,8 +1200,8 @@ describe("Phasenmatrix je Risikostufe (factory#528)", () => {
     assert.match(pruefeStufenMatrix(basis, ag, { 0: ["umsetzer"], 1: ["umsetzer"] }).join("\n"), /Rolle lens steht in der Tabelle, startet aber nicht/);
   });
   test.each([
-    ["planer", "sih-planer"],
-    ["lens", "sih-lens"],
+    ["planer", AG.planer],
+    ["lens", AG.lens],
     ["holdout-szenario", "holdout-szenario"],
     ["holdout-abnahme", "holdout-abnahme"],
   ])("Stufe 0 mit Rolle %s wird rot, auch wenn die Konstante sie erlaubt", (rolle, ziel) => {
