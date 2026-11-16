@@ -204,33 +204,48 @@ function positionLesen(werte) {
   return { nach };
 }
 
+function bereichsLabelPruefen(labels, praefix) {
+  if (labels.some((l) => l.startsWith(praefix) && l.length > praefix.length && !/\s/.test(l.slice(praefix.length)))) return null;
+  return aufrufFehler(praefix ? `ein Label \`${praefix}<x>\` ist Pflicht (--label ${praefix}<x>)` : "ein Label ist Pflicht (--label <x>)");
+}
+
+// Anker vor dem Anlegen prüfen: ein Anker vom falschen Board ließe sonst ein angelegtes, aber nicht einsortiertes Issue zurück.
+function ankerPruefen(nach, werte, repo, io) {
+  let ankerText;
+  try {
+    ankerText = io.pruefeAnker({ nach, labels: werte.label, repo });
+  } catch (e) {
+    return aufrufFehler(`Anker #${nach} nicht prüfbar, nichts angelegt (${fehlerText(e)})`);
+  }
+  return ankerText ? aufrufFehler(`nichts angelegt: ${ankerText}`) : null;
+}
+
+// Dieselbe Lesart wie risikostufe --ticket (Fehler dort = Stufe 2, fail-closed); mit --epic ist ein Fehler ein Abbruch.
+function pfadePruefen(body, werte, sprache) {
+  const fehler = pfadeAusTicket(body, sprache.pfade).fehler;
+  if (!fehler || werte.epic === undefined) return { fehler };
+  return { fehler, abbruch: aufrufFehler(`nichts angelegt: ein Epic-Kind braucht einen lesbaren Abschnitt „${sprache.pfade}“ (${fehler}); sonst wertet risikostufe --ticket Stufe 2`) };
+}
+
 function anlegen(werte, io, sprache) {
   if (!werte.titel || werte.titel.trim() === "") return aufrufFehler("--titel fehlt");
   const praefix = bereichsPraefix(io.config);
   const repo = zielRepoFuer(werte.label, io.config); // Ziel-Repo (#76): das Repo, dessen Issues das Board der Rolle des Labels führt (ohne boards[].repo das eigene)
-  if (!werte.label.some((l) => l.startsWith(praefix) && l.length > praefix.length && !/\s/.test(l.slice(praefix.length)))) {
-    return aufrufFehler(praefix ? `ein Label \`${praefix}<x>\` ist Pflicht (--label ${praefix}<x>)` : "ein Label ist Pflicht (--label <x>)");
-  }
+  const labelFehler = bereichsLabelPruefen(werte.label, praefix);
+  if (labelFehler) return labelFehler;
   const pos = positionLesen(werte);
   if (pos.fehler) return aufrufFehler(pos.fehler);
   const { nach } = pos;
   const b = leseBody(werte, io);
   if (b.fehler) return aufrufFehler(b.fehler);
   const body = mitBlockerZeile(b.body, werte.blocker, sprache);
-  const pfadFehler = pfadeAusTicket(body, sprache.pfade).fehler; // dieselbe Lesart wie risikostufe --ticket: Fehler dort = Stufe 2 (fail-closed)
-  if (pfadFehler && werte.epic !== undefined) return aufrufFehler(`nichts angelegt: ein Epic-Kind braucht einen lesbaren Abschnitt „${sprache.pfade}“ (${pfadFehler}); sonst wertet risikostufe --ticket Stufe 2`);
+  const pfad = pfadePruefen(body, werte, sprache);
+  if (pfad.abbruch) return pfad.abbruch;
+  const pfadFehler = pfad.fehler;
   const gate = pruefeEingang({ nummer: 0, titel: werte.titel, body }, { sprache }); // neu angelegt: nie Bestand, nie ausgenommen
   if (gate.art !== "ok") return ergebnis(1, "", `✖ Spezifikation unvollständig, nichts angelegt:\n${liste(gate.fehlt)}\n`);
-  if (nach !== null) {
-    // Anker vor dem Anlegen prüfen: ein Anker vom falschen Board ließe sonst ein angelegtes, aber nicht einsortiertes Issue zurück.
-    let ankerText;
-    try {
-      ankerText = io.pruefeAnker({ nach, labels: werte.label, repo });
-    } catch (e) {
-      return aufrufFehler(`Anker #${nach} nicht prüfbar, nichts angelegt (${fehlerText(e)})`);
-    }
-    if (ankerText) return aufrufFehler(`nichts angelegt: ${ankerText}`);
-  }
+  const ankerFehler = nach === null ? null : ankerPruefen(nach, werte, repo, io);
+  if (ankerFehler) return ankerFehler;
   const { neu, fehler } = erzeugeImZiel(werte, body, repo, io);
   if (fehler) return fehler;
   try {
