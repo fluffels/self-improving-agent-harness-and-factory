@@ -250,7 +250,7 @@ function bewerteRunden(review, zeilen, risikostufe) {
   const erlaubt = reviewErlaubt + (af ? 1 : 0);
   if (review.runden > erlaubt) {
     return [
-      `${R}: runden=${review.runden} überschreitet die Obergrenze (${risikostufe.stufe === 1 ? "Risikostufe 1: " : ""}Cap ${basisPaesse - 1} Fix-Runden = höchstens ${erlaubt} Pässe). ` +
+      `${R}: runden=${review.runden} überschreitet die Obergrenze (${risikostufe.stufe === 1 ? "Risikostufe 1: " : ""}Cap ${basisPaesse - 1} Fix-Runden = höchstens ${erlaubt} Pässe; Risikostufe aus dem Diff: ${risikostufe.stufe}; die Ticket-Prognose zählt für den Cap nicht). ` +
         `Bis zu ${MAX_ZUSATZPAESSE} Zusatzpässe nach dem Cap fährt der Umsetzer ohne Rückfrage (mehr nur mit Freigabe): zusatzpass=<anzahl>:<Ursache> in die ${R}-Zeile; ` +
         `die eine Delta-Runde nach einem Abnahme-Fix steht als abnahmefix=1.`,
     ];

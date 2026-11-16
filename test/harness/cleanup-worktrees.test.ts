@@ -660,7 +660,8 @@ describe("fixOrphans: Wiederholung und leerer gesperrter Ordner (#1411)", () => 
   test("bei nicht leerem Ordner nennt `halter` die möglichen Halter mit PID (nur Windows)", () => {
     const prozesse = [{ pid: 4711, ppid: 1, name: "python3.exe", commandLine: "python3 -m http.server", startMs: 2000 }];
     const base = { ...okDeps, rmSync: () => {}, existsSync: () => true, readdirSync: () => ["x"], statSync: () => ({ birthtimeMs: 1000 }), listProcesses: () => prozesse };
-    assert.equal((fix("/root", "/root/.claude/worktrees", [`${WTP}1`], { ...base, platform: "win32" }).halter[`${WTP}1`] as { pid: number }[])[0].pid, 4711);
+    assert.equal((fix("/root", "/root/.claude/worktrees", [`${WTP}1`], { ...base, platform: "win32", eigenePid: -1 }).halter[`${WTP}1`] as { pid: number }[])[0].pid, 4711);
+    assert.deepEqual(fix("/root", "/root/.claude/worktrees", [`${WTP}1`], { ...base, platform: "win32", eigenePid: 4711 }).halter[`${WTP}1`], [], "findeHalter respektiert deps.eigenePid");
     assert.deepEqual(fix("/root", "/root/.claude/worktrees", [`${WTP}1`], { ...base, platform: "linux" }).halter[`${WTP}1`], [], "nur Windows");
     const kaputt = { ...base, platform: "win32", listProcesses: () => { throw new Error("powershell fehlt"); } };
     assert.deepEqual(fix("/root", "/root/.claude/worktrees", [`${WTP}1`], kaputt).halter[`${WTP}1`], [], "fail-open");
@@ -686,7 +687,7 @@ describe("moeglicheHalter und formatHalter (#1411)", () => {
       proz({ pid: 12, name: "bash.exe", commandLine: `bash /c/dev/projekt/.claude/worktrees/${WTP.toUpperCase()}1404/run.sh` }),
       proz({ pid: 13, commandLine: `node C:\\dev\\projekt\\.claude\\worktrees\\${WTP}1405\\server.mjs` }),
     ];
-    assert.deepEqual(m.moeglicheHalter(liste, PFAD, 0).map((h) => h.pid), [10, 11, 12], `${WTP}1405 ist ein anderer Worktree`);
+    assert.deepEqual(m.moeglicheHalter(liste, PFAD, 0, -1).map((h) => h.pid), [10, 11, 12], `${WTP}1405 ist ein anderer Worktree`);
   });
 
   test("verwaister Werkzeug-Prozess nach dem Anlegen des Ordners ist Kandidat; davor, mit Elternprozess oder fremder Name nicht", () => {
@@ -697,10 +698,10 @@ describe("moeglicheHalter und formatHalter (#1411)", () => {
       proz({ pid: 22, ppid: 1, name: "python3.exe", startMs: 5000 }), // hat einen lebenden Elternprozess
       proz({ pid: 23, ppid: 999, name: "chrome.exe", startMs: 5000 }), // kein Werkzeug
     ];
-    const treffer = m.moeglicheHalter(liste, PFAD, 1000);
+    const treffer = m.moeglicheHalter(liste, PFAD, 1000, -1);
     assert.deepEqual(treffer.map((h) => h.pid), [20]);
     assert.match(treffer[0].grund, /verwaist/);
-    assert.deepEqual(m.moeglicheHalter(liste, PFAD, null).map((h) => h.pid), [20, 21], "ohne bekannte Ordner-Geburt zählt jeder verwaiste Werkzeug-Prozess");
+    assert.deepEqual(m.moeglicheHalter(liste, PFAD, null, -1).map((h) => h.pid), [20, 21], "ohne bekannte Ordner-Geburt zählt jeder verwaiste Werkzeug-Prozess");
   });
 
   test("Regel (c): ein Interpreter, der ein Skript von stdin liest (`python -`), nach dem Anlegen des Ordners gestartet, wird genannt (#1428 Z16)", () => {
@@ -715,15 +716,15 @@ describe("moeglicheHalter und formatHalter (#1411)", () => {
       proz({ pid: 36, name: "python.exe", commandLine: "python -m http.server", startMs: 5000 }), // `-m`, nicht `-`
       proz({ pid: 37, name: "chrome.exe", commandLine: "chrome -", startMs: 5000 }), // kein Interpreter
     ];
-    const treffer = m.moeglicheHalter(liste, PFAD, 1000);
+    const treffer = m.moeglicheHalter(liste, PFAD, 1000, -1);
     assert.deepEqual(treffer.map((h) => h.pid), [30, 31, 32, 33]);
     assert.match(treffer[0].grund, /stdin/);
-    assert.deepEqual(m.moeglicheHalter(liste, PFAD, null).map((h) => h.pid), [30, 31, 32, 33, 34], "ohne bekannte Ordner-Geburt zählt auch der frühere");
+    assert.deepEqual(m.moeglicheHalter(liste, PFAD, null, -1).map((h) => h.pid), [30, 31, 32, 33, 34], "ohne bekannte Ordner-Geburt zählt auch der frühere");
   });
 
   test("der eigene Prozess ist nie Kandidat; ohne Prozesse oder Treffer bleibt die Liste leer", () => {
     assert.deepEqual(m.moeglicheHalter([proz({ pid: 77, commandLine: `node c:/dev/projekt/.claude/worktrees/${WTP}1404/x` })], PFAD, 0, 77), []);
-    assert.deepEqual(m.moeglicheHalter([], PFAD, 0), []);
+    assert.deepEqual(m.moeglicheHalter([], PFAD, 0, -1), []);
   });
 
   test("formatHalter: PID, Name und Rat per PID; nie ein Kill per Name; leer sagt es klar", () => {

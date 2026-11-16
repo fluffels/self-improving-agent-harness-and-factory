@@ -313,7 +313,7 @@ describe("cli: Aufruf, pfade, worktree, sauber (Fehlerwege)", () => {
     expect(gemischt.err).toMatch(/✖ web: git status schlug fehl[\s\S]*✖ api: \?\? AGENTS\.md/);
   });
 
-  test("ohne --wurzel gilt die Wurzel der Option (im Skript: sein Repo), hier eine Temp-Config ohne Arbeitsplatz-Block statt der echten Repo-Config (#101 L14); ohne Option zu arbeitsplatzMaengel gilt der Standard", () => {
+  test("ohne --wurzel gilt die Wurzel der Option (im Skript: sein Repo), hier eine Temp-Config ohne Arbeitsplatz-Block statt der echten Projekt-Config (#101 L14); ohne Option zu arbeitsplatzMaengel gilt der Standard", () => {
     const eingebettet = realpathSync.native(schreibe());
     try {
       const l = lauf(["pfade"], { wurzel: eingebettet });

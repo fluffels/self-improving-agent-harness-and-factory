@@ -7,7 +7,7 @@
 import { describe, test } from "vitest";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { FREMD } from "../support/fremd-config";
@@ -15,12 +15,15 @@ import { FREMD } from "../support/fremd-config";
 import * as hookRaw from "../../scripts/pretooluse-hook.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as libRaw from "../../scripts/nachweis-lib.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Hook-Skript.
+import * as guardRaw from "../../scripts/lens-auftrag-guard.mjs";
 
 const hook = hookRaw as unknown as { dispatch: (t: string, w: string, a?: unknown, b?: unknown, d?: unknown) => { hookSpecificOutput: { permissionDecision: string; permissionDecisionReason: string } } | null };
 const { zusatzpassKopfAus, MAX_REVIEW_PAESSE } = libRaw as unknown as { zusatzpassKopfAus: (p: string) => { brille: string; pruefpunkt: string; entscheidung: string; weil: string } | null; MAX_REVIEW_PAESSE: number };
+const guard = guardRaw as unknown as { worktreePfadeAus: (t: string) => string[]; registrierteWorktrees: (c: unknown, wurzel: string) => string[] };
 const WT = FREMD.praefixe.worktree;
 const agent = (prompt: string) => JSON.stringify({ hook_event_name: "PreToolUse", tool_name: "Agent", cwd: "/w", tool_input: { subagent_type: FREMD.agenten.lens, description: "Lens", prompt } });
-const deny = (prompt: string) => hook.dispatch(agent(prompt), "/w", undefined, undefined, { config: FREMD });
+const deny = (prompt: string, liste?: string[]) => hook.dispatch(agent(prompt), "/w", undefined, undefined, { config: FREMD, ...(liste ? { worktreeListe: () => liste } : {}) });
 const kopf = (ende: string, zusatz = "") =>
   `Brille: architektur${zusatz} · Arbeitsverzeichnis: /w/.claude/worktrees/${WT}7 · Patch: /tmp/x/${WT}7-r1.patch · erwarteter HEAD: abc1234def · Sabotage-Worktree: /w/.claude/worktrees/${WT}7-lens-${ende}`;
 const FELD = " · Zusatzpass: architektur:Blocker B1 offen · Entscheidung: Pass nötig, weil Vorpass-Blocker blieb";
@@ -88,9 +91,11 @@ describe("zusatzpassKopfAus", () => {
 
 describe("R6 stufenabhängig: bei Risikostufe 1 sperrt schon `-lens-r3-` (factory#583)", () => {
   const ARBEIT = `/w/.claude/worktrees/${WT}7`;
+  const REGISTRIERT = [ARBEIT, "/w/.claude/worktrees/a/b", "C:/w/.claude/worktrees/" + WT + "7"];
   const mit = (stufe: number | "wirft", aufrufe: string[] = []) => (prompt: string) =>
     hook.dispatch(agent(prompt), "/w", undefined, undefined, {
       config: FREMD,
+      worktreeListe: () => REGISTRIERT,
       risikostufeFuer: (pfad: string) => {
         aufrufe.push(pfad);
         if (stufe === "wirft") throw new Error("Stufe nicht bestimmbar");
@@ -159,12 +164,85 @@ describe("R6 stufenabhängig: bei Risikostufe 1 sperrt schon `-lens-r3-` (factor
       writeFileSync(join(arbeit, "scripts", "a.mjs"), "a\nb\n");
       git("commit", "-qam", "aenderung");
       const prompt = `Brille: architektur · Arbeitsverzeichnis: ${arbeit} · Patch: /tmp/x/${WT}7-r1.patch · erwarteter HEAD: abc1234def · Sabotage-Worktree: ${arbeit}-lens-r3-architektur`;
-      const r = deny(prompt);
+      const r = deny(prompt, [arbeit]);
       assert.equal(r?.hookSpecificOutput.permissionDecision, "deny");
       assert.match(r?.hookSpecificOutput.permissionDecisionReason ?? "", /Runde 3, das Cap liegt bei 2 Pässen/);
-      assert.equal(deny(prompt.replace("Brille: architektur", `Brille: architektur${FELD}`)), null);
+      assert.equal(deny(prompt.replace("Brille: architektur", `Brille: architektur${FELD}`), [arbeit]), null);
     } finally {
       if (alt !== undefined) process.env.FACTORY_DIFF_BASE = alt;
+      rmSync(wurzel, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("R6: der Kindprozess startet nur in einem bei Git registrierten Worktree (L6)", () => {
+  const ARBEIT = `/repo/.claude/worktrees/${WT}1`;
+  const prompt = (arbeit: string) => `Brille: architektur · Arbeitsverzeichnis: ${arbeit} · Patch: /tmp/x/${WT}1-r1.patch · erwarteter HEAD: abc1234def · Sabotage-Worktree: ${ARBEIT}-lens-r3-architektur`;
+  const lauf = (arbeit: string, liste: () => string[], plattform?: string) => {
+    const aufrufe: string[] = [];
+    const r = hook.dispatch(agent(prompt(arbeit)), "/w", undefined, undefined, {
+      config: FREMD,
+      worktreeListe: liste,
+      ...(plattform ? { plattform } : {}),
+      risikostufeFuer: (p: string) => {
+        aufrufe.push(p);
+        return 1;
+      },
+    });
+    return { aufrufe, deny: r?.hookSpecificOutput.permissionDecision ?? null };
+  };
+  test("nicht registrierter Pfad: kein Kindprozess, Cap MAX_REVIEW_PAESSE, kein Deny", () => {
+    const l = lauf("/tmp/x/.claude/worktrees/fremd", () => [ARBEIT]);
+    assert.deepEqual(l.aufrufe, []);
+    assert.equal(l.deny, null);
+  });
+  test("registrierter Pfad: der Kindprozess startet (Stufe 1 sperrt r3)", () => {
+    const l = lauf(ARBEIT, () => [ARBEIT]);
+    assert.deepEqual(l.aufrufe, [ARBEIT]);
+    assert.equal(l.deny, "deny");
+  });
+  test("Listenfehler: kein Kindprozess, Fallback-Cap, kein Deny", () => {
+    const l = lauf(ARBEIT, () => {
+      throw new Error("git fehlt");
+    });
+    assert.deepEqual(l.aufrufe, []);
+    assert.equal(l.deny, null);
+  });
+  test("Schreibweise: Backslash, abschließender Separator und Backticks gleichen die Liste ab", () => {
+    for (const a of [ARBEIT + "/", ARBEIT.replaceAll("/", "\\"), "`" + ARBEIT + "`"]) assert.equal(lauf(a, () => [ARBEIT]).aufrufe.length, 1, a);
+    assert.equal(lauf(ARBEIT, () => [ARBEIT + "/"]).aufrufe.length, 1, "Listeneintrag mit Separator");
+    assert.equal(lauf(ARBEIT.replace("/repo/", "/REPO/"), () => [ARBEIT], "linux").aufrufe.length, 0, "unter POSIX zählt die Schreibweise");
+  });
+  test("unter win32 ist die Groß-/Kleinschreibung egal", () => {
+    assert.equal(lauf(ARBEIT.replace("/repo/", "/REPO/"), () => [ARBEIT], "win32").aufrufe.length, 1);
+  });
+});
+
+describe("R6: die Liste der registrierten Worktrees (L6)", () => {
+  test("worktreePfadeAus nimmt nur die worktree-Zeilen der Porcelain-Ausgabe, auch mit CRLF", () => {
+    const aus = "worktree /r\nHEAD abc\nbranch refs/heads/main\n\nworktree /r/.claude/worktrees/a b\r\nHEAD def\r\nprunable gitdir weg\r\n";
+    assert.deepEqual(guard.worktreePfadeAus(aus), ["/r", "/r/.claude/worktrees/a b"]);
+    assert.deepEqual(guard.worktreePfadeAus(""), []);
+  });
+  test("registrierteWorktrees fragt das echte git: ein angelegter Worktree steht in der Liste, ein bloßer Ordner nicht", () => {
+    const wurzel = mkdtempSync(join(tmpdir(), "lens-wt-"));
+    try {
+      const haupt = join(wurzel, "haupt");
+      mkdirSync(haupt);
+      const git = (...a: string[]) => execFileSync("git", ["-C", haupt, ...a], { stdio: "ignore" });
+      git("init", "-q", "-b", "main");
+      git("config", "user.email", "t@example.invalid");
+      git("config", "user.name", "t");
+      git("commit", "-q", "--allow-empty", "-m", "basis");
+      const wt = join(wurzel, "wt");
+      git("worktree", "add", "-q", "--detach", wt);
+      mkdirSync(join(wurzel, "bloss"));
+      const liste = guard.registrierteWorktrees({}, haupt).map((p) => p.replace(/\\/g, "/").toLowerCase());
+      const norm = (p: string) => realpathSync(p).replace(/\\/g, "/").toLowerCase();
+      assert.ok(liste.includes(norm(wt)), liste.join(","));
+      assert.ok(liste.includes(norm(haupt)));
+      assert.ok(!liste.includes(norm(join(wurzel, "bloss"))));
+    } finally {
       rmSync(wurzel, { recursive: true, force: true });
     }
   });

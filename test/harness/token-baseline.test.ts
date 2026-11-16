@@ -1229,6 +1229,33 @@ describe("token-baseline: readTranscriptSession (#1311)", () => {
     );
   });
 
+  test("eindeutiges Präfix findet die Session (factory#354)", () => {
+    mitSession(
+      (proj, id) => writeFileSync(join(proj, `${id}.jsonl`), zeile("h1", "2026-09-29T09:00:00Z") + "\n"),
+      (root) => assert.equal(m.readTranscriptSession("sess", root).calls.length, 1),
+    );
+  });
+
+  test("mehrdeutiges Präfix wirft mit Kandidaten", () => {
+    mitSession(
+      (proj, id) => {
+        writeFileSync(join(proj, `${id}.jsonl`), zeile("h1", "2026-09-29T09:00:00Z") + "\n");
+        writeFileSync(join(proj, "sess-2.jsonl"), zeile("h2", "2026-09-29T09:00:00Z") + "\n");
+      },
+      (root) => assert.throws(() => m.readTranscriptSession("sess", root), /mehrdeutig.*sess-1.*sess-2/s),
+    );
+  });
+
+  test("exakter Treffer gewinnt gegen Präfix-Treffer", () => {
+    mitSession(
+      (proj, id) => {
+        writeFileSync(join(proj, `${id}.jsonl`), zeile("h1", "2026-09-29T09:00:00Z") + "\n");
+        writeFileSync(join(proj, "sess-10.jsonl"), zeile("h2", "2026-09-29T09:00:00Z") + "\n" + zeile("h3", "2026-09-29T09:01:00Z") + "\n");
+      },
+      (root) => assert.equal(m.readTranscriptSession("sess-1", root).calls.length, 1),
+    );
+  });
+
   test("unbekannte Session wirft, statt still leer zu melden", () => {
     mitSession(
       () => undefined,
