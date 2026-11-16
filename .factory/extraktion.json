@@ -1225,6 +1225,11 @@
       "muster": "test/harness/aenderungsregister.test.ts",
       "art": "projekt-test",
       "grund": "Prüft das Änderungsregister der Fabrik (.github/aenderungsregister.json, nicht im Besitz)"
+    },
+    {
+      "muster": "test/harness/repo-tag-fabrik.test.ts",
+      "art": "projekt-test",
+      "grund": "Prüft das Repo-Tag in den Settings der Fabrik (env der .claude/settings.json steht nicht im Besitz; Bezieher prüft der Harness-Doctor)"
     }
   ]
 }
