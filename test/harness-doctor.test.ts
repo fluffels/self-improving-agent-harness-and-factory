@@ -204,7 +204,7 @@ describe("Altnamen der Kern-Umgebungsvariablen (--pruefen)", () => {
     writeFileSync(join(root, "ruleset.json"), JSON.stringify(SPIEGEL));
     const punkte = () => (rawPruefLauf as (a: Record<string, unknown>) => { ergebnis: { punkt: string; ok: boolean; fix?: string }[] })({ rootDir: root, configPfad: join(root, "projekt.json"), gh: () => "{}", langfuse: null }).ergebnis.filter((e) => e.punkt === "Repo-Tag");
     assert.equal(punkte().length, 1);
-    assert.equal(punkte()[0]?.ok, false); // ohne Settings: nicht prüfbar
+    assert.equal((punkte()[0] as { nichtPruefbar?: boolean }).nichtPruefbar, true); // ohne Settings: nicht prüfbar, keine Lücke
     mkdirSync(join(root, ".claude"));
     writeFileSync(join(root, ".claude", "settings.json"), JSON.stringify({ env: { CC_LANGFUSE_TRACE_TAGS: "anderes" } }));
     assert.match(punkte()[0]?.fix ?? "", /demo/);

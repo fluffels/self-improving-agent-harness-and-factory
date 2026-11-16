@@ -3,6 +3,7 @@ import { spawnSync } from "node:child_process";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { isAbsolute, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, test } from "vitest";
 import { importHuelle } from "./support/import-huelle";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
@@ -46,13 +47,16 @@ const L = libRaw as unknown as {
   bericht: (e: unknown[]) => Bericht;
   renderMarkdown: (b: Bericht) => string;
   tagesLuecken: (von: string, bis: string, data: unknown[]) => string[];
-  REPO_TAG_STICHTAG: string;
 };
 const C = cliRaw as unknown as {
   parseArgs: (a: string[]) => unknown;
   auswerten: (a: unknown, d?: Record<string, unknown>) => { exitCode: number; text: string };
 };
 const agentenNamen = (agentenRoh as unknown as { agentenNamen: (ordner: string, deps?: unknown) => string[] }).agentenNamen;
+
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as configRoh from "../scripts/projekt-config-lib.mjs";
+const { ladeProjektConfig: ladeConfigRoh, repoName: repoNameRoh } = configRoh as unknown as { ladeProjektConfig: (o: { rootDir: string }) => unknown; repoName: (c: unknown) => string };
 
 const VON = "2026-11-01T00:00:00Z";
 const BIS = "2026-11-04T00:00:00Z";
@@ -604,6 +608,10 @@ describe("Repo-Tag (factory#523)", () => {
     expect(() => lese(mit([FILTER, LEER_FILTER, tags(["repoA", "project:anderes"])]))).toThrow(/genau einen Filter/);
     expect(() => lese(mit([FILTER, LEER_FILTER, tags(["repoA", "project:repoA"]), tags(["repoB", "project:repoB"])]))).toThrow(/genau einen Filter/);
     expect(() => lese(mit([FILTER, LEER_FILTER, tags(["factory", "repoA", "project:repoA"]), tags(["repoA", "project:repoA"])]))).not.toThrow();
+    expect(() => lese(mit([FILTER, LEER_FILTER, { ...tags(["repoA", "project:repoA"]), operator: "none of" }]))).toThrow(/genau einen Filter/);
+    expect(() => lese(mit([FILTER, LEER_FILTER, tags(["repoA", "project:repoA", "x"])]))).toThrow(/genau einen Filter/);
+    expect(() => lese(mit([FILTER, LEER_FILTER, tags(["", "project:"])]))).toThrow(/genau einen Filter/);
+    expect(() => lese(mit([FILTER, LEER_FILTER, tags(["repoA", "project:repoA"]), tags(["repoA", "project:repoA"])]))).not.toThrow(); // derselbe Tag zweimal ist kein Widerspruch
   });
   test("zwei Exporte desselben Repo-Tags sind mehrfach, verschiedene Tags nicht", () => {
     expect(() => rep(...basis, repoA)).toThrow(/Export repo repo=repoA mehrfach/);
@@ -617,21 +625,16 @@ describe("Repo-Tag (factory#523)", () => {
     expect(l).toContain("3 Calls, 1.50 $");
     expect(l).toContain("Session außerhalb eines Repos");
     expect(l).toContain("CC_LANGFUSE_TRACE_TAGS");
-    expect(l).toContain("Daten vor dem Stichtag"); // das Test-Fenster (VON) liegt vor dem Stichtag
+    expect(l).toContain("Daten vor dem Eintrag des Repo-Tags"); // der Kern trägt kein festes Datum
+    expect(l).not.toContain("Stichtag");
+    expect(b.luecken.filter((x) => x.startsWith("Repo:"))).toEqual([]);
     expect(L.renderMarkdown(b)).toContain("| ohne Repo-Tag | 3 |");
-  });
-  test("Stichtag: beginnt das Fenster davor, nennt der Grund ihn; danach nicht", () => {
-    const vor = (von: string) => {
-      const ex = (j: { abfrage: object }) => ({ ...j, abfrage: { ...j.abfrage, fromTimestamp: von } });
-      return rep(...[exp("gesamt", [...gesamtRows, g(...ohneTag, 3, 1.5)]), tageVoll, repoA, repoB].map(ex)).luecken.find((x) => x.startsWith("ohne Repo-Tag:")) ?? "";
-    };
-    expect(vor("2026-11-15T00:00:00Z")).toContain(`Daten vor dem Stichtag ${L.REPO_TAG_STICHTAG}`);
-    expect(vor(`${L.REPO_TAG_STICHTAG}T00:00:00Z`)).not.toContain("Stichtag");
   });
   test("ohne Repo-Export: alle Calls ohne Repo-Tag mit Grund, keine Repo-Zeile außer der Lücke", () => {
     const b = rep(...basis.filter((e) => e.art !== "repo"));
     expect(b.repo.zeilen.map((z) => [z.name, z.count])).toEqual([["ohne Repo-Tag", 34]]);
     expect(b.luecken.find((x) => x.startsWith("ohne Repo-Tag:"))).toContain("34 Calls, 17.00 $ (Grund: kein Repo-Export");
+    expect(b.luecken.filter((x) => /Repo/.test(x))).toHaveLength(1); // keine zweite Lücke „kein Metadaten-Export“
   });
   test("Kosten null (ohne Preis) in der Lücke: „Lücke: ohne Preis“ bzw. „mindestens“, nie 0 $", () => {
     const b = rep(exp("gesamt", [...gesamtRows, { ...g(...ohneTag, 3, 0), sum_totalCost: null }]), tageVoll, repoA, repoB);
@@ -644,6 +647,15 @@ describe("Repo-Tag (factory#523)", () => {
     const b = rep(...basis, repoEx("repoC", [g(...R3, 4, 2, 7)]));
     expect(b.luecken.join("\n")).toMatch(/Repo: Exporte nicht konsistent/);
     expect(b.repo.zeilen.every((z) => z.count >= 0 && z.cost >= 0)).toBe(true);
+  });
+  test("ein Repo-Tag mit dem Wortlaut unbekannt ist ein Repo, nie „unzugeordnet“", () => {
+    const b = rep(...basis.filter((e) => e !== repoA), repoEx("unbekannt", [g(...R1, 10, 5, 3), g(...R2, 20, 10, 3)]));
+    expect(b.repo.zeilen.map((z) => z.name)).toContain("unbekannt");
+    expect(b.repo.davon.unbekannt.count).toBe(0);
+  });
+  test("genau ein Call ohne Repo-Tag ist schon eine Lücke (Grenze 0/1)", () => {
+    const b = rep(exp("gesamt", [...gesamtRows, g(...ohneTag, 1, 0.5)]), tageVoll, repoA, repoB);
+    expect(b.luecken.find((x) => x.startsWith("ohne Repo-Tag:"))).toContain("1 Calls, 0.50 $");
   });
   test("ohne Calls ohne Repo-Tag: keine Zeile und keine Lücke", () => {
     const b = rep(...basis);
@@ -718,7 +730,8 @@ describe("CLI", () => {
   test("--rezept ohne Injektion nimmt den Repo-Namen aus der Projekt-Config", () => {
     const r = JSON.parse(C.auswerten(C.parseArgs(["--rezept", "--von", VON, "--bis", BIS])).text) as { art: string; name: string }[];
     expect(r.filter((x) => x.art === "repo")).toHaveLength(1);
-    expect(r.find((x) => x.art === "repo")?.name).toMatch(/^repo \S+$/);
+    const wurzel = fileURLToPath(new URL("../", import.meta.url));
+    expect(r.find((x) => x.art === "repo")?.name).toBe(`repo ${repoNameRoh(ladeConfigRoh({ rootDir: wurzel }))}`);
   });
   test("rezept: bis allein, ungültige Zeiten, von gleich bis und ein fehlender Agentenordner sind Fehler", () => {
     erwarte(["--rezept", "--bis", BIS], 2, "--rezept braucht");

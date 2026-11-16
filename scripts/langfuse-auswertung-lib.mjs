@@ -33,8 +33,6 @@ export const QUELLEN = ["live", "nachgeliefert", "codex", "sonstige"];
 export const ARTEN = ["gesamt", "tage", "latenz", "metadaten", "leer", "repo"];
 /** Zeile der Repo-Tabelle für Generations ohne Repo-Tag (factory#523): nie unter einem Repo, nie als 0 $. */
 export const REPO_REST = "ohne Repo-Tag";
-/** Stichtag des Repo-Tags (Tag der Umstellung): Daten davor tragen keins, der Bericht nennt das im Grund der Lücke `ohne Repo-Tag`. */
-export const REPO_TAG_STICHTAG = "2026-11-16";
 /** Modellname der leeren Hook-GENERATIONs des Plugins (factory#522: Modell `claude`, leere Usage, eine je Tool-Call). */
 export const LEER_MODELL = "claude";
 /** Platzhalter-Modell ohne Usage: Dashboards (Filter) und Transkript (`istEchtesModell`) zählen es nicht, die Auswertung verwirft die Zeilen nach dem Lesen (factory#583; der Query-Filter bleibt). */
@@ -391,7 +389,7 @@ export function bericht(exporte) {
     ...rolle.luecken,
     ...effort.luecken,
     ...repo.luecken,
-    ...repoLuecke(repo, gesamt.von),
+    ...repoLuecke(repo),
     ...leer2.luecken,
   ];
   const basisSumme = summeP([...teil.basis.values()]);
@@ -416,11 +414,10 @@ export function bericht(exporte) {
 }
 
 /** Lücke `ohne Repo-Tag` (factory#523): Generations ohne Repo-Tag stehen mit Anzahl, Kosten (nie 0 $) und Grund, nie unter einem Repo; ohne Calls keine Lücke. */
-function repoLuecke(repo, von) {
+function repoLuecke(repo) {
   const rest = summeP(repo.posten.filter((p) => p.label === REPO_REST));
   if (!(rest.count > 0) && !(rest.ohnePreis > 0)) return [];
-  const gruende = repo.hatExport ? ["Session außerhalb eines Repos", "Bezieher ohne Repo-Tag in CC_LANGFUSE_TRACE_TAGS"] : ["kein Repo-Export (Rezept: --rezept liefert einen Export je Repo-Tag)"];
-  if (Date.parse(von) < Date.parse(`${REPO_TAG_STICHTAG}T00:00:00Z`)) gruende.push(`Daten vor dem Stichtag ${REPO_TAG_STICHTAG}`);
+  const gruende = repo.hatExport ? ["Session außerhalb eines Repos", "Bezieher ohne Repo-Tag in CC_LANGFUSE_TRACE_TAGS", "Daten vor dem Eintrag des Repo-Tags (Sessions tragen ihn ab ihrem Start)"] : ["kein Repo-Export (Rezept: --rezept liefert einen Export je Repo-Tag)"];
   return [`${REPO_REST}: ${rest.count} Calls, ${betrag(rest)} (Grund: ${gruende.join(", ")})`];
 }
 

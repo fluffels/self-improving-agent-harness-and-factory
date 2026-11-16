@@ -99,13 +99,14 @@ describe("Repo-Tag-Punkt (repoTagPunkt, factory#523)", () => {
   });
   test("nur ein Teilstring des Repo-Namens zählt nicht", () => {
     expect(mit("mein-repo-x").ok).toBe(false);
+    expect(mit("mein").ok).toBe(false);
   });
   test("Wert kein Text oder fehlend: Lücke", () => {
     expect(mit(5).ok).toBe(false);
     expect(tag({ settingsText: JSON.stringify({}), repoName: "mein-repo" }).ok).toBe(false);
   });
   test("Settings fehlen oder kein JSON: nicht prüfbar mit Fix", () => {
-    for (const settingsText of [null, undefined, "kein json"]) {
+    for (const settingsText of [null, undefined, "kein json", "42", "[]", "null"]) {
       const x = tag({ settingsText, repoName: "mein-repo" });
       expect(x.nichtPruefbar).toBe(true);
       expect(x.fix).toContain(".claude/settings.json");

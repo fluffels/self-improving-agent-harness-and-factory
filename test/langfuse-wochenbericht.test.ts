@@ -514,6 +514,7 @@ describe("Verdrahtung und Guards (Runde 1)", () => {
     for (const x of rez.filter((y) => y.abfrage.view === "observations")) expect(x.abfrage.filters).toContainEqual(PF);
     const rollen = rez.filter((x) => x.art === "metadaten").flatMap((x) => x.abfrage.filters.map((y) => (y as { value?: string }).value));
     expect(rollen).toContain("sonderrolle");
+    expect(rez.filter((x) => x.art === "repo")).toHaveLength(1); // die CLI übergibt das Repo des Projekts (factory#523)
   });
   test("Exit 4 ohne --ablegen schreibt nichts und gibt ohne --json keinen stdout aus", async () => {
     const home = tmp();
