@@ -20,6 +20,7 @@ const m = raw as unknown as {
   bewerte: (a: { dateien: string[]; agentsKernGeaendert?: boolean; override?: string | null }) => Urteil;
   kernBlockGeaendert: (alt: string | null, neu: string | null) => boolean;
   pruefeReadme: (a: { readme: string | null; seitenVorhanden: (p: string) => boolean; abschnitte?: string[] }) => string[];
+  checkReadmeAusConfig: (c: unknown, rootDir: string) => string[];
   checkReadme: (a: { rootDir: string; abschnitte?: string[] }) => string[];
   checkDokuPflichtSlice: (a: { runGit: (args: string[]) => string; env?: Record<string, string>; zeilen: { dokuOverride: string } }) => Record<string, unknown>;
 };
@@ -166,6 +167,13 @@ describe("checkReadme gegen die Platte", () => {
     mitReadme("# T\n\n## Status\n", [], (w) => {
       expect(m.checkReadme({ rootDir: w, abschnitte: ["Lizenz"] })).toHaveLength(1);
       expect(m.checkReadme({ rootDir: w, abschnitte: ["Status"] })).toEqual([]);
+    });
+  });
+  it("die Abschnitte kommen aus dokuPflicht.readmeAbschnitte der Config", () => {
+    mitReadme("# T\n\n## Status\n", [], (w) => {
+      expect(m.checkReadmeAusConfig({ dokuPflicht: { readmeAbschnitte: ["Lizenz"] } }, w)).toHaveLength(1);
+      expect(m.checkReadmeAusConfig({ dokuPflicht: { readmeAbschnitte: ["Status"] } }, w)).toEqual([]);
+      expect(m.checkReadmeAusConfig({}, w)).toEqual([]);
     });
   });
   it("Verweis wird nur bei existierender Zielseite verlangt", () => {

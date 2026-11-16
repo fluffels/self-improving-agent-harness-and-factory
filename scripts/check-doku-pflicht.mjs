@@ -124,6 +124,9 @@ export function checkReadme({ rootDir = ROOT, abschnitte = [] } = {}) {
   return pruefeReadme({ readme, seitenVorhanden: (s) => existsSync(join(rootDir, s)), abschnitte });
 }
 
+/** README-Prüfung mit den Abschnitten aus der Projekt-Config (`dokuPflicht.readmeAbschnitte`, ohne den Schlüssel keine). */
+export const checkReadmeAusConfig = (config, rootDir = ROOT) => checkReadme({ rootDir, abschnitte: config?.dokuPflicht?.readmeAbschnitte ?? [] });
+
 function main() {
   const config = ladeProjektConfig();
   const zeilen = commitZeilenAus(config);
@@ -133,7 +136,7 @@ function main() {
   const dim = (s) => paint("2", s);
   let rot = false;
 
-  for (const b of checkReadme({ abschnitte: config.dokuPflicht?.readmeAbschnitte ?? [] })) {
+  for (const b of checkReadmeAusConfig(config)) {
     console.error(red(`✖ ${b}`));
     rot = true;
   }
