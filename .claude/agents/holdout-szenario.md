@@ -3,6 +3,8 @@ name: holdout-szenario
 description: Schreibt Prüfszenarien (Gegeben/Wenn/Dann, Negativfall, Beobachtungsweg) zu den Akzeptanzkriterien eines Tickets, allein aus Ticket und Kriterienliste. Nur vom Hauptchat nach einem Plan ohne Epic-Weiche im Hintergrund spawnen, nie vom Umsetzer.
 model: opus
 effort: medium
+# omitClaudeMd (factory#551): Begründung im Absatz „Holdout ohne Kontextdateien“ der Routing-Doku (Modellwahl)
+omitClaudeMd: true
 tools: Read, Grep, Glob
 hooks:
   PreToolUse:
