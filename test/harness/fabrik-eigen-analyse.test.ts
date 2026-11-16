@@ -83,6 +83,7 @@ describe("Fabrik-eigene Analyse-Dateien (factory#518)", () => {
   });
   it("(c) skript-wurzel: der Einstieg bricht in-process mit einer Bezieher-Wurzel ab", async () => {
     const wurzel = fixture({ ".factory/sync-stand.json": "{}\n" });
+    // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
     const freigabe = (await import("../../scripts/token-analyse-freigabe.mjs")) as { cli: (a: string[], e: Record<string, string>, d: { repoWurzel: string }) => { code: number; zeilen: string[] } };
     const r = freigabe.cli(["pruefen"], {}, { repoWurzel: wurzel });
     expect(r.code).not.toBe(0);
