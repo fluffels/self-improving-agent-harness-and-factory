@@ -33,7 +33,7 @@ Ergänzt [ADR 0027](../0027-regeln-lockern.md) (Punkte 4 und 8); die Ledger-Zeil
 - Scan: `grep -l "\.md" test/harness/*.test.ts`, dann je Datei die gelesenen Eingaben prüfen; kein dauerhaftes Inventar-Skript.
 - Die Zulässigkeit prüft `excludeListe` in `scripts/waechter-einfrieren-lib.mjs` fail-closed, die Config wirft bei einem Verstoß: Ziel ist ein einzelner Wächter `test/harness/<name>.test.ts` (Whitelist `[a-z0-9-]`, kein Glob), keine Sicherheits-Ausnahme, kein `durch`-Wächter, nicht verteilt (`artVon` = `kern-test`) und keiner der drei Selbstschutz-Wächter (`waechter-einfrieren`, `regel-verfall`, `aenderungsregister`). Wächter `test/harness/waechter-einfrieren.test.ts`: dazu die Datei existiert und `exclude` ist genau Standardliste plus Register. Register, Lib und Config sind Leitplanke (`.github/protected-paths.json`): ein Einfrieren braucht den Audit-Kommentar. Grenze: der Fang-Teil (Regel 2) braucht gh und steht als Messwert im PR.
 - Rückfall: erreicht ein Fehler `main`, den ein eingefrorener Wächter gefangen hätte, wird das Feld entfernt (oder per PR revertiert).
-- Erstes Urteil (2026-11-16): alle sechs Doku-Wächter im Umfang bleiben `behalten`, die Messbasis ist mit 13 Läufen je Wächter dünn (Regel 3); der Mechanismus steht bereit, die Prüftermine der Verfall-Zeilen entscheiden erneut.
+- Erstes Urteil (2026-11-16): alle sieben Doku-Wächter im Umfang bleiben `behalten`, die Messbasis ist mit 13 Läufen je Wächter dünn (Regel 3); der Mechanismus steht bereit, die Prüftermine der Verfall-Zeilen entscheiden erneut.
 
 ## Auflösung des Sammeleintrags (factory#574)
 
