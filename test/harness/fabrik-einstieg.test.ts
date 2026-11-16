@@ -64,6 +64,7 @@ describe("Fabrik-Einstieg: jede dokumentierte FACTORY_*-Variable steht in der Ta
     const seiten = scanSeiten();
     assert.ok(seiten.includes("README.md") && seiten.includes("docs/model-routing.md") && seiten.includes("docs/referenz/befehle.md"));
     assert.ok(!seiten.includes(SEITE));
+    for (const ordner of ["docs/", "docs/referenz/", "docs/factory/", "docs/codex/"]) assert.ok(seiten.some((p) => p.startsWith(ordner) && p.slice(ordner.length).indexOf("/") < 0), `kein Dokument aus ${ordner} im Scan`);
     assert.ok(seiten.every((p) => !p.startsWith("docs/adr/") && !p.includes("-messhistorie-") && !p.includes("-gegenprobe-") && !p.startsWith("docs/mutation-messung-")));
   });
 

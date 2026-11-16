@@ -11,10 +11,10 @@ Jede Einstellung gehört auf genau eine Ebene. Wer eine Einstellung ändern will
 | Ebene | Was dort steht | Ort | Wer ändert | Mehr |
 | --- | --- | --- | --- | --- |
 | Factory-Besitz | Skripte, Agenten, Skills, Workflows, Kern-Tests, Kern-Seiten, der Kern-Block der `AGENTS.md` | Besitz-Manifest der Factory, geliefert vom Sync | nur die Quelle der Factory; im Bezieher nie von Hand | [Erstbezug](../erstbezug.md) |
-| Repo-Config | Repo, Boards, Präfixe, Agentennamen, Labels, Projekt-Block der `AGENTS.md`, projekteigene Gates | `.factory/projekt.json`, Projekt-Block in `AGENTS.md`, Projektdateien aus den Vorlagen | das Projekt, per Pull Request | [Erstbezug](../erstbezug.md), [Doku-Vorlagen](../referenz/doku-vorlagen.md) |
+| Projekt-Config | Repo, Boards, Präfixe, Agentennamen, Labels, Projekt-Block der `AGENTS.md`, projekteigene Gates | `.factory/projekt.json`, Projekt-Block in `AGENTS.md`, Projektdateien aus den Vorlagen | das Projekt, per Pull Request | [Erstbezug](../erstbezug.md), [Doku-Vorlagen](../referenz/doku-vorlagen.md) |
 | Nutzer-Konfiguration | persönliche Werte je Rechner: Umgebungsvariablen, lokale Einstellungen, Zugänge | Shell, lokale Einstellungsdatei `settings.local.json` (ungetrackt), Home-Dateien des Nutzers | die einzelne Nutzerin bzw. der einzelne Nutzer, nie ein Agent | [Sicherheit der Agenten](../sicherheit-agenten.md) |
 
-Regeln, die für alle Ebenen gelten: ein Projektwort gehört nie in den Factory-Besitz (Leitfrage der `AGENTS.md`); Werte aus der Repo-Config setzt die Factory über die Platzhalter `<gruppe.schlüssel>` ein; Zugangsdaten (Keys, Tokens) trägt nur die Nutzerin selbst ein, nie ein Agent.
+Welche Regel für welche Ebene gilt, steht in der `AGENTS.md` (Oberste Regel, Kern-Regeln) und in [Sicherheit der Agenten](../sicherheit-agenten.md) (Zugangsdaten trägt nur die Nutzerin selbst ein).
 
 ## Umgebungsvariablen
 
@@ -23,7 +23,7 @@ Alle Variablen der Factory tragen das Präfix `FACTORY_`. Sie sind **optional**:
 | Variable | Art | Zweck | Mehr |
 | --- | --- | --- | --- |
 | `FACTORY_ABO_KONTINGENT_VERLAUF` | Nutzer | Pfad der Verlaufsdatei des Abo-Kontingents (Standard im Home unter `.claude/state`) | [Modell-Routing](../model-routing.md) |
-| `FACTORY_ABSCHLUSS_SKILL` | Nutzer | privater Abschluss-Skill am Sitzungsende; `aus` schaltet ihn ab, nie in der Repo-Config | [Harness-Transfer](../harness-transfer.md) |
+| `FACTORY_ABSCHLUSS_SKILL` | Nutzer | privater Abschluss-Skill am Sitzungsende; `aus` schaltet ihn ab, nie in der Projekt-Config | [Harness-Transfer](../harness-transfer.md) |
 | `FACTORY_BASIS_REF` | CI | Basis-Branch der Pull-Request-CI für die Basis-Nachlauf-Prüfung | [Erstbezug](../erstbezug.md) |
 | `FACTORY_COVERAGE` | CI | schaltet die Coverage-Instrumentierung ein (lokal bleibt `verify` uninstrumentiert) | [FAQ](../agent-harness-faq.md) |
 | `FACTORY_DIFF_BASE` | Nutzer | Basis für Diff-Gates, sonst Merge-Base mit `origin/main` | [Harness-Transfer](../harness-transfer.md) |
@@ -72,15 +72,10 @@ Persönliche Werte je Rechner (Variablen oben, `settings.local.json`, Zugänge i
 
 ## Sammeltickets
 
-Befunde zum Harness werden Zeilen in einem Sammelticket („Harness-Härtung (gesammelt)“), nicht eigene Tickets; Langfuse-Befunde gehen ins Sammelticket „Langfuse-Befunde (gesammelt)“, Codequalität (falls das Label in der Repo-Config gesetzt ist) ins Sammelticket „Codequalität (gesammelt)“. Eine Zeile trägt Klasse und Beleg. Eingetragen wird mit `node scripts/melden.mjs`, angelegt mit `node scripts/sammelticket-anlegen.mjs`. Format, Deckel je Lauf, Verfall und Übertrag: [Ticket-Reihenfolge](../ticket-reihenfolge.md).
+Befunde zum Harness stehen als Zeilen in Sammeltickets, nicht in eigenen Tickets (Harness-Härtung, Langfuse-Befunde, Codequalität). Eintragen mit `node scripts/melden.mjs`, anlegen mit `node scripts/sammelticket-anlegen.mjs`. Regel, Zeilenformat, Deckel und Verfall: Abschnitt „Backlog“ der `AGENTS.md` und [Ticket-Reihenfolge](../ticket-reihenfolge.md).
 
 ## Abschluss
 
-Am Ticket-Ende pflegt der Agent selbst das Projekt-Brain (Regel → `AGENTS.md`, Entscheidung → ADR, Evergreen → Brain-Seite) und trägt jeden Befund ein, bevor er berichtet. Einen privaten Abschluss-Skill setzt jede Nutzerin bzw. jeder Nutzer nur lokal über `FACTORY_ABSCHLUSS_SKILL`; in der Repo-Config bleibt `skills.abschluss` leer. Ablauf und Aufräumen: [Ticket-Reihenfolge](../ticket-reihenfolge.md) (Abschnitt „Am Ticket-Ende“).
+Was am Ticket-Ende zu tun ist (Projekt-Brain pflegen, Befunde eintragen, Aufräumen): Abschnitt „Verifikation“ und „Backlog“ der `AGENTS.md` und [Ticket-Reihenfolge](../ticket-reihenfolge.md). Einen privaten Abschluss-Skill setzt jede Nutzerin bzw. jeder Nutzer nur lokal über `FACTORY_ABSCHLUSS_SKILL`; in der Projekt-Config bleibt `skills.abschluss` leer.
 
-## Regeln für Texte dieser Seite und anderer Kern-Seiten
-
-- `npm run <x>` nur für die Skripte der geschlossenen Liste `BEZIEHER_NPM_SKRIPTE` (Wächter `besitz-abschnittsverweise`); sonst `node scripts/<x>.mjs`.
-- Link-Anker nur auf verteilte Seiten oder auf die Liste `kern-link-anker`.
-- Ticketnummern mit Herkunft (`factory#<nr>`, `quellprojekt#<nr>`), nie nackt.
-- Kein Projektliteral und keine Personenangabe.
+Regeln für Texte von Kern-Seiten (Verweisformen, Ticketnummern, Link-Anker, kein Projektliteral): Abschnitt „Gates“ der `AGENTS.md`.
