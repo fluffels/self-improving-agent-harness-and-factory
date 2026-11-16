@@ -25,7 +25,6 @@ export const VERMERK_TAGS = "nachgelieferte Calls ohne Tag fehlen";
 const SCHWELLEN_FELDER = ["erfassungLueckenMax", "kostenAnstiegProzent", "unzugeordnetProzent"];
 
 const iso = (ms) => new Date(ms).toISOString();
-const usd = (x) => `${x.toFixed(2)} $`;
 const prozent = (x) => (x === null ? "–" : `${x >= 0 ? "+" : ""}${x.toFixed(1)} %`);
 
 /** Montag (UTC, `JJJJ-MM-TT`) der letzten vollen Woche vor `jetzt`. Pur. */
@@ -245,7 +244,7 @@ export function urteil(schwellen, ist) {
 // ── Darstellung ──────────────────────────────────────────────────────────────
 
 /** Zeilen ohne Rolle oder Modell stehen als Datenlücke des Wochenberichts (nie nur als Summe im Auswertungsteil). */
-const unzugeordnetLuecke = (b) => (b.unzugeordnet.count > 0 ? [`Zeilen ohne Rolle oder Modell: ${b.unzugeordnet.count} Calls (${usd(b.unzugeordnet.cost)})`] : []);
+const unzugeordnetLuecke = (b) => (b.unzugeordnet.count > 0 ? [`Zeilen ohne Rolle oder Modell: ${b.unzugeordnet.count} Calls (${betrag({ ...b.unzugeordnet, ...(b.preis?.unzugeordnet ?? {}) })})`] : []);
 
 /** Baut Bericht, Kennzahlen, Probe und Urteil aus den geordneten Exporten. */
 export function wochenAuswertung(geordnet, { schwellen, vermerk, merges }) {

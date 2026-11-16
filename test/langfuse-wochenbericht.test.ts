@@ -777,6 +777,17 @@ describe("Leere Hook-Generations und Preislücke (factory#522)", () => {
     expect(k.deltaProzent).toBeNull();
     expect(k.preis.woche.ohnePreis).toBe(16);
   });
+  test("Vorwoche mit Calls ohne Preis: Untergrenze bzw. Lücke in der Summenzeile; der Grund in der Je-Merge-Zeile nennt die Woche ohne Preis", async () => {
+    const vor = [ohnePreis(g("Claude Code Turn", "LLM Call", "claude-opus-5-5", "default", 10, 0))];
+    const teil = await lauf([], { ...satz(), "gesamtV.json": exp("gesamt", F.vorVon, F.vorBis, vor), "leer.json": leerOk() });
+    expect(teil.stdout).toContain("Vorwoche Lücke: ohne Preis (claude-opus-5-5)");
+    const gemischt = [g("Claude Code Turn", "LLM Call", "claude-opus-5-5", "default", 10, 3), ohnePreis(g("Abgleich", "Model response", "claude-sonnet-5-5", "repo", 2, 0))];
+    const mix = await lauf([], { ...satz(), "gesamtV.json": exp("gesamt", F.vorVon, F.vorBis, gemischt), "leer.json": leerOk() });
+    expect(mix.stdout).toContain("Vorwoche mindestens 3.00 $, ohne 2 Calls");
+    const gW = [ohnePreis(g("Claude Code Turn", "LLM Call", "claude-opus-5-5", "default", 16, 0))];
+    const woche = await lauf([], { ...satz(), "gesamtW.json": exp("gesamt", F.von, F.bis, gW), "leer.json": leerOk() });
+    expect(woche.stdout).toMatch(/Kosten je Merge Lücke: ohne Preis \(claude-opus-5-5\)[^\n]*Δ – \(Woche ohne Preis, nicht bewertbar\)/);
+  });
   test("ein Export leer ohne Projektfilter wird abgelehnt (wie jeder Export)", async () => {
     const roh = leerOk();
     const r = await lauf([], { ...satz(), "leer.json": { ...roh, abfrage: { ...roh.abfrage, filters: [TYPE] } } });

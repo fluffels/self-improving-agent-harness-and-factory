@@ -157,7 +157,7 @@ const kostenOk = (v) => v === null || numerisch(v);
 
 /**
  * Normalisiert eine Zeile; fehlende oder nicht numerische Metriken sind ein Formfehler, nie eine stille 0. Kosten null bei
- * Calls zählen mit 0 $ und tragen `ohnePreis`: der Bericht nennt sie als Datenlücke.
+ * Calls tragen `ohnePreis` (Anzahl der Calls ohne Preis, Kosten dann 0 als Untergrenze): der Bericht zeigt „Lücke“ bzw. „mindestens“ und nennt sie als Datenlücke.
  */
 function zeileVon(r, art, pfad, i) {
   const z = { traceName: r?.traceName, name: r?.name, providedModelName: r?.providedModelName, environment: r?.environment };
@@ -316,7 +316,7 @@ const addPosten = (ziel, p) => {
 
 export function tabelle(posten) {
   const zeilen = new Map([[UNZUGEORDNET, { name: UNZUGEORDNET, ...leerePosten(), quellen: {}, quellenInfo: {} }]]);
-  const davon = { unbekannt: { count: 0, cost: 0 }, ohneSchluessel: { count: 0, cost: 0 } };
+  const davon = { unbekannt: leerePosten(), ohneSchluessel: leerePosten() };
   for (const p of posten) {
     const z = zeilen.get(p.label) ?? { name: p.label, ...leerePosten(), quellen: {}, quellenInfo: {} };
     addPosten(z, p);
@@ -326,8 +326,7 @@ export function tabelle(posten) {
     zeilen.set(p.label, z);
     if (p.label === UNZUGEORDNET) {
       const ziel = p.art === "unbekannt" ? davon.unbekannt : davon.ohneSchluessel;
-      ziel.count += p.count;
-      ziel.cost += p.cost;
+      addPosten(ziel, p);
     }
   }
   const alle = [...zeilen.values()];
@@ -338,7 +337,7 @@ export function tabelle(posten) {
 
 const postenAusBasis = (basis, feld) => [...basis.values()].map((b) => ({ quelle: b.quelle, label: b[feld], count: b.count, cost: b.cost, ohnePreis: b.ohnePreis, modelle: b.modelle, art: "wert" }));
 
-/** Lücke für Gruppen mit Calls, aber ohne Preis (Kosten null): die Summen zählen sie mit 0 $, das ist nie still. */
+/** Lücke für Gruppen mit Calls, aber ohne Preis (Kosten null): die Summen sind dann nur eine Untergrenze („mindestens x $, ohne k Calls“), nie 0 $. */
 function preisLuecke(ohnePreis) {
   if (!ohnePreis.length) return [];
   const modelle = [...new Set(ohnePreis.map((z) => z.modell))].sort(sortName).join(", ");
@@ -355,6 +354,7 @@ export function bericht(exporte) {
   const tageFehlend = tage ? tagesLuecken(gesamt.von, gesamt.bis, tage.data) : null;
   const rolle = dimensionPosten(teil, exporte.filter((e) => e.art === "metadaten" && ROLLE_SCHLUESSEL.includes(e.schluessel)), "Rolle");
   const effort = dimensionPosten(teil, exporte.filter((e) => e.art === "metadaten" && EFFORT_SCHLUESSEL.includes(e.schluessel)), "Effort");
+  const unz = unzugeordnetGesamt(teil, rolle);
   const leer2 = leerAuswerten(exporte.find((e) => e.art === "leer"), summe(gesamt.zeilen).count);
   const luecken = [
     ...(tage ? [] : ["Tage nicht geprüft (Export tage fehlt)"]),
@@ -372,7 +372,7 @@ export function bericht(exporte) {
     vermerk: tage ? (tageFehlend.length ? ` (ohne Tag ${tageFehlend.join(", ")})` : "") : " (Tage nicht geprüft)",
     roh: summe([basisSumme, teil.audit, teil.negativ]),
     bereinigt: summe([basisSumme]),
-    preis: { roh: nurPreis(summeP([basisSumme, teil.audit, teil.negativ])), bereinigt: nurPreis(basisSumme) },
+    preis: { roh: nurPreis(summeP([basisSumme, teil.audit, teil.negativ])), bereinigt: nurPreis(basisSumme), audit: nurPreis(teil.audit), negativ: nurPreis(teil.negativ), unzugeordnet: nurPreis(unz) },
     leer: leer2.leer,
     audit: summe([teil.audit]),
     negativ: { gruppen: teil.negativ.gruppen, count: teil.negativ.count, cost: teil.negativ.cost },
@@ -381,7 +381,7 @@ export function bericht(exporte) {
     repo: tabelle(postenAusBasis(teil.basis, "repo")),
     rolle: tabelle(rolle.posten),
     effort: tabelle(effort.posten),
-    unzugeordnet: unzugeordnetGesamt(teil, rolle),
+    unzugeordnet: summe([unz]),
     luecken,
     dubletten: "Dubletten Live/Nachgeliefert: nicht abgezogen (Stichprobe factory#286: keine belegt)",
   };
@@ -409,7 +409,7 @@ const leerZeile = (l) => (l ? `leere Hook-Generations: ${l.count} (nicht gezähl
 function unzugeordnetGesamt(teil, rolle) {
   const ohneModell = [...teil.basis.values()].filter((b) => b.modell === UNZUGEORDNET);
   const ohneRolle = rolle.posten.filter((p) => p.label === UNZUGEORDNET && teil.basis.get(p.key).modell !== UNZUGEORDNET);
-  return summe([...ohneModell, ...ohneRolle]);
+  return summeP([...ohneModell, ...ohneRolle]);
 }
 
 // ── Darstellung ──────────────────────────────────────────────────────────────
@@ -422,7 +422,7 @@ function tabellenZeilen(t) {
 
 function abschnitt(titel, t, vermerk, mitDavon) {
   const out = [`## ${titel}${vermerk}`, "", quellenKopf, "| --- | --- | --- | --- | --- | --- | --- |", ...tabellenZeilen(t), ""];
-  if (mitDavon) out.push(`Davon unzugeordnet: unbekannt ${t.davon.unbekannt.count} Calls (${usd(t.davon.unbekannt.cost)}); ohne Schlüssel oder Wert ohne Export ${t.davon.ohneSchluessel.count} Calls (${usd(t.davon.ohneSchluessel.cost)}).`, "");
+  if (mitDavon) out.push(`Davon unzugeordnet: unbekannt ${t.davon.unbekannt.count} Calls (${betrag(t.davon.unbekannt)}); ohne Schlüssel oder Wert ohne Export ${t.davon.ohneSchluessel.count} Calls (${betrag(t.davon.ohneSchluessel)}).`, "");
   return out;
 }
 
@@ -433,10 +433,10 @@ export function renderMarkdown(b) {
   return [
     `# Langfuse-Auswertung ${b.fenster.von} bis ${b.fenster.bis}`,
     "",
-    `Gesamt${v}: roh ${betrag({ ...b.roh, ...b.preis.roh })} (${b.roh.count} Calls), bereinigt ${betrag({ ...b.bereinigt, ...b.preis.bereinigt })} (${b.bereinigt.count} Calls; ohne negative Latenzen ${n.count} Calls ${usd(n.cost)}, ohne doppelte Audit-Markierungen ${b.audit.count} Calls ${usd(b.audit.cost)}).`,
+    `Gesamt${v}: roh ${betrag({ ...b.roh, ...b.preis.roh })} (${b.roh.count} Calls), bereinigt ${betrag({ ...b.bereinigt, ...b.preis.bereinigt })} (${b.bereinigt.count} Calls; ohne negative Latenzen ${n.count} Calls ${betrag({ ...n, ...b.preis.negativ })}, ohne doppelte Audit-Markierungen ${b.audit.count} Calls ${betrag({ ...b.audit, ...b.preis.audit })}).`,
     leerZeile(b.leer),
     b.dubletten,
-    `unzugeordnet${v}: ${b.unzugeordnet.count} Calls (${usd(b.unzugeordnet.cost)}) ohne Rolle oder ohne Modell.`,
+    `unzugeordnet${v}: ${b.unzugeordnet.count} Calls (${betrag({ ...b.unzugeordnet, ...b.preis.unzugeordnet })}) ohne Rolle oder ohne Modell.`,
     "",
     ...abschnitt("Quelle", b.quelle, v, false),
     ...abschnitt("Je Rolle", b.rolle, v, true),

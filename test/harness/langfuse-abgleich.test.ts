@@ -1144,6 +1144,25 @@ describe("pruefen (Ablauf)", () => {
     expect(nur.sessions[0]).toMatchObject({ status: "Lücke", dubletten: 0, leer: 5, callsLangfuse: 0 });
   });
 
+  test("Markdown: mit Dimension providedModelName trägt auch eine echte Dublette nicht den Hinweis auf leere Hook-GENERATIONs, ohne Dimension schon", async () => {
+    const root = mitSession([msg("a")]);
+    const tokens = tokenZeilen("s1", { input: 10, output: 5, cacheRead: 100, w5: 10, w1: 30 });
+    const lauf = (zeilen: object[]) => {
+      const dateien: Record<string, string> = { "z.json": JSON.stringify({ data: zeilen }), "t.json": JSON.stringify(tokens) };
+      return A.pruefen(args({ ist: ["z.json", "t.json"] }), { env: {}, now: SPAET(), projectsRoot: root, repoRoot: REPO, leseDatei: (p: string) => dateien[p] });
+    };
+    const mit = await lauf([{ sessionId: "s1", providedModelName: "claude-opus-5-5", count_count: 2 }]);
+    expect(mit.text).toContain("Dublette");
+    expect(mit.text).not.toContain("keine Dimension providedModelName");
+    expect((await lauf([{ sessionId: "s1", count_count: 2 }])).text).toContain("keine Dimension providedModelName");
+  });
+
+  test("istAusMetrics: mehrere claude-Zeilen einer Session (Fensterhalbierung) addieren sich in leer; ohne claude bleibt leer undefined", () => {
+    const m = A.istAusMetrics([{ sessionId: "s1", providedModelName: "claude", count_count: 4 }, { sessionId: "s1", providedModelName: "claude", count_count: 3 }, { sessionId: "s2", providedModelName: "m", count_count: 1 }]);
+    expect(m.get("s1")).toMatchObject({ leer: 7, calls: null });
+    expect((m.get("s2") as { leer?: number } | undefined)?.leer).toBeUndefined();
+  });
+
   test("istAusMetrics: claude zählt in leer, die übrigen Zeilen in calls; ohne Dimension (alter Export) bleibt es bei calls, ohne leer und ohne Kennzeichen", () => {
     const neu = A.istAusMetrics([{ sessionId: "s1", providedModelName: "claude-opus-5-5", count_count: 229 }, { sessionId: "s1", providedModelName: "claude", count_count: "42" }]);
     expect(neu.get("s1")).toEqual({ calls: 229, leer: 42, modellGetrennt: true, tokens: null, kosten: null });

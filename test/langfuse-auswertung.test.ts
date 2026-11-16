@@ -126,7 +126,7 @@ describe("unzugeordnet (AK7)", () => {
   test("der Wert unbekannt zählt als unzugeordnet, nie als Rolle", () => {
     const b = rep(...basis, meta("agent_type", "unbekannt", [g(...R1, 10, 5, 3)]), meta("agent_type", "Plan", [g(...R2, 20, 10, 3)]));
     expect(b.rolle.zeilen.map((z) => z.name)).not.toContain("unbekannt");
-    expect(b.rolle.davon.unbekannt).toEqual({ count: 10, cost: 5 });
+    expect(b.rolle.davon.unbekannt).toMatchObject({ count: 10, cost: 5 });
     expect(unzZeile(b.rolle)).toMatchObject({ count: 14, cost: 7 });
     expect(L.renderMarkdown(b)).toContain("Davon unzugeordnet: unbekannt 10 Calls (5.00 $)");
   });
@@ -792,5 +792,50 @@ describe("Preislücke (factory#522, AK4)", () => {
     const b = rep(exp("gesamt", rows), tageVoll, leerVon(rows), meta("agent_type", "Plan", [ohnePreis(g(...R1, 4, 0, 3))]));
     expect(L.renderMarkdown(b)).not.toContain("NaN");
     expect(L.renderMarkdown(b)).not.toContain("ohne -");
+  });
+});
+
+describe("Preislücke und Filter, Nachschärfung Runde 1 (factory#522)", () => {
+  const ohnePreis = (r: ReturnType<typeof g>): ReturnType<typeof g> => ({ ...r, sum_totalCost: null as unknown as number });
+  const mitLeer = (rows: ReturnType<typeof g>[]) => [exp("gesamt", rows), tageVoll, leerVon(rows)];
+  test("AK4: „unzugeordnet“ und „Davon unzugeordnet“ nennen Calls ohne Preis als Untergrenze, bei komplett fehlendem Preis die Lücke, nie 0 $", () => {
+    const rows = [g(...R1, 10, 5), ohnePreis(g("Claude Code Turn", "LLM Call", null, "repoA", 6, 0))];
+    const md = L.renderMarkdown(rep(...mitLeer(rows)));
+    expect(md).toContain("unzugeordnet: 16 Calls (mindestens 5.00 $, ohne 6 Calls) ohne Rolle oder ohne Modell.");
+    expect(md).toMatch(/Davon unzugeordnet: unbekannt 0 Calls \(0\.00 \$\); ohne Schlüssel oder Wert ohne Export 16 Calls \(mindestens 5\.00 \$, ohne 6 Calls\)/);
+    const nur = L.renderMarkdown(rep(...mitLeer([ohnePreis(g("Claude Code Turn", "LLM Call", null, "repoA", 6, 0))])));
+    expect(nur).toContain("unzugeordnet: 6 Calls (Lücke: ohne Preis (unzugeordnet)) ohne Rolle oder ohne Modell.");
+    expect(nur).not.toMatch(/unzugeordnet: 6 Calls \(0\.00 \$\)/);
+  });
+  test("Audit-Kopien und negative Latenz ohne Preis stehen in der Gesamtzeile als Untergrenze oder Lücke", () => {
+    const rows = [g(...R1, 10, 5), ohnePreis(g("Abgleich", "[duplicate audit] Call", "claude-opus-5-5", "repoA", 4, 0))];
+    expect(L.renderMarkdown(rep(...mitLeer(rows)))).toContain("ohne doppelte Audit-Markierungen 4 Calls Lücke: ohne Preis (claude-opus-5-5))");
+  });
+  test("Rest ohne Rollen-Zelle: Gruppe komplett ohne Preis ergibt in Rolle „unzugeordnet“ die Lücke, eine Zelle nimmt nur einen Teil", () => {
+    const rows = [ohnePreis(g(...R1, 4, 0))];
+    const ganz = rep(...mitLeer(rows));
+    expect(L.renderMarkdown(ganz)).toContain("| unzugeordnet | 4 | Lücke: ohne Preis (claude-sonnet-5-5) |");
+    const teil = rep(exp("gesamt", rows), tageVoll, leerVon(rows), meta("agent_type", "Plan", [ohnePreis(g(...R1, 1, 0, 3))]));
+    const md = L.renderMarkdown(teil);
+    expect(md).toContain("| Plan | 1 | Lücke: ohne Preis (claude-sonnet-5-5) |");
+    expect(md).toContain("| unzugeordnet | 3 | Lücke: ohne Preis (claude-sonnet-5-5) |");
+  });
+  test("Quell-Spalte: dasselbe Modell und dieselbe Quelle in zwei Repos addieren Preislücken (nicht nur die letzte Gruppe)", () => {
+    const rows = [ohnePreis(g("Claude Code Turn", "LLM Call", "claude-sonnet-5-5", "repoA", 2, 0)), g("Claude Code Turn", "LLM Call", "claude-sonnet-5-5", "repoB", 3, 1.5)];
+    const md = L.renderMarkdown(rep(...mitLeer(rows)));
+    expect(md).toContain("| claude-sonnet-5-5 | 5 | mindestens 1.50 $, ohne 2 Calls |");
+  });
+  test("Formfehler: Filter any of statt none of, anderer Wert und Export leer mit falscher Dimension", () => {
+    const mit = (f: unknown) => ({ ...gesamt, abfrage: { ...gesamt.abfrage, filters: [FILTER, f] } });
+    expect(() => lese(mit({ ...LEER_FILTER, operator: "any of" }))).toThrow(/none of \[claude\] fehlt/);
+    expect(() => lese(mit({ ...LEER_FILTER, value: ["claude-opus-5-5"] }))).toThrow(/none of \[claude\] fehlt/);
+    const ok = leerVon(gesamtRows);
+    expect(() => lese({ ...ok, abfrage: { ...ok.abfrage, dimensions: [{ field: "traceName" }] } })).toThrow(/Dimension providedModelName/);
+  });
+  test("leer-Zeile mit Tokens null zählt als leer (0 Tokens), nicht als Usage", () => {
+    const ex = { ...leerVon(gesamtRows), data: [...leerVon(gesamtRows).data, { providedModelName: "claude", count_count: 3, sum_totalCost: null, sum_totalTokens: null }] };
+    const b = rep(gesamt, tageVoll, latenzOk, ex);
+    expect(b.leer).toEqual({ count: 3 });
+    expect(b.luecken.join("\n")).not.toContain("mit Usage");
   });
 });
