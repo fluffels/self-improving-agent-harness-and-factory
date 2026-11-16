@@ -158,7 +158,7 @@ export function wochenFenster(jetzt) {
   return { letzte: woche(mo - 7 * TAG_MS), davor: woche(mo - 14 * TAG_MS) };
 }
 
-function verdichtungsSchritt(wurzel, nurAnlass = false) {
+function verdichtungsSchritt(wurzel, nurAnlass) {
   if (nurAnlass) return "keine Verdichtungszeile (in der Fabrik ersetzt der Analyse-Schnappschuss sie), Ticket schließen";
   // Die Verdichtungstabelle liegt nur im Factory-Repo (Seite model-routing.md): dort per PR mit `Closes`, im Bezieher (Sync-Stand vorhanden) nur im Bericht-Kommentar.
   return istBezieher(wurzel)
@@ -214,6 +214,9 @@ function laufzeitenZeile(upstream) {
 /** Pur (factory#579): ist das Status-Ticket auf „nur bei Anlass“ gestellt (`langfuseWochenbericht.statusTicket`)? */
 const istNurAnlass = (wochenbericht) => wochenbericht?.statusTicket === "nur-anlass";
 
+/** Pur: die Wochenbudget-Zeile entfällt bei „nur-anlass“ (Punkt 7 läuft dann nicht im Status-Ticket). */
+const budgetZeilen = (nurAnlass, budget) => (nurAnlass ? [] : [budget]);
+
 /** Pur: die Umfang-Zeilen des Bodys; bei „nur-anlass“ nur der Anlass, sonst Kennzahlen-Aufträge und Laufzeiten-Upstream. */
 function umfangZeilen({ nurAnlass, von, upstream }) {
   if (nurAnlass) return ["- **Umfang:** nur der Anlass (Zeile „Anlass“ der Entscheidungstabelle der Checkliste); die übrigen Punkte laufen hier nicht, sie liegen in der Token-Analyse (factory#518)."];
@@ -252,7 +255,7 @@ export function statusBody({ vorgaenger, jetzt, repo = REPO, start = null, wurze
     "Wiederkehrende Auswertung der Langfuse-Daten, vom Wochen-Workflow angelegt (kein Agent legt dieses Ticket an).",
     "",
     `- **Zeitraum:** ${zeitraum}.`,
-    budget,
+    ...budgetZeilen(nurAnlass, budget),
     ...anlassZeilen({ wochenbericht, anlass, repo, vorgaenger, start, bis: w.letzte.bis }),
     ...umfangZeilen({ nurAnlass, von: vorgaenger?.closedAt ?? start ?? "<Start des Zeitraums>", upstream }),
     `- **Checkliste:** ${verweis("Checkliste Langfuse-Status überprüfen", "docs/model-routing.md", "langfuse-status-überprüfen-1293")}.`,

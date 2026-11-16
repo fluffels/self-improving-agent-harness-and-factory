@@ -293,6 +293,7 @@ describe("Langfuse-Status und Erfassungsschutz (#1293)", () => {
     assert.ok(!hatEntscheidungstabelle(mr.replace(/^(\| Wirkung \|[^|]*\|[^|]*\|)[^|]*\|/m, "$1 |")), "Begründung leer");
     assert.ok(!hatEntscheidungstabelle(mr + "\n" + ENTSCHEIDUNG_KOPF + "\n"), "zweite Tabelle");
     assert.ok(!hatEntscheidungstabelle(mr.replace("| Anlass | Anlass-Ticket (Rest) |", "| Anlass | entfällt |")), "Anlass ohne Rest-Entscheidung");
+    assert.ok(!hatEntscheidungstabelle(mr.replace(/^(\| Wirkung \| geht in factory#518 auf \| Teil 0 \|[^|]*)\|/m, "$1")), "Zellzahl");
     assert.ok(!hatEntscheidungstabelle(""));
   });
 

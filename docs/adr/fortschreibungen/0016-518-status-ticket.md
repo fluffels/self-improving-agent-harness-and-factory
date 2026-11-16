@@ -24,6 +24,9 @@ Der Höchstabstand-Teil der Fortschreibung 0016-314 entfällt in der Fabrik; sei
 - Ein Anlass bei offenem Status-Ticket führt weiter nur zu `nach-oben`; der Mindestabstand von 24 Stunden bleibt.
 - Ein Kosten-Anlass geht an die Analyse (`node scripts/token-analyse-ausloesen.mjs --anlass kosten`), nicht in dieses Ticket.
 
+- `"nur-anlass"` ist für die Fabrik gedacht: die Token-Analyse ist fabrik-eigen. Ein Bezieher, der ihn setzt, verliert die periodische Auswertung ohne Ersatz; der Validator verbietet es nicht (er kennt den Bezieher nicht), der Standard `"takt"` bleibt.
+- Punkt 2: Erreichbarkeit und Hook-/Plugin-Ausfall meldet der Wochenbericht; MCP-Verbindung und lokale Basis-URL prüft kein periodischer Lauf mehr, sie werden beim Probe-Lauf der Erfassung und über die Vorbedingung vor jedem Ticketlauf belegt.
+
 ## Folgen
 
 - Der Body des Status-Tickets nennt mit `"nur-anlass"` nur den Anlass (Zeile „Umfang“), keine Kennzahlen-Aufträge und keine Verdichtungszeile; ohne das Feld bleibt er byte-gleich.

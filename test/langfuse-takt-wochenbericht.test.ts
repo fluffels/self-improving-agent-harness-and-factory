@@ -121,9 +121,14 @@ describe("statusTicket nur-anlass (factory#579)", () => {
     expect(b).not.toContain("PR mit Verdichtungszeile");
     expect(b).not.toContain("Factory-Kennzahlen");
     expect(b).not.toContain("Laufzeiten-Upstream");
+    expect(b).not.toContain("Wochenbudget");
     expect(b).toContain("- **Anlass:**");
     const alt = S.statusBody({ ...basis, wochenbericht: W });
     expect(alt).not.toContain("Umfang");
+    const reihe = ["Datenbasis:", "Factory-Kennzahlen:", "Laufzeiten-Upstream:", "Checkliste:"].map((k) => alt.indexOf(`**${k}**`));
+    expect(reihe.every((x) => x > 0)).toBe(true);
+    expect([...reihe].sort((x, y) => x - y)).toEqual(reihe);
+    expect(alt.indexOf("**Wochenbudget:**")).toBeGreaterThan(0);
     expect(alt).toContain("PR mit Verdichtungszeile");
     expect(S.statusBody({ ...basis, wochenbericht: { ...W, statusTicket: "takt" } })).toBe(alt);
   });
