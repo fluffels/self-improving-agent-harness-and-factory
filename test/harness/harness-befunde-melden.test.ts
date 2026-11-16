@@ -6,6 +6,8 @@
  * Einheit ist der Satzteil (Zeile, geteilt nach `.`, `;`, `!`, `?` und Leerraum). Ein Fund ist ein Satzteil mit einem TRIGGER-Wort (Harness-Befund, Sammelticket, `melden.mjs` …)
  * UND einem ROLLE-Wort (Bezieher, Fabrik, Factory-Repo, Factory-Board, upstream).
  * Zweite Regel (Sammeltickets nie per `gh issue create`): ein Satzteil mit `gh issue create` UND einem TRIGGER-Wort oder „Sammelticket“ ist ein Fund.
+ * Dritte Regel (Refactoring-Befunde nur per `melden.mjs --ziel refactoring`): ein Satzteil mit einem REFACTORING-Wort („Refactoring (gesammelt)“, „Refactoring-Sammelticket“,
+ * „Refactoring-Befund“) UND `gh issue comment` oder `gh issue create` ist ein Fund. Auch hier fällt eine Umschreibung ohne Listenwort durch („Codequalität per gh issue comment“).
  * Grenzen: eine Heuristik mit zwei Wortlisten; eine Umschreibung ohne Listenwort fällt durch (auch das blanke „Sammelticket“ und `sammelticket-anlegen.mjs` sind kein TRIGGER; die Position des Anlegens sichert `sammelticketPosition`), zwei getrennte Sätze zählen nicht als Fund. Nicht gescannt: Factory-Seiten (`docs/`),
  * der Projekt-Block (Form 4 erlaubt dort Fabrik-Text) und `.mjs`-Laufzeittexte (die Inventur der übrigen Rollen-Texte leistet `test/harness/fabrik-regeltext.test.ts`, factory#222).
  *
@@ -87,6 +89,26 @@ describe("Harness-Befunde nur per melden.mjs (factory#221)", () => {
     ]) expect(rollenFunde("x.md", z), z).toEqual([]);
     expect(rollenFunde("x.md", "Sammelticket legen. Dann `gh issue create` für ein Projekt-Issue.")).toEqual([]);
     expect(rollenFunde("x.md", "nichts\nSammelticket per gh issue create", 5)[0]).toContain("x.md:6:");
+  });
+
+  test("ein Satzteil mit Refactoring-Listenwort und `gh issue comment`/`gh issue create` ist ein Fund (Refactoring-Befunde nur per melden.mjs --ziel refactoring)", () => {
+    for (const z of [
+      "Zeile im Sammelticket „Refactoring (gesammelt)“ per `gh issue comment` eintragen.",
+      "Das Refactoring-Sammelticket per `gh issue create` anlegen.",
+      "Refactoring-Befund per `gh issue comment` melden",
+    ]) {
+      const f = rollenFunde("x.md", z).filter((m) => m.includes("Refactoring-Befunde nur per"));
+      expect(f, z).toHaveLength(1);
+      expect(f[0]).toContain("x.md:1:");
+      expect(f[0]).toContain("`node scripts/melden.mjs --ziel refactoring`");
+    }
+    // ohne Listenwort, ohne gh-Aufruf oder in getrennten Sätzen: kein Refactoring-Fund
+    for (const z of [
+      "Refactoring-Befunde per `node scripts/melden.mjs --ziel refactoring`.",
+      "Ein Kommentar per `gh issue comment` im Ticket.",
+      "Refactoring (gesammelt) bekommt Zeilen. Dann `gh issue comment` für Rückfragen.",
+      "Codequalität per `gh issue comment` melden",
+    ]) expect(rollenFunde("x.md", z).filter((m) => m.includes("Refactoring-Befunde nur per")), z).toEqual([]);
   });
 
   test("der echte Scan (Kern-Block und verteilte Agenten-/Skill-Texte) ist leer", () => {
