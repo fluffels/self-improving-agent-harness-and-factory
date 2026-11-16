@@ -34,7 +34,7 @@ const WEG_ZEILE = "Sammeltickets nie per `gh issue create`; Zeilen per `node scr
 const REFACTORING = /Refactoring \(gesammelt\)|Refactoring-Sammelticket|Refactoring-Befund/;
 const GH_ISSUE_SCHREIBEN = /gh issue (comment|create)/;
 const REFACTORING_WEG = "Refactoring-Befunde nur per `node scripts/melden.mjs --ziel refactoring`";
-const ROLLE =/Bezieher|Fabrik|Factory-Repo|Factory-Board|upstream/;
+const ROLLE = /Bezieher|Fabrik|Factory-Repo|Factory-Board|upstream/;
 const TEXT_PFAD = /^(\.claude\/agents|\.agents\/skills)\/.*\.md$/;
 
 /** Pur: Meldungen `<pfad>:<zeile>: nennt für Harness-Befunde eine Rolle: …` (leer = grün); `ab` ist die Zeilennummer der ersten Zeile von `text`. */
