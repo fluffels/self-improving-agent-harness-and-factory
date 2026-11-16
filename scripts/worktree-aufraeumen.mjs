@@ -408,7 +408,7 @@ const MAX_HALTER = 8;
  * `null` = unbekannt, dann zählt jeder verwaiste Werkzeug-Prozess), oder (c, #1428) ein Interpreter-Prozess, der ein Skript von stdin
  * liest (`python -`, `python3 -`, `py -`, `node -`; ein Heredoc im Bash-Tool), gestartet nach dem Anlegen des Ordners: der Bash-Wrapper
  * des Tools (`bash.exe -c "… eval '<Befehl>' < /dev/null && pwd -P"`) nennt den Ordner nicht, (a) und (b) verfehlen ihn. Nur NENNEN,
- * nie beenden. Der eigene Prozess ist ausgenommen. Pure.
+ * nie beenden. Der eigene Prozess ist ausgenommen (`eigenePid` injizierbar, Test). Pure.
  */
 export function moeglicheHalter(prozesse, pfad, ordnerGeburtMs, eigenePid = process.pid) {
   const slash = norm(pfad).toLowerCase();
@@ -449,12 +449,12 @@ export function listProcessesWindows() {
 
 /**
  * Halter-Kandidaten für einen gesperrten, nicht leeren Ordner. Nur unter Windows; jeder Fehler (PowerShell fehlt, Timeout,
- * kaputtes JSON) ergibt eine leere Liste, der Hook bleibt fail-open. `deps.listProcesses`/`deps.platform` injizierbar.
+ * kaputtes JSON) ergibt eine leere Liste, der Hook bleibt fail-open. `deps.listProcesses`/`deps.platform`/`deps.eigenePid` injizierbar.
  */
 export function findeHalter(absPath, ordnerGeburtMs, deps = {}) {
   if ((deps.platform ?? process.platform) !== "win32") return [];
   try {
-    return moeglicheHalter((deps.listProcesses ?? listProcessesWindows)(), absPath, ordnerGeburtMs);
+    return moeglicheHalter((deps.listProcesses ?? listProcessesWindows)(), absPath, ordnerGeburtMs, deps.eigenePid ?? process.pid);
   } catch {
     return [];
   }
