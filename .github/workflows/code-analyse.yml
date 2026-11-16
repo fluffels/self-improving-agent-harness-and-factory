@@ -1,0 +1,51 @@
+name: Code-Analyse (Monatslauf)
+
+# Monatliche Code- und Sicherheitsanalyse (factory#596, ADR 0034, ADR 0031): `scripts/code-analyse.mjs` legt genau ein Takt-Ticket „Code-Analyse“ im EIGENEN Repo an, ein normaler Agentenlauf arbeitet es ab
+# (Code-Funde als Zeilen im Refactoring-Sammelticket, Sicherheitsfunde als Notfall-Issue). Ohne Modell und ohne Modell-Schlüssel; CodeQL (`codeql.yml`) und die Sicherheitsprüfung bleiben die deterministische Ergänzung.
+# Der Lauf schreibt nie in ein anderes Repo; ist schon ein Takt-Ticket offen, entsteht nichts. Mechanik: docs/ticket-reihenfolge.md § Code-Analyse.
+#
+# Geschrieben wird das Ticket ausschließlich mit github.token (issues: write); danach sortiert board-place.mjs es mit PROJECT_TOKEN ans Ende der Todo-Spalte des eigenen Boards (ohne Secret nur eine Warnung).
+
+on:
+  schedule:
+    - cron: "41 5 1 * *"
+  workflow_dispatch:
+    inputs:
+      trocken:
+        description: "Nur prüfen und ausgeben, nichts schreiben"
+        type: boolean
+        default: false
+
+concurrency: code-analyse
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  code-analyse:
+    runs-on: ubuntu-latest
+    steps:
+      # Ohne Install-Schritt: das Skript lädt nur Node-Builtins und relative Importe (der Job hat Schreibrecht und ein PAT).
+      - name: Repo auschecken
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Node einrichten
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+
+      - name: Code-Analyse ausführen
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          PROJECT_TOKEN: ${{ secrets.PROJECT_TOKEN }}
+          TROCKEN: ${{ inputs.trocken }}
+        run: |
+          if [ "$TROCKEN" = "true" ]; then
+            node scripts/code-analyse.mjs --dry-run
+          else
+            node scripts/code-analyse.mjs
+          fi

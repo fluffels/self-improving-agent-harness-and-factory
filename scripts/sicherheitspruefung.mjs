@@ -102,14 +102,14 @@ function ermittle(d) {
 }
 
 /** Offene Issues als `[{ number, title, body, user, labels }]` (fail-closed bei Limit). */
-function offeneIssues(gh, repo) {
+export function offeneIssues(gh, repo) {
   const roh = JSON.parse(gh(["issue", "list", "--repo", repo, "--state", "open", "--limit", String(LIMIT), "--json", "number,title,body,author,labels"]));
   if (!Array.isArray(roh) || roh.length >= LIMIT) throw new Error(`Issue-Liste unvollständig (${Array.isArray(roh) ? roh.length : "kein Array"} von höchstens ${LIMIT}): kein Ticket`);
   return roh.map((i) => ({ number: i.number, title: i.title, body: i.body, user: nutzerAus(i.author), labels: (i.labels ?? []).map((l) => l.name) }));
 }
 
 /** Zweitabfrage vor dem Anlegen (REST, hinkt weniger als die Liste): offene Issues desselben Repos in der Normalform. */
-const frischeIssues = (gh, repo) =>
+export const frischeIssues = (gh, repo) =>
   JSON.parse(gh(["api", "--paginate", "--slurp", `repos/${repo}/issues?state=open&per_page=100`]))
     .flat()
     .filter((i) => !i.pull_request)
