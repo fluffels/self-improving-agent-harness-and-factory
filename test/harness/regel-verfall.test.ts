@@ -18,6 +18,7 @@ const lib = libModul as unknown as {
   fettRegeln: (t: string) => { titel: string; anker: string }[];
   ankerAus: (t: string, fett?: boolean) => Set<string>;
   plusTage: (d: string, n: number) => string;
+  regelId: (anker: string) => string;
   fehlendeZeilen: (o: { zeilen: Zeile[]; waechterPfade: string[]; agentsText: string; heute: string }) => Zeile[];
   pruefeAbdeckung: (o: { zeilen: Zeile[]; waechterPfade: string[]; agentsText: string }) => string[];
   pruefeAusnahmen: (a: unknown[], existiert: (z: string) => boolean) => string[];
