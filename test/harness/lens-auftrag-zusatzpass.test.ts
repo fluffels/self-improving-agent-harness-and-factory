@@ -123,16 +123,22 @@ describe("R6 stufenabhängig: bei Risikostufe 1 sperrt schon `-lens-r3-` (factor
   });
   test("ein Arbeitsverzeichnis außerhalb von `.claude/worktrees/` oder mit `..` startet keinen Prozess; Laufwerk und Backslash gelten", () => {
     const mitArbeit = (arbeit: string) => `Brille: architektur · Arbeitsverzeichnis: ${arbeit} · Patch: /tmp/x/${WT}7-r1.patch · erwarteter HEAD: abc1234def · Sabotage-Worktree: /w/.claude/worktrees/${WT}7-lens-r3-architektur`;
-    for (const arbeit of ["/tmp/fremd/" + WT + "7", "/w/../.claude/worktrees/" + WT + "7", "/w/.claude/worktrees/../x/" + WT + "7", WT + "7", "/w/.claude/worktrees/a/b", ""]) {
+    for (const arbeit of ["/tmp/fremd/" + WT + "7", "/w/../.claude/worktrees/" + WT + "7", "/w/.claude/worktrees/../x/" + WT + "7", WT + "7", "/w/.claude/worktrees/a/b/c", "w/.claude/worktrees/" + WT + "7", ""]) {
       const aufrufe: string[] = [];
       assert.equal(mit(1, aufrufe)(mitArbeit(arbeit)), null, arbeit);
       assert.deepEqual(aufrufe, [], arbeit);
     }
-    for (const arbeit of ["C:\\w\\.claude\\worktrees\\" + WT + "7", "`/w/.claude/worktrees/" + WT + "7`"]) {
+    for (const arbeit of ["/w/.claude/worktrees/a/b", "/w/.claude/worktrees/" + WT + "7/", "C:\\w\\.claude\\worktrees\\" + WT + "7", "`/w/.claude/worktrees/" + WT + "7`"]) {
       const aufrufe: string[] = [];
       assert.equal(mit(1, aufrufe)(mitArbeit(arbeit))?.hookSpecificOutput.permissionDecision, "deny", arbeit);
       assert.equal(aufrufe.length, 1, arbeit);
     }
+  });
+  test("fehlt das Feld Arbeitsverzeichnis ganz, bleibt der alte Cap und kein Prozess startet", () => {
+    const aufrufe: string[] = [];
+    const prompt = `Brille: architektur · Patch: /tmp/x/${WT}7-r1.patch · erwarteter HEAD: abc1234def · Sabotage-Worktree: /w/.claude/worktrees/${WT}7-lens-r3-architektur`;
+    assert.equal(mit(1, aufrufe)(prompt), null);
+    assert.deepEqual(aufrufe, []);
   });
   test("echter Kindprozess: ein Git-Worktree mit Codeänderung ergibt Stufe 1 und sperrt `-lens-r3-`, ein Feld lässt ihn durch", () => {
     const wurzel = mkdtempSync(join(tmpdir(), "zusatzpass-"));

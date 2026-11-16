@@ -123,10 +123,10 @@ function stufeImWorktree(pfad) {
   return JSON.parse(aus).stufe;
 }
 
-/** Wert von `Arbeitsverzeichnis:` als Pfad, nur absolut und direkt `<…>/.claude/worktrees/<name>` (kein `..`); sonst `null`. Der Feature-Worktree existiert beim Spawn und steht auf demselben HEAD wie der spätere Lens-Worktree. Pur. */
+/** Wert von `Arbeitsverzeichnis:` als Pfad, nur absolut und `<…>/.claude/worktrees/<name>` oder im Arbeitsplatz `…/worktrees/<repo>/<name>` (kein `..`); sonst `null`. Der Feature-Worktree existiert beim Spawn und steht auf demselben HEAD wie der spätere Lens-Worktree. Pur. */
 function arbeitsPfad(felder) {
   const pfad = (felder.Arbeitsverzeichnis ?? "").replace(/^`+|`+$/g, "");
-  const gueltig = /^(?:[A-Za-z]:)?[\\/](?:[^\s"'<>]*[\\/])?\.claude[\\/]worktrees[\\/][^\s\\/"'<>]+[\\/]?$/.test(pfad);
+  const gueltig = /^(?:[A-Za-z]:)?[\\/](?:[^\s"'<>]*[\\/])?\.claude[\\/]worktrees[\\/][^\s\\/"'<>]+(?:[\\/][^\s\\/"'<>]+)?[\\/]?$/.test(pfad);
   return gueltig && !pfad.includes("..") ? pfad : null;
 }
 
