@@ -1,6 +1,6 @@
 # Teil 3: Regel- und Kontext-Inventar
 
-Auftrag: Größe und Wirkung der Regel- und Kontextdateien (`AGENTS.md`, Skills, Agenten) nach `node scripts/kontext-treiber.mjs` und `docs/model-routing.md`. Nur lesen.
+Auftrag: Größe und Wirkung der Regel- und Kontextdateien (`AGENTS.md`, Skills, Agenten) nach `node scripts/kontext-treiber.mjs` und `docs/model-routing.md`. Nur lesen, kein Web-Aufruf.
 
 ## Messwerte
 Tokens je Kontextdatei, Sockel je Rolle, Veränderung gegen den letzten Schnappschuss.

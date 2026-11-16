@@ -1,6 +1,6 @@
 # Teil 5: Webrecherche
 
-Auftrag: der Agent `analyse-recherche` beantwortet öffentliche Sachfragen (Anbieter-Empfehlungen, Preise, Modelle) und ermittelt die eingebauten Claude-Code-Befehle zur Laufzeit aus Doku und Befehlsliste (`claude --help`), nie aus Erinnerung.
+Auftrag: der Agent `analyse-recherche` beantwortet öffentliche Sachfragen (Anbieter-Empfehlungen, Preise, Modelle) und ermittelt die eingebauten Claude-Code-Befehle zur Laufzeit aus Doku und Befehlsliste, nie aus Erinnerung. Die Ausgabe von `claude --help` liefert der Hauptchat im Auftrag mit (der Agent hat keine Shell).
 
 ## Messwerte
 Tabelle: Befehl | Nutzen | aufnehmen ja-nein. Aufnahme nur bei lokalem Lauf, ohne Datenabfluss.

@@ -43,9 +43,9 @@ const budgetBefunde = (text: string, wiedervorlagen: string[]): string[] => {
   const wert = Number(zeilen[0][1]);
   const b: string[] = [];
   if (!(wert > 0)) b.push("BUDGET_USD ist keine Zahl > 0");
-  const quelle = text.includes("Langfuse") && text.includes("2026-11-15");
+  const quelle = /^Basis: .*(Langfuse.*2026-11-15|2026-11-15.*Langfuse)/m.test(text);
   const luecke = text.includes("Lücke: Basis fehlt");
-  if (!quelle) b.push("Quelle (Langfuse, 2026-11-15) fehlt");
+  if (!quelle) b.push("Quellzeile „Basis: …“ mit Langfuse und 2026-11-15 fehlt");
   if (luecke) {
     const id = /Wiedervorlage `([a-z0-9-]+)`/.exec(text)?.[1];
     if (!id || !wiedervorlagen.includes(id)) b.push(`Wiedervorlage zur Lücke fehlt: ${id ?? "keine Id"}`);
@@ -126,13 +126,15 @@ describe("Skill token-analyse (factory#518, factory#576)", () => {
     expect(budgetBefunde(skill, ids)).toEqual([]);
   });
   it("(c) Selbsttest: Budget 0, fehlend, doppelt und fehlende Wiedervorlage werden rot", () => {
-    const gut = "BUDGET_USD: 40\nLangfuse 2026-11-15 Lücke: Basis fehlt Wiedervorlage `x-1`\nkein weiterer Teil, Abbruch";
+    const gut = "BUDGET_USD: 40\nBasis: Langfuse 2026-11-15 Lücke: Basis fehlt Wiedervorlage `x-1`\nkein weiterer Teil, Abbruch";
     expect(budgetBefunde(gut, ["x-1"])).toEqual([]);
     expect(budgetBefunde(gut.replace("40", "0"), ["x-1"])).not.toEqual([]);
     expect(budgetBefunde(gut.replace("BUDGET_USD: 40\n", ""), ["x-1"])).not.toEqual([]);
     expect(budgetBefunde(`${gut}\nBUDGET_USD: 5`, ["x-1"])).not.toEqual([]);
     expect(budgetBefunde(gut, [])).not.toEqual([]);
     expect(budgetBefunde(gut.replace("kein weiterer Teil", ""), ["x-1"])).not.toEqual([]);
+    expect(budgetBefunde(gut.replace("Abbruch", ""), ["x-1"])).not.toEqual([]);
+    expect(budgetBefunde(gut.replace("Basis:", "Notiz:"), ["x-1"])).toContain("Quellzeile „Basis: …“ mit Langfuse und 2026-11-15 fehlt");
   });
 
   it("(d) die Lehren der ersten Durchführung stehen als Regeln im Skill", () => {
@@ -191,8 +193,16 @@ describe("Skill token-analyse (factory#518, factory#576)", () => {
     it("Selbsttest: fehlender Abschnitt, falscher Alias, Effort inherit, Teil 7 und fehlender Teil 3 werden rot", () => {
       const z = zeilen() ?? [];
       expect(routingBefunde(null, skill, fm)).not.toEqual([]);
-      expect(routingBefunde(z.map((r) => [r[0], "`claude-opus-5-5`", r[2], r[3]]), skill, fm)).not.toEqual([]);
-      expect(routingBefunde(z.map((r) => [r[0], r[1], "`inherit`", r[3]]), skill, fm)).not.toEqual([]);
+      // durchgängig verfälscht (Tabelle, Spawn-Zeilen, Frontmatter), damit nur die Alias- und Effort-Prüfung anschlagen kann
+      const pin = "claude-opus-5-5";
+      const fmPin = { "analyse-extern": { ...fm["analyse-extern"], model: pin }, "analyse-recherche": { ...fm["analyse-recherche"], model: pin } };
+      const skillPin = skill.replace(/model "(sonnet|opus)"/g, `model "${pin}"`);
+      expect(routingBefunde(z.map((r) => [r[0], `\`${pin}\``, r[2], r[3]]), skillPin, fmPin)).toContain(`Teil 1: Alias ${pin} nicht in MODELL_ALIASE`);
+      const fmInherit = { "analyse-extern": { ...fm["analyse-extern"], effort: "inherit" }, "analyse-recherche": { ...fm["analyse-recherche"], effort: "inherit" } };
+      const skillInherit = skill.replace(/effort "(medium|high)"/g, 'effort "inherit"');
+      expect(routingBefunde(z.map((r) => [r[0], r[1], "`inherit`", r[3]]), skillInherit, fmInherit)).toContain("Teil 1: Effort inherit ungültig");
+      // nur das Frontmatter weicht ab
+      expect(routingBefunde(z, skill, { ...fm, "analyse-extern": { ...fm["analyse-extern"], effort: "medium" } }).join(" ")).toContain("weicht vom Frontmatter");
       expect(routingBefunde([...z, ["7 Extra", "`sonnet`", "`medium`", "x"]], skill, fm)).not.toEqual([]);
       expect(routingBefunde(z.filter((r) => !r[0].startsWith("3")), skill, fm)).not.toEqual([]);
       expect(routingBefunde(z, skill.replace('model "opus", effort "medium"', 'model "sonnet", effort "medium"'), fm)).not.toEqual([]);

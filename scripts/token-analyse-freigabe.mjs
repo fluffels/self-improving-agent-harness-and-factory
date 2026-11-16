@@ -1,6 +1,6 @@
 /**
  * Freigabe, Ablage und Datenschutz-Grenzen der Token-Analyse (factory#518, Teil 5/9). Fabrik-eigen, nicht im Besitz, nie in einem Bezieher.
- *   node scripts/token-analyse-freigabe.mjs pruefen | ablegen --eingabe <kennzahlen.json>
+ *   node scripts/token-analyse-freigabe.mjs pruefen | lesen <k> <git|wc …> | ablegen --eingabe <kennzahlen.json>
  * `FACTORY_ANALYSE_FREIGABE`: Datei außerhalb des Repos, ein absoluter Pfad je Bezieher-Checkout. `FACTORY_ANALYSE_ABLAGE`: Ordner außerhalb von
  * Repo, Worktrees und Bezieher-Checkouts. Gelesen wird nur aus Checkouts des angemeldeten Kontos (`gh api user`) über die Allowlist der Lib;
  * die Ausgabe nennt nur `Bezieher <k>`. Exit: 0 gut oder Teil 6 entfällt mit Hinweis, 1 Abbruch, 2 Aufruf oder Bezieher.
@@ -148,6 +148,17 @@ export function fuehreFreigegebenAus(k, argv, freigegeben, deps = {}) {
   return (deps.runner ?? standardRunner)(befehlMitSchutz(argv), { cwd: eintrag.wurzel });
 }
 
+/** Lesender Befehl für „Bezieher k“ über die Allowlist (Teil 6); bei `git` setzt der Aufruf `-C <Wurzel>` selbst, der Aufrufer kennt keinen Pfad. */
+export function lesen(env, k, argv, deps) {
+  const p = pruefen(env, deps);
+  if (!p.freigegeben?.some((x) => x.k === k)) return { code: 2, zeilen: [`${bezieherLabel(k)} nicht freigegeben`] };
+  const wurzel = p.freigegeben.find((x) => x.k === k).wurzel;
+  const voll = argv[0] === "git" ? ["git", "-C", wurzel, ...argv.slice(1)] : argv;
+  const r = fuehreFreigegebenAus(k, voll, p.freigegeben, { runner: deps?.runner });
+  if (r.abgelehnt) return { code: 2, zeilen: [`abgelehnt: ${r.abgelehnt}`] };
+  return { code: r.status === 0 ? 0 : 1, zeilen: r.stdout.split(/\r?\n/).filter((z) => z !== "") };
+}
+
 function leseEingabe(pfad) {
   const e = JSON.parse(readFileSync(pfad, "utf8"));
   const heute = new Date().toISOString().slice(0, 10);
@@ -194,8 +205,9 @@ export function cli(argv, env = process.env, deps = {}) {
   if (istBezieher(deps.repoWurzel ?? REPO_WURZEL)) return { code: 2, zeilen: ["token-analyse-freigabe läuft nur in der Fabrik, nicht in einem Bezieher"] };
   const [befehl, flag, eingabe] = argv;
   if (befehl === "pruefen" && argv.length === 1) return pruefen(env, deps);
+  if (befehl === "lesen" && /^[1-9]\d*$/.test(flag ?? "") && argv.length >= 3) return lesen(env, Number(flag), argv.slice(2), deps);
   if (befehl === "ablegen" && flag === "--eingabe" && eingabe && argv.length === 3) return ablegen(env, eingabe, deps);
-  return { code: 2, zeilen: ["Aufruf: node scripts/token-analyse-freigabe.mjs (pruefen | ablegen --eingabe <datei>)"] };
+  return { code: 2, zeilen: ["Aufruf: node scripts/token-analyse-freigabe.mjs (pruefen | lesen <k> <git|wc …> | ablegen --eingabe <datei>)"] };
 }
 
 if (istDirektaufruf(import.meta.url)) {
