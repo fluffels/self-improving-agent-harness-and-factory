@@ -716,7 +716,7 @@ describe("Sammel-Override (factory#358): Override nur für eine einzelne Zeile e
   });
 
   test("sammelOverrideFehler: jeder Sammelticket-Titel greift", () => {
-    for (const t of ["Harness-Härtung (gesammelt)", "Langfuse-Befunde (gesammelt)", "Codequalität (gesammelt)", "Sicherheit: Rest-Befunde (gesammelt)"]) {
+    for (const t of ["Harness-Härtung (gesammelt)", "Langfuse-Befunde (gesammelt)", "Refactoring (gesammelt)", "Codequalität (gesammelt)", "Sicherheit: Rest-Befunde (gesammelt)"]) {
       assert.equal(typeof m.sammelOverrideFehler(`${FREMD.praefixe.commitZeile}1 ${t}: L1, L2`, "L1 L2"), "string", t);
     }
   });

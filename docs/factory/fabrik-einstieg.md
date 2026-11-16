@@ -74,7 +74,7 @@ Persönliche Werte je Rechner (Variablen oben, `settings.local.json`, Zugänge i
 
 ## Sammeltickets
 
-Befunde zum Harness stehen als Zeilen in Sammeltickets, nicht in eigenen Tickets (Harness-Härtung, Langfuse-Befunde, Codequalität). Eintragen mit `node scripts/melden.mjs`, anlegen mit `node scripts/sammelticket-anlegen.mjs`. Regel, Zeilenformat, Deckel und Verfall: Abschnitt „Backlog“ der `AGENTS.md` und [Ticket-Reihenfolge](../ticket-reihenfolge.md).
+Befunde zum Harness stehen als Zeilen in Sammeltickets, nicht in eigenen Tickets (Harness-Härtung, Langfuse-Befunde, Refactoring). Eintragen mit `node scripts/melden.mjs`, anlegen mit `node scripts/sammelticket-anlegen.mjs`. Regel, Zeilenformat, Deckel und Verfall: Abschnitt „Backlog“ der `AGENTS.md` und [Ticket-Reihenfolge](../ticket-reihenfolge.md).
 
 ## Abschluss
 

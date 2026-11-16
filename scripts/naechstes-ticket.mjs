@@ -18,7 +18,7 @@
  * Frei heißt, in Board-Reihenfolge: Status Todo und offen · kein Assignee · kein offener Blocker (Zeile `blockiert durch #X` im Body,
  * mehrfach, ohne Groß-/Kleinschreibung; zusätzlich `issue_dependencies_summary.blocked_by > 0`: GitHubs Zähler offener Blocker; die Feldform ist an
  * echten Daten belegt (Probe 2026-10-08, 151 von 151 Items), ein Wert über 0 noch nie beobachtet; ein Wert, der keine Zahl ist, zählt als 0) · nur mit Block `design` der Config: kein Design-Label ohne Freigabe-Label (`design-lib.mjs`, factory#172; Grund „Design-Entwurf nicht freigegeben“, nach dem Blocker-Grund) · kein Branch, Worktree oder offener PR
- * `<praefixe.branch><nr>-*` · das ungeclaimte Harness- und Codequalität-Sammelticket erst ab `HARNESS_TAKT_KOMMENTARE` offenen Befund-Zeilen (Härtungs-Takt, `fuellstand`; `--ticket` umgeht das) · Messfenster erfüllt (Zeile `Messfenster: n ≥ <k> <agent> nach #<nr>`, #1589: #nr geschlossen und seit dessen `closedAt` mindestens k Läufe des
+ * `<praefixe.branch><nr>-*` · das ungeclaimte Harness- und Refactoring-Sammelticket (auch unter dem alten Titel) erst ab `HARNESS_TAKT_KOMMENTARE` offenen Befund-Zeilen (Härtungs-Takt, `fuellstand`; `--ticket` umgeht das) · Messfenster erfüllt (Zeile `Messfenster: n ≥ <k> <agent> nach #<nr>`, #1589: #nr geschlossen und seit dessen `closedAt` mindestens k Läufe des
  * Agent-Typs gestartet, ohne die des wartenden Tickets; unlesbar oder nicht prüfbar = übersprungen) · vollständige Spezifikation (#1615, `spezifikation-lib.mjs`: Ziel- und
  * Kriterien-Abschnitt mit Negativfall, Namen aus `sprache.spezifikation` der Config; Kopf-, Sammel- und Epic-Tickets ausgenommen; ab `spezifikation.hartAb` aus der Projekt-Config übersprungen und als `reparieren` gemeldet, nie kommentiert: der Reparaturweg steht in docs/ticket-reihenfolge.md,
  * darunter nur als `hinweis` gemeldet). I/O: Board-Seiten und offene Issues (REST), `git fetch/for-each-ref/worktree list`,
@@ -38,7 +38,7 @@ import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { pfadHinweis } from "./pfadwurzeln-lib.mjs";
 import { ALLE_SAMMELTICKET_TITEL } from "./sammelticket-titel.mjs";
-import { CODEQUALITAET_SAMMELTICKET_TITEL, NOTFAELLE, OWNER, boardFuerRolle, REPO, SAMMELTICKET_TITEL, frischeOffeneIssues, istKopfItem, kopfRang, loadItemPages, loadOpenIssuePages, normalizeItems, normalizeOffene, nurRepo, seitenListen } from "./board-lib.mjs";
+import { NOTFAELLE, OWNER, boardFuerRolle, REFACTORING_TITEL_AKZEPTIERT, REPO, SAMMELTICKET_TITEL, frischeOffeneIssues, istKopfItem, kopfRang, loadItemPages, loadOpenIssuePages, normalizeItems, normalizeOffene, nurRepo, seitenListen } from "./board-lib.mjs";
 import { istFremdeingang, issueKommentare } from "./fremdtext-lib.mjs";
 import { direktaufruf, flagsLesen } from "./flag-lib.mjs";
 import { ghJson } from "./gh-cli.mjs";
@@ -174,7 +174,7 @@ export function imBereich(item, bereich, config) {
 /**
  * Wählt das oberste freie Ticket. `items`: normalisierte Board-Items (`normalizeItems` aus board-lib, Board-Reihenfolge), `offene`: Menge offener Issue-Nummern,
  * `refs`/`worktrees`/`prHeads`: Texte (Branch-Namen, Worktree-Pfade bzw. -Branches, PR-Branches), `owner` für die Vertrauensprüfung.
- * `fuellstand(nr)`: Füllstand des Harness- oder Codequalität-Sammeltickets (`fuellstandVon`) oder `{ fehler }`; ein ungeclaimtes Sammelticket unter `HARNESS_TAKT_KOMMENTARE` wird übersprungen
+ * `fuellstand(nr)`: Füllstand des Harness- oder Refactoring-Sammeltickets (`fuellstandVon`) oder `{ fehler }`; ein ungeclaimtes Sammelticket unter `HARNESS_TAKT_KOMMENTARE` wird übersprungen
  * (Härtungs-Takt: „füllt sich“), ein nicht prüfbarer Füllstand ebenso (fail-closed; Standard ohne Lader). Er wird nur für dieses Ticket als Kandidat geladen.
  * `nur`: zusätzlicher Filter (Kopf- bzw. Nicht-Kopf-Walk der Zwei-Boards-Auswahl). Liefert `{ ticket: { nr, titel } | null, uebersprungen: [{ nr, grund }] }`. Pur.
  */
@@ -279,9 +279,9 @@ const spezAusgenommen = (t) => istKopfItem({ title: t.titel }) || ALLE_SAMMELTIC
 const MESSFENSTER_OHNE_LADER = () => ({ fehler: "Messfenster nicht prüfbar (kein Lader)" });
 const FUELLSTAND_OHNE_LADER = () => ({ fehler: "kein Lader" });
 
-const FUELLSTAND_TITEL = [SAMMELTICKET_TITEL, CODEQUALITAET_SAMMELTICKET_TITEL];
+const FUELLSTAND_TITEL = [SAMMELTICKET_TITEL, ...REFACTORING_TITEL_AKZEPTIERT];
 
-/** Härtungs-Takt: Grund, das ungeclaimte Harness- oder Codequalität-Sammelticket noch nicht zu nehmen (`""` = nehmen). `fuellstand === null` schaltet die Prüfung ab (Einzelprüfung `--ticket`, Mängelliste). */
+/** Härtungs-Takt: Grund, das ungeclaimte Harness- oder Refactoring-Sammelticket noch nicht zu nehmen (`""` = nehmen). `fuellstand === null` schaltet die Prüfung ab (Einzelprüfung `--ticket`, Mängelliste). */
 function fuellstandGrund(c, fuellstand) {
   if (fuellstand === null || !FUELLSTAND_TITEL.includes(c.title)) return "";
   const f = fuellstand(c.number);

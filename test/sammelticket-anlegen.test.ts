@@ -118,6 +118,18 @@ describe("sammelticketBody", () => {
   });
 });
 
+describe("Alt-Titel „Codequalität (gesammelt)“ im Übergang (Refactoring 1/5)", () => {
+  const AKZ = ["Refactoring (gesammelt)", "Codequalität (gesammelt)"];
+  const o = (number: number, titel: string): Offen => ({ number, titel, assignees: [], createdAt: "2026-10-01T00:00:00Z" });
+  test("kandidatenSammelticket mit Titelliste findet das Alt-Titel-Ticket und das neue, das jüngste zuerst", () => {
+    expect(A.kandidatenSammelticket([o(5, AKZ[1]), o(9, AKZ[0]), o(7, "Harness-Härtung (gesammelt)")], AKZ as never).map((i) => i.number)).toEqual([9, 5]);
+  });
+  test("dublettenEntscheidung mit Titelliste: das ältere Alt-Titel-Ticket ist das Original (eigenes schließen)", () => {
+    expect(A.dublettenEntscheidung({ eigenNr: 20, titel: AKZ as never, eigenKommentare: 0, andere: [o(15, AKZ[1])] })).toEqual({ art: "eigenes-schliessen", aelter: 15 });
+    expect(A.dublettenEntscheidung({ eigenNr: 20, titel: AKZ as never, eigenKommentare: 0, andere: [o(15, "Harness-Härtung (gesammelt)")] })).toEqual({ art: "keine" });
+  });
+});
+
 describe("kandidatenSammelticket", () => {
   const o = (number: number, titel: string, assignees: string[] = []): Offen => ({ number, titel, assignees, createdAt: "2026-10-01T00:00:00Z" });
   const T = "Harness-Härtung (gesammelt)";
@@ -620,6 +632,7 @@ describe("main mit injizierten gh-/Board-Nähten (factory#189 L7): Verzweigung j
   const M = (raw as unknown as { main: (argv: string[], deps: object) => Promise<void> }).main;
   const BOARD = (rawLib as unknown as { boardFuerRolle: (r: string) => unknown }).boardFuerRolle;
   const FABRIK = "zz-org/zz-fabrik";
+  const Z = raw as unknown as { findeVorhandenes: (a: object, n: object) => unknown };
   const cfg = { ...FREMD, boards: FREMD.boards.map((b: { rolle: string }) => (b.rolle === "factory" ? { ...b, repo: FABRIK } : b)), labels: { ...FREMD.labels, codequalitaet: "area:code" } };
   const it = (n: number, title = `T${n}`) => ({ id: `I${n}`, number: n, status: "Todo", title, assignees: [], state: "open" });
   const listeVoll = () => [it(1, "Langfuse-Status überprüfen"), it(2), it(3), it(4), it(5), it(6), it(7), it(8), it(9)];
@@ -761,10 +774,76 @@ describe("main mit injizierten gh-/Board-Nähten (factory#189 L7): Verzweigung j
     expect(namen(rufe)).not.toContain("setzeUndPruefe");
   });
 
+  test("Negativfall (AK3): ein offenes, ungeclaimtes Ticket mit dem alten Titel verhindert die Anlage eines zweiten", async () => {
+    const naht = {
+      env: {},
+      gh: (_a: string[]) => ({ state: "open", assignees: [], user: ownerUser, comments: 0 }),
+      ladeSeiten: () => [[{ number: 15, title: "Codequalität (gesammelt)", created_at: "2026-10-01T00:00:00Z", assignees: [] }]],
+      log: () => {},
+      err: () => {},
+      exit: (c: number) => { throw new Error(`exit ${c}`); },
+    };
+    const { deps, rufe, log } = fakes({ findeVorhandenes: (a: object) => Z.findeVorhandenes(a, naht) });
+    await M(["codequalitaet"], deps);
+    expect(namen(rufe)).not.toContain("legeAn");
+    expect(log.join("\n")).toContain("„Codequalität (gesammelt)“ gibt es schon: #15");
+  });
+  test("Gegenprobe: ist das Alt-Titel-Ticket geclaimt, wird unter dem neuen Titel angelegt", async () => {
+    const naht = {
+      env: {},
+      gh: (_a: string[]) => ({ state: "open", assignees: [{ login: OWNER }], user: ownerUser, comments: 0 }),
+      ladeSeiten: () => [[{ number: 15, title: "Codequalität (gesammelt)", created_at: "2026-10-01T00:00:00Z", assignees: [{ login: OWNER }] }]],
+      log: () => {},
+      err: () => {},
+      exit: (c: number) => { throw new Error(`exit ${c}`); },
+    };
+    const { deps, rufe } = fakes({ findeVorhandenes: (a: object) => Z.findeVorhandenes(a, naht) });
+    await M(["codequalitaet"], deps);
+    expect(rufe.find((r) => r[0] === "legeAn")![1]).toMatchObject({ titel: "Refactoring (gesammelt)" });
+  });
+
+  /** Naht für das echte findeVorhandenes: `tickets` = [Nummer, Titel], `einzel(nr)` = Direktabruf. */
+  const alteNaht = (tickets: [number, string][], einzel: (nr: number) => object) => ({
+    env: {},
+    gh: (a: string[]) => einzel(Number(/issues[/](\d+)$/.exec(a[a.length - 1] ?? "")?.[1])),
+    ladeSeiten: () => [tickets.map(([number, title]) => ({ number, title, created_at: "2026-10-01T00:00:00Z", assignees: [] }))],
+    log: () => {},
+    err: () => {},
+    exit: (c: number) => { throw new Error(`exit ${c}`); },
+  });
+  const offen = { state: "open", assignees: [], user: ownerUser, comments: 0 };
+  const ALT = "Codequalität (gesammelt)";
+  const NEU = "Refactoring (gesammelt)";
+  test("Negativfall: ein Alt-Titel-Ticket eines fremden Autors wird nie gewählt, es wird unter dem neuen Titel angelegt", async () => {
+    const naht = alteNaht([[15, ALT]], () => ({ ...offen, user: { login: "fremd", type: "User" } }));
+    const { deps, rufe } = fakes({ findeVorhandenes: (a: object) => Z.findeVorhandenes(a, naht) });
+    await M(["codequalitaet"], deps);
+    expect(rufe.find((r) => r[0] === "legeAn")![1]).toMatchObject({ titel: NEU });
+  });
+  test("Alt- und Neu-Titel gleichzeitig offen: das höchste bestätigte gilt; ist das höhere nicht bestätigt, das nächste", async () => {
+    const lauf = async (einzel: (nr: number) => object) => {
+      const { deps, rufe, log } = fakes({ findeVorhandenes: (a: object) => Z.findeVorhandenes(a, alteNaht([[15, ALT], [20, NEU]], einzel)) });
+      await M(["codequalitaet"], deps);
+      return { rufe, log: log.join("\n") };
+    };
+    const beide = await lauf(() => offen);
+    expect(beide.log).toContain(`„${NEU}“ gibt es schon: #20`);
+    expect(namen(beide.rufe)).not.toContain("legeAn");
+    const hoeheresGeclaimt = await lauf((nr) => (nr === 20 ? { ...offen, assignees: [{ login: OWNER }] } : offen));
+    expect(hoeheresGeclaimt.log).toContain(`„${ALT}“ gibt es schon: #15`);
+    expect(namen(hoeheresGeclaimt.rufe)).not.toContain("legeAn");
+  });
+  test("der Dubletten-Check nach dem Anlegen bekommt die Titelliste (neu und alt), damit ein parallel sichtbares Alt-Titel-Ticket als Original gilt", async () => {
+    const titel: unknown[] = [];
+    const { deps } = fakes({ schliesseWennDublette: (_nr: number, t: unknown) => (titel.push(t), false) });
+    await M(["codequalitaet"], deps);
+    expect(titel).toEqual([[NEU, ALT]]);
+  });
+
   test("codequalitaet: Label aus labels.codequalitaet, Produkt-Board im eigenen Repo, immer hinter den Kopf gesetzt", async () => {
     const { deps, rufe } = fakes();
     await M(["codequalitaet"], deps);
-    expect(rufe.find((r) => r[0] === "legeAn")![1]).toMatchObject({ repo: cfg.repo, titel: "Codequalität (gesammelt)", harness: "area:code" });
+    expect(rufe.find((r) => r[0] === "legeAn")![1]).toMatchObject({ repo: cfg.repo, titel: "Refactoring (gesammelt)", harness: "area:code" });
     const board = BOARD("produkt");
     expect(rufe.find((r) => r[0] === "addToBoardTodo")![1]).toEqual(board);
     const set = rufe.filter((r) => r[0] === "setPosition");

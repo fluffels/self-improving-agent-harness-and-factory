@@ -7,11 +7,14 @@ export const SAMMELTICKET_TITEL = "Harness-Härtung (gesammelt)";
 /** Titel des Sammeltickets für Langfuse-Befunde (Mechanik: docs/ticket-reihenfolge.md). */
 export const LANGFUSE_SAMMELTICKET_TITEL = "Langfuse-Befunde (gesammelt)";
 
-/** Titel des freiwilligen Sammeltickets für Codequalität außerhalb des Slices (im eigenen Repo des Beziehers, nur mit `labels.codequalitaet`; Mechanik: docs/ticket-reihenfolge.md). */
-export const CODEQUALITAET_SAMMELTICKET_TITEL = "Codequalität (gesammelt)";
+/** Titel des freiwilligen Refactoring-Sammeltickets für Code-Befunde außerhalb des Slices (im eigenen Repo des Beziehers, nur mit `labels.codequalitaet`; Mechanik: docs/ticket-reihenfolge.md). Nur dieser Titel wird angelegt. */
+export const REFACTORING_SAMMELTICKET_TITEL = "Refactoring (gesammelt)";
+
+/** Titel, die als Refactoring-Sammelticket erkannt werden: der neue und im Übergang der alte „Codequalität (gesammelt)“ (nur erkennen, nie anlegen). */
+export const REFACTORING_TITEL_AKZEPTIERT = [REFACTORING_SAMMELTICKET_TITEL, "Codequalität (gesammelt)"];
 
 /** Alle Sammeltickets, die das Einsortieren kennt (die Ankersuche und das Einsortieren kennen alle, nicht nur das Harness-Sammelticket). */
-export const SAMMELTICKET_TITEL_LISTE = [SAMMELTICKET_TITEL, LANGFUSE_SAMMELTICKET_TITEL, CODEQUALITAET_SAMMELTICKET_TITEL];
+export const SAMMELTICKET_TITEL_LISTE = [SAMMELTICKET_TITEL, LANGFUSE_SAMMELTICKET_TITEL, ...REFACTORING_TITEL_AKZEPTIERT];
 
 /** Titel des Rest-Tickets der Sicherheits-Inbox (angelegt von `inbox-start-lib.mjs`). */
 export const SICHERHEITS_SAMMELTICKET_TITEL = "Sicherheit: Rest-Befunde (gesammelt)";

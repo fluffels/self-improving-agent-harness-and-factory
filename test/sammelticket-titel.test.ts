@@ -11,12 +11,12 @@ import * as produktquoteRaw from "../scripts/produktquote-lib.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import { exporteAus as exporteAusRaw } from "../scripts/tag-takt.mjs";
 
-type Blatt = { SAMMELTICKET_TITEL: string; LANGFUSE_SAMMELTICKET_TITEL: string; CODEQUALITAET_SAMMELTICKET_TITEL: string; SAMMELTICKET_TITEL_LISTE: string[]; NICHT_EINTRAGBAR_PRAEFIX: string; BEFUND_ZEILE: RegExp; BEFUND_ZEILE_OFFEN: RegExp; offeneZeileMit: (zeile: string, praefix: string) => boolean };
+type Blatt = { SAMMELTICKET_TITEL: string; LANGFUSE_SAMMELTICKET_TITEL: string; REFACTORING_SAMMELTICKET_TITEL: string; REFACTORING_TITEL_AKZEPTIERT: string[]; SAMMELTICKET_TITEL_LISTE: string[]; NICHT_EINTRAGBAR_PRAEFIX: string; BEFUND_ZEILE: RegExp; BEFUND_ZEILE_OFFEN: RegExp; offeneZeileMit: (zeile: string, praefix: string) => boolean };
 const blatt = blattRaw as unknown as Blatt;
 const boardLib = boardLibRaw as unknown as Record<string, unknown>;
 const produktquote = produktquoteRaw as unknown as Pick<Blatt, "BEFUND_ZEILE" | "BEFUND_ZEILE_OFFEN">;
 const exporteAus = exporteAusRaw as (text: string) => Set<string>;
-const NAMEN = ["SAMMELTICKET_TITEL", "LANGFUSE_SAMMELTICKET_TITEL", "CODEQUALITAET_SAMMELTICKET_TITEL", "SAMMELTICKET_TITEL_LISTE"] as const;
+const NAMEN = ["SAMMELTICKET_TITEL", "LANGFUSE_SAMMELTICKET_TITEL", "REFACTORING_SAMMELTICKET_TITEL", "REFACTORING_TITEL_AKZEPTIERT", "SAMMELTICKET_TITEL_LISTE"] as const;
 
 describe("sammelticket-titel", () => {
   test("das Blatt hat keinen Import", () => {
@@ -24,10 +24,18 @@ describe("sammelticket-titel", () => {
     expect(importeAus(quelle)).toEqual([]);
   });
 
-  test("die Liste enthält genau die drei Titel, das Präfix endet mit Leerzeichen", () => {
-    expect(blatt.SAMMELTICKET_TITEL_LISTE).toEqual([blatt.SAMMELTICKET_TITEL, blatt.LANGFUSE_SAMMELTICKET_TITEL, blatt.CODEQUALITAET_SAMMELTICKET_TITEL]);
+  test("die Liste enthält die drei Titel (Refactoring mit altem Titel im Übergang), das Präfix endet mit Leerzeichen", () => {
+    expect(blatt.REFACTORING_SAMMELTICKET_TITEL).toBe("Refactoring (gesammelt)");
+    expect(blatt.REFACTORING_TITEL_AKZEPTIERT).toEqual(["Refactoring (gesammelt)", "Codequalität (gesammelt)"]);
+    expect(blatt.SAMMELTICKET_TITEL_LISTE).toEqual([blatt.SAMMELTICKET_TITEL, blatt.LANGFUSE_SAMMELTICKET_TITEL, ...blatt.REFACTORING_TITEL_AKZEPTIERT]);
     expect(blatt.SAMMELTICKET_TITEL).toBe("Harness-Härtung (gesammelt)");
     expect(blatt.NICHT_EINTRAGBAR_PRAEFIX).toBe("Nicht eintragbar: ");
+  });
+
+  test("die Quote erkennt das Refactoring-Sammelticket unter dem neuen und dem alten Titel (sammelIssues)", () => {
+    const { sammelStand } = produktquoteRaw as unknown as { sammelStand: (i: { number: number; title: string; state: string; closedAt?: string }[]) => { sammelIssues: Set<number> } };
+    const s = sammelStand(blatt.REFACTORING_TITEL_AKZEPTIERT.map((title, n) => ({ number: n + 1, title, state: "CLOSED", closedAt: "2026-10-09T00:00:00Z" })));
+    expect([...s.sammelIssues].sort()).toEqual([1, 2]);
   });
 
   test("Zeilenerkennung: eine Quelle im Blatt, produktquote-lib exportiert dieselben Objekte, meldung-lib trägt keine Kopie des Regex (L45)", () => {
