@@ -1,13 +1,19 @@
 import { configDefaults, defineConfig } from "vitest/config";
 import { availableParallelism } from "node:os";
 import { readFileSync } from "node:fs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as einfrierModul from "./scripts/waechter-einfrieren-lib.mjs";
+const excludeListe = (einfrierModul as unknown as { excludeListe: (standard: string[], zeilen: Record<string, unknown>[], extraktion: unknown[]) => string[] }).excludeListe;
 
 // Eingefrorene Wächter (factory#611): einzige Quelle ist das Änderungsregister (Verfall-Zeile mit Feld `eingefroren`). Die Datei bleibt erhalten, läuft aber
-// nicht mehr in verify. Wächter dieser Liste: test/harness/waechter-einfrieren.test.ts (Sicherheits-Ausnahmen, Durch-Wächter, verteilte und Selbstschutz-Wächter
-// dürfen nie darin stehen; exclude muss genau Standardliste plus Register sein).
-const eingefroren = (
-  JSON.parse(readFileSync(new URL(".github/aenderungsregister.json", import.meta.url), "utf8")) as { zeilen: { art?: string; ziel?: string; eingefroren?: string }[] }
-).zeilen.flatMap((z) => (z.art === "verfall" && z.eingefroren !== undefined && typeof z.ziel === "string" ? [z.ziel] : []));
+// nicht mehr in verify. `excludeListe` (scripts/waechter-einfrieren-lib.mjs) wirft, wenn eine Zeile eine Sicherheits-Ausnahme, einen Durch-Wächter, einen verteilten oder Selbstschutz-Wächter
+// trifft (fail-closed); Wächter: test/harness/waechter-einfrieren.test.ts.
+const einlesen = (rel: string): unknown => JSON.parse(readFileSync(new URL(rel, import.meta.url), "utf8"));
+const exclude = excludeListe(
+  configDefaults.exclude,
+  (einlesen(".github/aenderungsregister.json") as { zeilen: Record<string, unknown>[] }).zeilen,
+  (einlesen(".factory/extraktion.json") as { eintraege: unknown[] }).eintraege,
+);
 
 // Nur die Test-Konfiguration: das Factory-Repo hat keinen Build. Die Tests laufen auf Node, die Worker-Zahl ist lokal begrenzt,
 // damit parallele Läufe von Lenses und anderen Worktrees die Git-lastigen Tests nicht ins Zeitlimit treiben.
@@ -15,7 +21,7 @@ export default defineConfig({
   test: {
     environment: "node",
     include: ["test/**/*.test.ts"],
-    exclude: [...configDefaults.exclude, ...eingefroren],
+    exclude,
     // Zugangs-Variablen (LANGFUSE_*, GH_TOKEN, GITHUB_TOKEN) entfernt das Setup aus process.env, damit kein Prozess-Test einen echten Zugang erbt (Wächter: test/harness/test-umgebung.test.ts).
     // Die gh-Attrappe (PATH-Vorrang, Exit 1 mit "gh in Vitest gesperrt (Naht injizieren)") fängt jeden unbemerkten Netzaufruf eines Tests ab (factory#560; Wächter: test/gh-sperre.test.ts, test/harness/test-umgebung.test.ts).
     setupFiles: ["test/support/zugaenge-entfernen.ts", "test/support/gh-sperre-setup.ts"],

@@ -311,6 +311,10 @@ describe("Feld eingefroren bei Wächter-Zeilen (factory#611)", () => {
     ["vor aufgenommen", [verfall({ eingefroren: "2026-11-15" })], /eingefroren: nicht vor aufgenommen/],
     ["Glob im Ziel", [verfall({ ziel: "test/harness/*.test.ts", eingefroren: "2026-11-20" })], /eingefroren: nur bei einem einzelnen Wächter/],
     ["Ziel ohne test/harness-Wächterpfad", [verfall({ ziel: "scripts/x.mjs", eingefroren: "2026-11-20" })], /eingefroren: nur bei einem einzelnen Wächter/],
+    ["Extglob im Ziel", [verfall({ ziel: "test/harness/!(x).test.ts", eingefroren: "2026-11-20" })], /eingefroren: nur bei einem einzelnen Wächter/],
+    ["Ziel mit Präfix davor", [verfall({ ziel: "x/test/harness/a.test.ts", eingefroren: "2026-11-20" })], /eingefroren: nur bei einem einzelnen Wächter/],
+    ["Ziel mit Endung dahinter", [verfall({ ziel: "test/harness/a.test.ts.bak", eingefroren: "2026-11-20" })], /eingefroren: nur bei einem einzelnen Wächter/],
+    ["Ziel in Unterordner", [verfall({ ziel: "test/harness/sub/a.test.ts", eingefroren: "2026-11-20" })], /eingefroren: nur bei einem einzelnen Wächter/],
   ];
   it.each(faelle)("%s ist rot", (_n, zeilen, muster) => {
     expect(lib.pruefeRegister(zeilen).join("\n")).toMatch(muster);

@@ -27,6 +27,8 @@
     "/eslint-suppressions.json",
     "/any-suppressions.json",
     "/vite.config.ts",
+    "/.github/aenderungsregister.json",
+    "/scripts/waechter-einfrieren-lib.mjs",
     "/tsconfig.json",
     "/.github/workflows/*.yml",
     "/.github/CODEOWNERS",

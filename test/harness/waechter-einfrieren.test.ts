@@ -16,20 +16,21 @@ import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
-import * as libModul from "../../scripts/regel-verfall-lib.mjs";
+import * as libModul from "../../scripts/waechter-einfrieren-lib.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as regelVerfallModul from "../../scripts/regel-verfall-lib.mjs";
 
 const WURZEL = join(__dirname, "..", "..");
 type Zeile = Record<string, unknown>;
 type Extraktion = { muster: string; art: string }[];
 type Ausnahme = { ziel: string };
-const lib = libModul as unknown as { SICHERHEITS_AUSNAHMEN: Ausnahme[]; istSicherheitsAusnahme: (ziel: string, ausnahmen?: Ausnahme[]) => boolean };
-
-/** Diese Wächter schützen den Hebel selbst und werden nie eingefroren. */
-export const SELBSTSCHUTZ = [
-  "test/harness/waechter-einfrieren.test.ts",
-  "test/harness/regel-verfall.test.ts",
-  "test/harness/aenderungsregister.test.ts",
-];
+const lib = libModul as unknown as {
+  SELBSTSCHUTZ: string[];
+  pruefeEingefroreneZiele: (e: { zeilen: Zeile[]; extraktion: Extraktion; ausnahmen?: Ausnahme[] }) => string[];
+  excludeListe: (standard: string[], zeilen: Zeile[], extraktion: Extraktion, ausnahmen?: Ausnahme[]) => string[];
+};
+const SICHERHEITS_AUSNAHMEN = (regelVerfallModul as unknown as { SICHERHEITS_AUSNAHMEN: Ausnahme[] }).SICHERHEITS_AUSNAHMEN;
+const SELBSTSCHUTZ = lib.SELBSTSCHUTZ;
 
 type Eingabe = {
   zeilen: Zeile[];
@@ -40,25 +41,11 @@ type Eingabe = {
   standardExclude: string[];
 };
 
-const globRegex = (muster: string): RegExp => {
-  const teile = muster.split("**").map((s) => s.replace(/[.+^${}()|[\]\\]/g, "\\$&").replace(/\*/g, "[^/]*"));
-  return new RegExp(`^${teile.join(".*")}$`);
-};
-
-/** Pur: Befunde (leer = grün) zu den eingefrorenen Wächtern des Registers und zur exclude-Liste der Config. */
-export function pruefeEinfrieren(e: Eingabe): string[] {
-  const verfall = e.zeilen.filter((z) => z.art === "verfall");
-  const eingefroren = verfall.filter((z) => z.eingefroren !== undefined).map((z) => ({ id: String(z.id), ziel: String(z.ziel) }));
-  const durch = new Set(verfall.flatMap((z) => (Array.isArray(z.durch) ? (z.durch as string[]) : [])));
-  const idsDurch = new Set(verfall.filter((z) => durch.has(String(z.id))).map((z) => String(z.ziel)));
-  const aus: string[] = [];
-  for (const { id, ziel } of eingefroren) {
-    if (!e.existiert(ziel)) aus.push(`${id}: ${ziel} fehlt (eingefroren heißt: Datei bleibt erhalten)`);
-    if (e.ausnahmen.some((a) => a.ziel === ziel) || lib.istSicherheitsAusnahme(ziel, e.ausnahmen)) aus.push(`${id}: ${ziel} steht in der Sicherheits-Ausnahmeliste und darf nicht eingefroren werden`);
-    if (idsDurch.has(ziel)) aus.push(`${id}: ${ziel} ist Durch-Wächter einer Regel und darf nicht eingefroren werden`);
-    if (e.extraktion.some((x) => x.art === "kern-test" && globRegex(x.muster).test(ziel))) aus.push(`${id}: ${ziel} ist verteilt (kern-test) und darf in der Fabrik nicht eingefroren werden`);
-    if (SELBSTSCHUTZ.includes(ziel)) aus.push(`${id}: ${ziel} schützt den Einfrier-Hebel selbst und darf nicht eingefroren werden`);
-  }
+/** Befunde (leer = grün) zu den eingefrorenen Wächtern des Registers und zur exclude-Liste der Config. */
+function pruefeEinfrieren(e: Eingabe): string[] {
+  const eingefroren = e.zeilen.filter((z) => z.art === "verfall" && z.eingefroren !== undefined).map((z) => ({ id: String(z.id), ziel: String(z.ziel) }));
+  const aus = lib.pruefeEingefroreneZiele({ zeilen: e.zeilen, extraktion: e.extraktion, ausnahmen: e.ausnahmen });
+  for (const { id, ziel } of eingefroren) if (!e.existiert(ziel)) aus.push(`${id}: ${ziel} fehlt (eingefroren heißt: Datei bleibt erhalten)`);
   const soll = [...e.standardExclude, ...eingefroren.map((x) => x.ziel)];
   const fehlt = soll.filter((s) => !e.exclude.includes(s));
   const zuviel = e.exclude.filter((x) => !soll.includes(x));
@@ -105,6 +92,22 @@ describe("pruefeEinfrieren (Fixtures)", () => {
     expect(pruefeEinfrieren(eingabe({ zeilen: [zeile({ ziel })], exclude: ["**/node_modules/**", ziel] })).join("\n")).toMatch(/schützt den Einfrier-Hebel/);
   });
 
+  it("ein passender Extraktionseintrag mit art projekt-test blockiert nicht (Gegenbeweis zu verteilt)", () => {
+    expect(pruefeEinfrieren(eingabe({ extraktion: [{ muster: WAECHTER, art: "projekt-test" }] }))).toEqual([]);
+    expect(pruefeEinfrieren(eingabe({ extraktion: [{ muster: "test/harness/*.test.ts", art: "projekt-test" }, { muster: "test/harness/*.test.ts", art: "kern-test" }] })), "erster Treffer gewinnt wie im Gate").toEqual([]);
+  });
+
+  it("excludeListe: eingefrorenes Ziel landet im exclude, nichts Eingefrorenes lässt die Standardliste unverändert", () => {
+    expect(lib.excludeListe(["a"], [zeile()], [])).toEqual(["a", WAECHTER]);
+    expect(lib.excludeListe(["a"], [zeile({ eingefroren: undefined })], [])).toEqual(["a"]);
+  });
+
+  it("excludeListe wirft fail-closed bei Sicherheits-Ausnahme, Selbstschutz und Glob-Ziel", () => {
+    expect(() => lib.excludeListe([], [zeile({ ziel: "test/harness/fremdtext-gate.test.ts" })], [])).toThrow(/Sicherheits-Ausnahmeliste/);
+    expect(() => lib.excludeListe([], [zeile({ ziel: SELBSTSCHUTZ[0] })], [])).toThrow(/schützt den Einfrier-Hebel/);
+    expect(() => lib.excludeListe([], [zeile({ ziel: "test/harness/!(x).test.ts" })], [])).toThrow(/kein einzelner Wächter/);
+  });
+
   it("eine fehlende Datei ist rot", () => {
     expect(pruefeEinfrieren(eingabe({ existiert: () => false })).join("\n")).toMatch(/fehlt/);
   });
@@ -125,7 +128,7 @@ describe("echtes Register und echte vite.config.ts", () => {
       pruefeEinfrieren({
         zeilen: register.zeilen,
         extraktion,
-        ausnahmen: lib.SICHERHEITS_AUSNAHMEN,
+        ausnahmen: SICHERHEITS_AUSNAHMEN,
         existiert: (p) => existsSync(join(WURZEL, p)),
         exclude: cfg.default.test.exclude,
         standardExclude: [...configDefaults.exclude],

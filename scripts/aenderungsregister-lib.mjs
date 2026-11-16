@@ -159,7 +159,7 @@ const pruefeVerfallDurch = (z, p) => {
 };
 
 /** Ein einzelner Wächter unter test/harness/ (kein Anker, kein Glob): nur so ein Ziel darf eingefroren werden (factory#611). */
-const EINZELWAECHTER = /^test\/harness\/[^#*?[\]{}/]+\.test\.ts$/;
+export const EINZELWAECHTER = /^test\/harness\/[a-z0-9-]+\.test\.ts$/;
 
 const pruefeEingefroren = (z, p) => {
   if (z.eingefroren === undefined) return [];
