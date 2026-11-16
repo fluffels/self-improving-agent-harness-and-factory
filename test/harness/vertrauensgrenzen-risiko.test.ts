@@ -2,7 +2,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, test } from "vitest";
 // @ts-expect-error reines ES-Modul ohne Typen
-import { bestimmeRisikoklasse, risikoMusterAus } from "../../scripts/groessenstufe-lib.mjs";
+import * as libRaw from "../../scripts/groessenstufe-lib.mjs";
 
 /**
  * @harness-waechter – einziger Durchsetzer seiner Regel, darum im geschützten test/harness/ (#1165).
@@ -13,6 +13,11 @@ import { bestimmeRisikoklasse, risikoMusterAus } from "../../scripts/groessenstu
  * Repo existieren (Skripte nicht verteilter Module, etwa des Forums, werden übersprungen). Ungeprüft: andere Tabellen,
  * Prosa, Pfade außerhalb von scripts/.
  */
+type Risiko = { muster: string[] | null; quelle: string };
+const lib = libRaw as unknown as {
+  bestimmeRisikoklasse: (pfade: string[], risiko: Risiko) => { klasse: string };
+  risikoMusterAus: (config: unknown) => Risiko;
+};
 const wurzel = (rel: string): string => fileURLToPath(new URL(`../../${rel}`, import.meta.url));
 
 function tabellenSkripte(): string[] {
@@ -30,17 +35,17 @@ function tabellenSkripte(): string[] {
 }
 
 describe("Vertrauensgrenzen sind Risikoklasse hoch (factory#622 L8)", () => {
-  const config = JSON.parse(readFileSync(wurzel(".factory/projekt.json"), "utf8"));
-  const risiko = risikoMusterAus(config);
+  const config: unknown = JSON.parse(readFileSync(wurzel(".factory/projekt.json"), "utf8"));
+  const risiko = lib.risikoMusterAus(config);
   const skripte = tabellenSkripte();
 
   test("die Tabelle nennt die Schlüsselskripte", () => {
     for (const s of ["scripts/fremdtext.mjs", "scripts/melden.mjs", "scripts/spezifikation.mjs", "scripts/sammelticket-anlegen.mjs"]) expect(skripte).toContain(s);
   });
   test.each(tabellenSkripte())("%s ist Risikoklasse hoch", (pfad) => {
-    expect(bestimmeRisikoklasse([pfad], risiko).klasse).toBe("hoch");
+    expect(lib.bestimmeRisikoklasse([pfad], risiko).klasse).toBe("hoch");
   });
   test("ein unbeteiligtes Skript bleibt normal (Negativfall)", () => {
-    expect(bestimmeRisikoklasse(["scripts/groessenstufe-lib.mjs"], risiko).klasse).toBe("normal");
+    expect(lib.bestimmeRisikoklasse(["scripts/groessenstufe-lib.mjs"], risiko).klasse).toBe("normal");
   });
 });
