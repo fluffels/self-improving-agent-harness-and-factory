@@ -48,7 +48,7 @@ interface Pc {
   wirksamerAbschluss(config: unknown, env?: Record<string, string | undefined>): string | null;
   kernEnvNamen(ordner: string): string[];
   sammleKernEnv(datei: string, text: string): { literale: Set<string>; ohneLiteral: string[] };
-  sammleKernEnvIn(ordner: string, bezug?: string | null): { literale: Set<string>; ohneLiteral: string[] };
+  sammleKernEnvIn(ordner: string, bezug?: string | null): { literale: Set<string>; ohneLiteral: string[]; jeDatei: Record<string, Set<string>> };
 }
 const pc = rawPc as unknown as Pc;
 /** Blatt-Modul `repo-form.mjs` (factory#114): wird direkt importiert, die Config-Lib reicht es nicht weiter. */
@@ -811,6 +811,9 @@ describe("kernEnvNamen und sammleKernEnv", () => {
     const f = pc.sammleKernEnvIn(d, d);
     assert.deepEqual([...f.literale], ["FACTORY_A"]);
     assert.deepEqual(f.ohneLiteral, ["unter/b.mjs:1"]);
+    assert.deepEqual(Object.keys(f.jeDatei), ["a.mjs"], "nur Dateien mit Literal, Schlüssel relativ zum Bezug");
+    assert.deepEqual([...f.jeDatei["a.mjs"]], ["FACTORY_A"]);
+    assert.deepEqual(Object.keys(pc.sammleKernEnvIn(d).jeDatei).map((x) => x.endsWith("/a.mjs")), [true], "ohne Bezug der volle Pfad");
     assert.deepEqual(pc.sammleKernEnvIn(d).ohneLiteral.map((x) => x.endsWith("/unter/b.mjs:1")), [true]);
   });
   test("sammleKernEnvIn: ein Bezug, der kein Präfix des Ordners ist, schneidet nichts ab; Schrägstrich und Backslash am Bezugsende sind gleich", () => {
