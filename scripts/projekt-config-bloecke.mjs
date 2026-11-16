@@ -355,3 +355,19 @@ function browserMaengel(liste) {
     return [];
   });
 }
+
+/** Pur: prüft den optionalen Block `dokuPflicht` (`check:dokupflicht`): erlaubt ist nur `readmeAbschnitte`, eine Liste nicht-leerer H2-Überschriften der README (ohne `##`, ohne Doppelte); fehlt der Block, ist nichts zu prüfen. */
+export function pruefeDokuPflicht(b) {
+  if (b === undefined) return [];
+  const fix = "\nFix: dokuPflicht als { \"readmeAbschnitte\": [\"<Überschrift>\"] } schreiben oder den Block entfernen.";
+  if (!istObjekt(b)) return [`dokuPflicht muss ein Objekt mit der Liste readmeAbschnitte sein.${fix}`];
+  const fehler = Object.keys(b).filter((k) => k !== "readmeAbschnitte").map((k) => `dokuPflicht.${k} ist kein bekannter Schlüssel (erlaubt: readmeAbschnitte).${fix}`);
+  const liste = b.readmeAbschnitte;
+  if (liste === undefined) return fehler;
+  if (!Array.isArray(liste)) return [...fehler, `dokuPflicht.readmeAbschnitte muss eine Liste von H2-Überschriften sein.${fix}`];
+  liste.forEach((u, i) => {
+    if (!istText(u) || /^#/.test(u.trim())) fehler.push(`dokuPflicht.readmeAbschnitte[${i}] muss ein nicht-leerer Text ohne führendes # sein (${JSON.stringify(u)}).${fix}`);
+    else if (liste.indexOf(u) !== i) fehler.push(`dokuPflicht.readmeAbschnitte enthält „${u}“ doppelt.${fix}`);
+  });
+  return fehler;
+}

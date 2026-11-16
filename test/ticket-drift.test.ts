@@ -31,6 +31,8 @@ const L = libRaw as unknown as {
   BERICHT_MARKER: string;
   BERICHT_MAX: number;
   KLASSEN: string[];
+  TAG_MARKER: string;
+  ENTFERNTE_EXPORTE_PRAEFIX: string;
 };
 const S = skriptRaw as unknown as { gitSicht: (w: string, g?: (a: string[]) => string) => { tops: Set<string>; shallow: boolean; sha: string; git: Git }; main: (a: string[], d: Record<string, unknown>) => Promise<number>; waehleZiel: (i: Issue[], b: boolean, p: { owner: string; config: unknown }) => { art: string; nr?: number } };
 
@@ -91,6 +93,30 @@ describe("pruefe: Pfade und Zeilen", () => {
   });
   test("shallow nennt den Hinweis", () => {
     expect(L.pruefe([issue(1, { body })], ctx(git({ shallow: true }))).hinweise[0]).toMatch(/Shallow/);
+  });
+});
+
+describe("pruefe: Entfernte Exporte in Tag-Tickets (factory#604 L12)", () => {
+  const weg = git({ existiert: () => false, letzteAenderung: () => "2026-09-01T10:00:00+02:00" });
+  const zeile = `- ${L.ENTFERNTE_EXPORTE_PRAEFIX} \`scripts/weg.mjs\`: a`;
+  const tagTitel = `${L.TAG_MARKER}v1 setzen`;
+  test("die Zeile im Tag-Ticket ist kein pfad-entfernt", () => {
+    expect(klassen(L.pruefe([issue(1, { title: tagTitel, body: zeile })], ctx(weg)))).toEqual([]);
+  });
+  test("derselbe Pfad in anderer Zeile desselben Tag-Tickets bleibt Befund", () => {
+    expect(klassen(L.pruefe([issue(1, { title: tagTitel, body: `${zeile}\nSiehe \`scripts/weg.mjs\`.` })], ctx(weg)))).toEqual(["1:pfad-entfernt"]);
+  });
+  test("dieselbe Zeile in einem Issue ohne Tag-Titel bleibt Befund", () => {
+    expect(klassen(L.pruefe([issue(1, { title: "Anderes", body: zeile })], ctx(weg)))).toEqual(["1:pfad-entfernt"]);
+  });
+  test("der Präfix mitten in einer Zeile nimmt sie nicht aus", () => {
+    expect(klassen(L.pruefe([issue(1, { title: tagTitel, body: `Siehe ${L.ENTFERNTE_EXPORTE_PRAEFIX} \`scripts/weg.mjs\`.` })], ctx(weg)))).toEqual(["1:pfad-entfernt"]);
+  });
+  test("Aufzählung mit Stern oder Einrückung zählt wie ein Strich", () => {
+    for (const k of ["* ", "  - ", ""]) expect(klassen(L.pruefe([issue(1, { title: tagTitel, body: `${k}${L.ENTFERNTE_EXPORTE_PRAEFIX} \`scripts/weg.mjs\`: a` })], ctx(weg))), k).toEqual([]);
+  });
+  test("der Titel zählt nur am Anfang", () => {
+    expect(klassen(L.pruefe([issue(1, { title: `x ${tagTitel}`, body: zeile })], ctx(weg)))).toEqual(["1:pfad-entfernt"]);
   });
 });
 

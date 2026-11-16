@@ -25,6 +25,11 @@ export const RUECKSTELLUNG_MARKER = ["zurückgestellt", "zurückstellen", "⏸"]
 /** Gegenmarker: heben die Rückstellung auf und haben Vorrang vor dem Marker, auch im selben Kommentar (Teilwort, ohne Groß-/Kleinschreibung). */
 export const RUECKSTELLUNG_GEGENMARKER = ["reaktiviert", "wieder aufgenommen", "wiederaufgenommen", "nicht mehr zurückgestellt"];
 
+/** Titelpräfix der Tag-Tickets von `tag-takt.mjs` (dort re-exportiert; die eine Quelle liegt hier, damit die Drift-Prüfung nicht das schwere Tag-Skript importiert). */
+export const TAG_MARKER = "🏷️ Tag ";
+/** Präfix der Body-Zeile eines Tag-Tickets, die entfernte Pfade absichtlich nennt (`tag-takt.mjs` schreibt sie, `pfadBefunde` nimmt sie aus). */
+export const ENTFERNTE_EXPORTE_PRAEFIX = "Entfernte Exporte (Breaking):";
+
 const PFAD_FORM = /^[A-Za-z0-9._/-]+(?::(\d+)(?:-(\d+))?)?$/;
 const STOPPWOERTER = new Set(["und", "oder", "der", "die", "das", "den", "dem", "des", "ein", "eine", "für", "mit", "von", "zum", "zur", "bei", "auf", "aus", "nach", "als", "the", "and", "for", "with", "nicht", "statt", "wie", "ohne", "über"]);
 const SERIE = /\b\d+\/\d+\b/;
@@ -45,10 +50,17 @@ export function verweiseAus(body, tops) {
   return [...gefunden.values()];
 }
 
+/** Body ohne die Zeilen `<Aufzählung> Entfernte Exporte (Breaking): …`, aber nur bei einem Tag-Ticket (Titel beginnt mit `TAG_MARKER`): dort nennt die Zeile gelöschte Pfade absichtlich (factory#604 L12). Jede andere Zeile und jedes andere Issue bleibt unverändert. */
+function ohneEntfernteExporte(issue) {
+  const body = String(issue.body ?? "");
+  if (!String(issue.title ?? "").startsWith(TAG_MARKER)) return body;
+  return body.split(/\r?\n/).filter((z) => !z.replace(/^\s*(?:[-*]\s+)?/, "").startsWith(ENTFERNTE_EXPORTE_PRAEFIX)).join("\n");
+}
+
 /** Pfad- und Zeilen-Befunde eines Issues. `git`: `{ existiert(p), zeilen(p), letzteAenderung(p) → ISO|null, geaendertSeit(p, iso) → bool, shallow }`. Shallow setzt die Git-Prüfungen aus (fail-closed). */
 export function pfadBefunde(issue, tops, git) {
   const befunde = [];
-  for (const v of verweiseAus(issue.body, tops)) {
+  for (const v of verweiseAus(ohneEntfernteExporte(issue), tops)) {
     if (!git.existiert(v.pfad)) {
       const datum = git.shallow ? null : git.letzteAenderung(v.pfad);
       if (datum) befunde.push({ nr: issue.number, klasse: "pfad-entfernt", text: `\`${v.pfad}\` fehlt, zuletzt geändert ${String(datum).slice(0, 10)}` });

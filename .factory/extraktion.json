@@ -627,6 +627,11 @@
       "grund": "Gegenstand ist Besitz"
     },
     {
+      "muster": "test/harness/check-doku-pflicht.test.ts",
+      "art": "kern-test",
+      "grund": "Gegenstand ist Besitz"
+    },
+    {
       "muster": "test/lockfile.test.ts",
       "art": "kern-test",
       "grund": "Gegenstand ist Besitz"

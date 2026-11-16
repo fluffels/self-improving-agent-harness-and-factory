@@ -16,6 +16,8 @@ import { istDirektaufruf } from "./direktaufruf.mjs";
 import { fehlerText, ghJson, ghText, tokenFuerZiel } from "./gh-cli.mjs";
 import { inboxStart, ladeWiedervorlagen } from "./inbox-start-lib.mjs";
 import { istBezieher } from "./sync-stand-lib.mjs";
+import { istVertraut } from "./fremdtext-lib.mjs";
+import { nutzerAus } from "./ticket-drift-lib.mjs";
 import { bereiteMeldung } from "./meldung-lib.mjs";
 import { gleichesRepo } from "./repo-form.mjs";
 import { labelAus, zielRepoFuer } from "./projekt-config-lib.mjs";
@@ -86,13 +88,15 @@ const schlussTag = (t) => {
  * - offenes Ticket: nichts
  * - nur geschlossene Tickets, alle mit Schließtag vor `faellig` (Eintrag verschoben): `anlegen`
  * - sonst nur geschlossene (Eintrag steht noch, auch ohne lesbares `closedAt`): `warnen` ("Eintrag löschen"), kein neues Ticket.
+ * Nur Tickets vertrauter Autoren zählen als Treffer (factory#604 L1): ein Ticket mit `vertrauterAutor: false` (`markiereVertrauen`) hält keine Wiedervorlage still.
+ * Grenze: ein Ticket ohne das Feld zählt als vertraut; im Lauf setzt `main` es immer (ein fehlender Autor ist dort nicht vertraut).
  * Pur.
  */
 export function planeAktionen({ faellige: liste, tickets }) {
   const aktionen = [];
   for (const e of liste) {
     const marker = markerFuer(e.id);
-    const treffer = tickets.filter((t) => String(t.body ?? "").includes(marker));
+    const treffer = tickets.filter((t) => t.vertrauterAutor !== false && String(t.body ?? "").includes(marker));
     if (treffer.length === 0) aktionen.push({ art: "anlegen", eintrag: e });
     else if (!treffer.some((t) => String(t.state).toLowerCase() === "open")) {
       // Verschoben: alle Tickets wurden vor dem (neuen) Fälligkeitstag geschlossen, also gehören sie zum früheren Termin.
@@ -102,6 +106,9 @@ export function planeAktionen({ faellige: liste, tickets }) {
   }
   return aktionen;
 }
+
+/** Pur: setzt an jedes Ticket `vertrauterAutor` (Owner oder vertrauter Bot laut `istVertraut`, Autor in der Form von `gh`: `app/<name>` ist ein Bot); ohne Autor false (fail-closed). */
+export const markiereVertrauen = (tickets, owner) => tickets.map((t) => ({ ...t, vertrauterAutor: istVertraut(nutzerAus(t.author), owner) }));
 
 /** Titel und Body des Tickets zu einem Eintrag. Pur. */
 export function ticketText(e) {
@@ -122,7 +129,7 @@ export function ladeEintraege(lies) {
 
 /** Alle Issues (offen und geschlossen) aus der konsistenten Listenabfrage, nicht aus dem verzögerten Such-Index. */
 // Grenze: die jüngsten 1000 Issues (alle Zustände). Ein Wiedervorlage-Ticket wird zeitnah abgearbeitet und der Eintrag im selben PR gelöscht; ein Ticket, das hinter die 1000 fällt, stünde nur bei vergessenem Löschen noch an (dann Dublette statt Warnung).
-const ladeTickets = (repo, token) => ghJson(["issue", "list", "--repo", repo, "--state", "all", "--limit", "1000", "--json", "number,state,body,closedAt"], { token });
+const ladeTickets = (repo, token) => ghJson(["issue", "list", "--repo", repo, "--state", "all", "--limit", "1000", "--json", "number,state,body,closedAt,author"], { token });
 
 /** Die `gh`-Argumente für das Anlegen: `--label` nur mit Label (im Bezieher ohne Label darf kein `--label undefined` entstehen, factory#215). Pur. */
 export function anlegeArgumente(e, label, repo) {
@@ -229,7 +236,7 @@ export async function main(argv = process.argv.slice(2), { ladeConfig, ladeLibs,
   return lauf({
     eintraege,
     heute: new Date().toISOString().slice(0, 10),
-    tickets: [...ziele].flatMap(([ziel, token]) => ticketsLaden(ziel, token)),
+    tickets: [...ziele].flatMap(([ziel, token]) => markiereVertrauen(ticketsLaden(ziel, token), ziel.split("/")[0])),
     trocken,
     log,
     ...ioAus(config, { legen, repo: REPO, platziereOben, bezieher, ...(bereite ? { bereite } : {}) }),

@@ -447,6 +447,14 @@
       "messgroesse": "fangquote"
     },
     {
+      "id": "verfall-doku-pflicht-604",
+      "art": "verfall",
+      "ziel": "scripts/check-doku-pflicht.mjs",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2027-03-01",
+      "messgroesse": "fangquote"
+    },
+    {
       "id": "verfall-token-budget-560",
       "art": "verfall",
       "ziel": "AGENTS.md#kern-regeln-factory-besitz",
