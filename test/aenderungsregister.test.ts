@@ -320,7 +320,7 @@ describe("Grenzen und Zweige (Review Runde 1)", () => {
   const qualitaetZeile = (extra: Z = {}): Z => zeile({ messgroesse: "ci-fix-runden", parameter: undefined, ...extra });
   const langfuse = (rows: Z[]): Export => ({ quelle: "langfuse", punkte: rows.map((r) => ({ messgroesse: "kosten-je-ticket-rolle", parameter: "planer", repoTag: "fix-fabrik", ...r })) });
   const q = (): Export => nurQualitaet([10, 10], [10, 10])[0];
-  const kosten = (rows: Z[], z: Z = zeile()) => (solo(z, [q(), langfuse(rows)]) as Z).kosten as Z;
+  const kosten = (rows: Z[], z: Z = zeile()) => (solo(z, [q(), langfuse(rows)])).kosten as Z;
   const kost = (basis: number[], nach: number[], extra: Z = {}): Z[] => [
     ...basis.map((wert, i) => ({ zeitpunkt: BASIS_Z[i % 2], einheitId: `b${i}`, wert, ...extra })),
     ...nach.map((wert, i) => ({ zeitpunkt: NACH_Z[i % 2], einheitId: `n${i}`, wert, ...extra })),
@@ -385,11 +385,11 @@ describe("Grenzen und Zweige (Review Runde 1)", () => {
 
   describe("Kosten-Zweige", () => {
     it("eine Qualitätszeile hat kein Kostenfeld", () => {
-      expect((solo(qualitaetZeile(), nurQualitaet([10, 10], [11, 11])) as Z).kosten).toBeNull();
+      expect((solo(qualitaetZeile(), nurQualitaet([10, 10], [11, 11]))).kosten).toBeNull();
     });
     it("Freitext-Basis mit basis.wert: das Urteil steht, die Kosten sind eine Lücke mit Grund", () => {
       const z = zeile({ basis: { fenster: "irgendwann", wert: 10 } });
-      const u = solo(z, [q(), langfuse(kost([5, 5], [4, 4]))]) as Z;
+      const u = solo(z, [q(), langfuse(kost([5, 5], [4, 4]))]);
       expect(u.urteil).toBe("eingehalten");
       expect(u.kosten).toEqual({ luecke: "Basisfenster nicht auswertbar: irgendwann" });
     });

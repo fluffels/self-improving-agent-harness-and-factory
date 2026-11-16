@@ -100,7 +100,7 @@ const standardDeps = () => {
 
 const imRepo = (pfad) => {
   const rel = relative(WURZEL, resolve(pfad));
-  return rel === "" || (!rel.startsWith("..") && !isAbsolute(rel));
+  return !rel.startsWith("..") && !isAbsolute(rel);
 };
 
 function lese(args, lies) {
