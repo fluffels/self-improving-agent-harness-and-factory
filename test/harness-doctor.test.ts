@@ -211,6 +211,20 @@ describe("Altnamen der Kern-Umgebungsvariablen (--pruefen)", () => {
     writeFileSync(join(root, ".claude", "settings.json"), JSON.stringify({ env: { CC_LANGFUSE_TRACE_TAGS: "anderes,demo" } }));
     assert.equal(punkte()[0]?.ok, true);
   });
+  test("pruefLauf: der Punkt Plugin-Scope ist verdrahtet, OK ohne Hinweis bei false, sonst mit Hinweis (Sammelzeile L4)", () => {
+    const root = mkdtempSync(join(tmpdir(), "doctor-"));
+    ordner.push(root);
+    writeFileSync(join(root, "projekt.json"), JSON.stringify(CONFIG));
+    writeFileSync(join(root, "ruleset.json"), JSON.stringify(SPIEGEL));
+    const punkt = () => (rawPruefLauf as (a: Record<string, unknown>) => { ergebnis: { punkt: string; ok: boolean; hinweis?: string; nichtPruefbar?: boolean }[] })({ rootDir: root, configPfad: join(root, "projekt.json"), gh: () => "{}", langfuse: null }).ergebnis.filter((e) => e.punkt === "Plugin-Scope");
+    assert.equal(punkt().length, 1);
+    assert.equal(punkt()[0]?.nichtPruefbar, true); // ohne Settings
+    mkdirSync(join(root, ".claude"));
+    writeFileSync(join(root, ".claude", "settings.json"), JSON.stringify({ enabledPlugins: {} }));
+    assert.ok(punkt()[0]?.ok && punkt()[0]?.hinweis);
+    writeFileSync(join(root, ".claude", "settings.json"), JSON.stringify({ enabledPlugins: { "langfuse-observability@langfuse-observability": false } }));
+    assert.ok(punkt()[0]?.ok && punkt()[0]?.hinweis === undefined);
+  });
   test("pruefLauf ohne umgebung (Wochenlauf) prüft den Altnamen nicht, auch bei gesetzter Prozess-Umgebung", () => {
     const root = mkdtempSync(join(tmpdir(), "doctor-"));
     ordner.push(root);

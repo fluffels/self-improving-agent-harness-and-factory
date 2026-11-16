@@ -50,3 +50,34 @@ export function repoTagPunkt({ settingsText, repoName }) {
     `\`${SETTINGS_PFAD}\` → \`env.CC_LANGFUSE_TRACE_TAGS\` um \`${repoName}\` ergänzen (kommagetrennt, z. B. \`"projekt,${repoName}"\`), danach Sessions neu starten`,
   );
 }
+
+const PUNKT_PLUGIN_SCOPE = "Plugin-Scope";
+const PLUGIN_SCHLUESSEL = "langfuse-observability@langfuse-observability";
+
+/**
+ * Der Punkt `Plugin-Scope` (Sammelzeile L4, ADR 0036): steht `enabledPlugins` mit dem Plugin-Schlüssel `langfuse-observability@langfuse-observability` in der `.claude/settings.json` auf `false`?
+ * Sonst sendet das Plugin im Projekt-Scope Live-Generations ohne Ticket-Tag; der Nachlieferer ergänzt nur Fehlendes (idempotent, deterministische IDs), eine
+ * Doppelsendung entsteht daraus nicht. Darum `OK` mit `hinweis`, keine Lücke (belegte Grenze: ein bewusst aktives Plugin im User-Scope, ADR 0019, ist erlaubt).
+ * `enabledPlugins` steht nicht im Besitz-Manifest, der Sync setzt den Eintrag nicht. Pur: `settingsText` ist der Dateiinhalt oder `null`/`undefined`; den User-Scope liest der Doctor nicht.
+ */
+export function pluginScopePunkt({ settingsText }) {
+  let settings;
+  try {
+    settings = JSON.parse(settingsText);
+  } catch {
+    settings = null;
+  }
+  const fix = `${SETTINGS_PFAD} anlegen bzw. reparieren (JSON-Objekt, \`enabledPlugins\` ein Objekt)`;
+  if (settings === null || typeof settings !== "object" || Array.isArray(settings)) {
+    return nichtPruefbar(PUNKT_PLUGIN_SCOPE, `${SETTINGS_PFAD} fehlt oder ist kein lesbares JSON-Objekt`, fix);
+  }
+  const plugins = settings.enabledPlugins;
+  if (plugins !== undefined && (plugins === null || typeof plugins !== "object" || Array.isArray(plugins))) {
+    return nichtPruefbar(PUNKT_PLUGIN_SCOPE, "enabledPlugins ist kein Objekt", fix);
+  }
+  if (plugins?.[PLUGIN_SCHLUESSEL] === false) return gut(PUNKT_PLUGIN_SCOPE);
+  return gut(
+    PUNKT_PLUGIN_SCOPE,
+    `Plugin \`${PLUGIN_SCHLUESSEL}\` ist im Projekt-Scope nicht aus: seine Live-Generations tragen keinen Ticket-Tag (Kosten je Ticket erst, wenn dort nur der Nachlieferer sendet). Optional: \`${SETTINGS_PFAD}\` → \`enabledPlugins\` um \`"${PLUGIN_SCHLUESSEL}": false\` ergänzen (steht nicht im Besitz-Manifest, der Sync setzt es nicht), danach Sessions neu starten`,
+  );
+}

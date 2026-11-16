@@ -14,7 +14,7 @@ import { MANIFEST_PFAD, manifestAusText, pflichtChecksFehler, wirdVerteilt } fro
 import { GRENZE_PRIVAT, LINK_ACTIONS, LINK_RULESET, pruefeSicherheit } from "./harness-doctor-sicherheit.mjs";
 import { ausFehler as ausFehlerRoh, gut, luecke, nichtPruefbar } from "./harness-doctor-ergebnis.mjs";
 import { pinPunkt, rulesetPunkte } from "./harness-doctor-ruleset.mjs";
-import { langfusePunkt, repoTagPunkt } from "./harness-doctor-langfuse.mjs";
+import { langfusePunkt, pluginScopePunkt, repoTagPunkt } from "./harness-doctor-langfuse.mjs";
 import { istWorkflowDatei } from "./workflow-blockform.mjs";
 import { manifestKenntModule, MODUL_STANDARD, modulFormFehler, modulWahl } from "./modul-wahl-lib.mjs";
 
@@ -418,6 +418,7 @@ export function pruefLauf({ rootDir, configPfad, gh, langfuse = null, mitWochenl
   if (dateien) ergebnis.push(...dateien({ rootDir, config, spiegel, workflows, pflichtChecks: voraussetzungen.pflichtChecks }));
   ergebnis.push(...rulesetPunkte({ spiegel, repo: config.repo, lesen: rulesetLesen }), ...lokalePunkte({ lokal, rootDir, config }));
   ergebnis.push(repoTagPunkt({ settingsText: dateiTextOderNull(join(rootDir, SETTINGS_PFAD)), repoName: repoName(config) })); // liest nur die Settings, braucht weder Token noch Langfuse (factory#523)
+  ergebnis.push(pluginScopePunkt({ settingsText: dateiTextOderNull(join(rootDir, SETTINGS_PFAD)) })); // wie Repo-Tag nur lokale Settings (Sammelzeile L4, ADR 0036)
   return { config, ergebnis };
 }
 
