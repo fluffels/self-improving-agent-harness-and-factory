@@ -47,12 +47,12 @@ function schreibRechte(p: unknown): string[] {
   return Object.entries(p).filter(([, v]) => v === "write").map(([k]) => `${k}: write`);
 }
 
-/** Alle `uses:`-Zeilen ohne 40-stelligen Commit-SHA samt Versionskommentar (lokale `./`-Actions ausgenommen). */
+/** Alle `uses:`-Zeilen ohne 40-stelligen Commit-SHA samt Versionskommentar (lokale `./`- und `$/`-Actions ausgenommen, `$/` ist die Self-Repository-Syntax). */
 function ungepinnteUses(yml: string): string[] {
   const out: string[] = [];
   for (const l of String(yml ?? "").split(/\r?\n/)) {
     const m = /^\s*(?:-\s+)?uses:\s*(\S+)(.*)$/.exec(l);
-    if (!m || m[1].startsWith("./")) continue;
+    if (!m || m[1].startsWith("./") || m[1].startsWith("$/")) continue;
     if (!/@[0-9a-f]{40}$/.test(m[1]) || !/^\s+#\s*v\d+(\.\d+)*\s*$/.test(m[2])) out.push(l.trim());
   }
   return out;
@@ -260,6 +260,8 @@ describe("Grenzfälle", () => {
   });
   test("lokale Action braucht keinen SHA", () => {
     expect(ungepinnteUses("      - uses: ./.github/actions/x")).toEqual([]);
+    expect(ungepinnteUses("    uses: $/.github/workflows/x.yml")).toEqual([]);
+    expect(ungepinnteUses("    uses: $x/y@main")).toHaveLength(1);
   });
   test("SHA mit falscher Länge ist ungepinnt", () => {
     expect(ungepinnteUses("      - uses: a/b@0123456789abcdef # v1")).toHaveLength(1);
