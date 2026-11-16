@@ -189,7 +189,7 @@ export function checkAbnahmeNachweis({ runGit, gh = (a) => ghJson(a), env = proc
     if (ov.reason !== null) return { ok: true, override: ov.reason, overrideKey: zeilen.abnahmeOverride, fehler: [], invalid: [...ov.invalid], stufe, risikostufe };
     rov = sliceOverride(git, base, zeilen.reviewOverride);
     entwurf = entwurfLive({ gh, env, repo: repoVon(env, config) });
-    fehler = pruefe({ git, gh, env, config, zeilen, base, reviewOverride: rov.reason !== null, stufe, risikostufe });
+    fehler = pruefe({ git, gh, env, config, zeilen, base, reviewOverride: rov.reason !== null, risikostufe });
   } catch (e) {
     fehler = [`Fehler beim Prüfen des Abnahme-Nachweises (git/gh): ${fehlerText(e)}`];
   }
@@ -220,7 +220,7 @@ export function entwurfLive({ gh, env, repo }) {
 const anzeigeStufe = (git, base, config) => groessenstufeAusGit(git, base, "HEAD", { ladeRisiko: () => risikoMusterAus(config) }).stufe;
 
 /** Der eigentliche Ablauf nach Override-Prüfung; wirft bei git- oder gh-Fehlern (der Aufrufer wertet das als rot). */
-function pruefe({ git, gh, env, config, zeilen, base, reviewOverride, stufe, risikostufe }) {
+function pruefe({ git, gh, env, config, zeilen, base, reviewOverride, risikostufe }) {
   const repo = repoVon(env, config);
   const { owner } = zerlegeRepo(repo);
   const nachweis = parseNachweis(git(["log", "--reverse", "--format=%B", `${base}..HEAD`]), zeilen);
