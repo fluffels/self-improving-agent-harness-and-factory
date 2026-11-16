@@ -5,7 +5,9 @@
  * (b) Teil 0, Freigabe-Prüfung, Ablage und „nur unter Claude Code“ stehen im Skill;
  * (c) genau eine Zeile `BUDGET_USD: <Zahl>`, Quelle oder „Lücke: Basis fehlt“ mit existierender Wiedervorlage, Abbruch bei Überschreitung;
  * (d) die Lehren aus factory#576 AK 5 als geschlossene Stichwortliste, (e) die Negativfälle;
- * (f) die zwei Agenten (Werkzeuge, Fremdtext-Satz, Grenze), (g) die Routing-Tabelle gegen `MODELL_ALIASE`, Frontmatter und Spawn-Zeilen, (h) Teil 5.
+ * (f) die zwei Agenten (Werkzeuge, Fremdtext-Satz, Grenze), (g) die Routing-Tabelle gegen `MODELL_ALIASE`, Frontmatter und Spawn-Zeilen, (h) Teil 5;
+ * (i) Plan-Review (factory#577): `plan-review.md` mit Pflichtteilen, Reviewer-Auftrag, drei Urteilen und Ablauf-Reihenfolge im Skill, (j) die Review-Routing-Tabelle gegen `REVIEW_ROUTING`,
+ * (k) `folge-ticket.md` gegen `FOLGE_PRUEFPUNKTE`.
  * Grenze: geprüft wird der Text, nicht, dass ein Agent ihn befolgt.
  */
 import { describe, it, expect } from "vitest";
@@ -13,11 +15,14 @@ import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as routing from "../../scripts/modell-routing-lib.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as tickets from "../../scripts/token-analyse-tickets-lib.mjs";
 
 const WURZEL = join(__dirname, "..", "..");
 const lies = (p: string) => readFileSync(join(WURZEL, p), "utf8");
 const SKILL_DIR = ".agents/skills/token-analyse";
 const { MODELL_ALIASE, hatHartenPin } = routing as unknown as { MODELL_ALIASE: string[]; hatHartenPin: (t: string) => boolean };
+const { REVIEW_ROUTING, FOLGE_PRUEFPUNKTE } = tickets as unknown as { REVIEW_ROUTING: Record<string, { alias: string; effort: string }>; FOLGE_PRUEFPUNKTE: string[] };
 const EFFORTS = ["low", "medium", "high", "xhigh", "max"];
 const TEILE = [1, 2, 3, 4, 5, 6];
 
@@ -91,6 +96,27 @@ const routingBefunde = (
   }
   return b;
 };
+
+/** Pur: Befunde der Review-Routing-Tabelle (Zeilen `[Tragweite, Alias, Effort, Fälle]`) gegen die Lib-Tabelle; leer = gut. */
+const reviewRoutingBefunde = (zeilen: string[][] | null, soll: Record<string, { alias: string; effort: string }>, fall: string[]): string[] => {
+  if (!zeilen) return ["Abschnitt „Token-Analyse: Plan-Review“ fehlt"];
+  const b: string[] = [];
+  const doku = Object.fromEntries(zeilen.map((z) => [z[0].replace(/`/g, ""), { alias: z[1].replace(/`/g, ""), effort: z[2].replace(/`/g, ""), faelle: z[3] }]));
+  for (const k of Object.keys(soll)) if (!doku[k]) b.push(`Tragweite ${k} fehlt in der Tabelle`);
+  for (const [k, v] of Object.entries(doku)) {
+    if (!soll[k]) b.push(`Tragweite ${k} nicht in REVIEW_ROUTING`);
+    else if (soll[k].alias !== v.alias || soll[k].effort !== v.effort) b.push(`${k}: Tabelle ${v.alias}/${v.effort} weicht von REVIEW_ROUTING ab`);
+    if (!MODELL_ALIASE.includes(v.alias)) b.push(`${k}: Alias ${v.alias} nicht in MODELL_ALIASE`);
+    if (!EFFORTS.includes(v.effort)) b.push(`${k}: Effort ${v.effort} ungültig`);
+  }
+  if (doku.standard?.alias !== "opus" || doku.standard?.effort !== "high") b.push("Standard ist nicht opus/high");
+  const faelle = Object.entries(doku).filter(([k]) => k !== "standard");
+  if (faelle.length !== 6 || faelle.some(([, v]) => v.alias !== "fable")) b.push("erwartet genau sechs Fälle mit fable");
+  for (const w of fall) if (!zeilen.some((z) => z[3].includes(w))) b.push(`Fall „${w}“ fehlt`);
+  return b;
+};
+
+const REVIEW_FAELLE = ["Rückbau oder Lockerung von Regeln und Gates", "Abschaffung von Status-Ticket oder Takt", "Wechsel von Modell oder Effort einer Rolle", "Leitplanke", "Sicherheits-Gate", "Opus-Blocker"];
 
 describe("Skill token-analyse (factory#518, factory#576)", () => {
   const skill = existsSync(join(WURZEL, SKILL_DIR, "SKILL.md")) ? lies(`${SKILL_DIR}/SKILL.md`) : "";
@@ -208,6 +234,60 @@ describe("Skill token-analyse (factory#518, factory#576)", () => {
       expect(routingBefunde([...z, ["7 Extra", "`sonnet`", "`medium`", "x"]], skill, fm)).not.toEqual([]);
       expect(routingBefunde(z.filter((r) => !r[0].startsWith("3")), skill, fm)).not.toEqual([]);
       expect(routingBefunde(z, skill.replace('model "opus", effort "medium"', 'model "sonnet", effort "medium"'), fm)).not.toEqual([]);
+    });
+  });
+
+  describe("(i) Plan-Review (factory#577)", () => {
+    const pr = existsSync(join(WURZEL, SKILL_DIR, "plan-review.md")) ? lies(`${SKILL_DIR}/plan-review.md`) : "";
+    it("plan-review.md ist im Skill verlinkt und trägt die Pflichtteile der Vorlage", () => {
+      expect(skill).toContain("(plan-review.md)");
+      const teile = ["## Rückbau-Kandidaten", "## Umstellungen", "## Entscheidung Status-Ticket", "## Neue Registerzeilen", "## Ticketentwürfe", "## Vorab-Bewertung je Probe-Ticket", "## Bezieher-Analysen", "Reihenfolge", "Abhängigkeiten", "| Analyse | wo | warum | Bezieher-Schalter |", "Name, Ort in der Bezieher-Config", "Standard „an“", "eine Lücke, nicht „eingehalten“"];
+      expect(fehlende(pr, teile)).toEqual([]);
+    });
+    it("Reviewer: unabhängig, Auftrag, drei Urteile, Durchgänge, keine Transkripte, Lauf-Budget", () => {
+      const woerter = ["nie der Hauptchat", "ohne Vorgeschichte", "jede Empfehlung zu widerlegen versuchen", "Fenster", "Überlappung", "Lücken", "Preisbasis", "Qualitätsrisiko je Rückbau", "Vollständigkeit, Schnitt und Negativfälle", "suchen, was fehlt", "`bestätigt`", "`bedingt`", "`abgelehnt`", "nie rohe Transkripte", "ein zweiter nur nach `bedingt`", "Lauf-Budget", "nie `fork`"];
+      expect(fehlende(pr, woerter)).toEqual([]);
+    });
+    it("Ablauf im Skill: Analyse, Plan, Review, Anlegen, Umsetzung in dieser Reihenfolge", () => {
+      const pos = ["**Zusammenfassung", "**Plan**", "**Review:**", "**Anlegen:**", "**Umsetzung**"].map((w) => skill.indexOf(w));
+      expect(pos.every((x) => x >= 0)).toBe(true);
+      expect([...pos].sort((a, b) => a - b)).toEqual(pos);
+      expect(skill).toContain("node scripts/token-analyse-tickets.mjs --review");
+      expect(skill).toContain("noch nichts angelegt");
+    });
+    it("Selbsttest: fehlender Pflichtteil und fehlende Regel werden erkannt", () => {
+      expect(fehlende(pr.replace("## Umstellungen", ""), ["## Umstellungen"])).toEqual(["## Umstellungen"]);
+      expect(fehlende(pr.replace("nie der Hauptchat", "").replace("nie rohe Transkripte", ""), ["nie der Hauptchat", "nie rohe Transkripte"])).toHaveLength(2);
+    });
+  });
+
+  describe("(j) Review-Routing-Tabelle (factory#577)", () => {
+    const doku = lies("docs/model-routing.md");
+    const zeilen = () => tabelle(doku, "### Token-Analyse: Plan-Review (factory#577)")?.filter((z) => z[0] !== "Tragweite") ?? null;
+    it("Tabelle und REVIEW_ROUTING stimmen überein, alle sechs fable-Fälle, Standard opus/high, kein harter Pin", () => {
+      expect(reviewRoutingBefunde(zeilen(), REVIEW_ROUTING, REVIEW_FAELLE)).toEqual([]);
+      expect(hatHartenPin(JSON.stringify(zeilen()))).toBe(false);
+    });
+    it("Selbsttest: fehlender Abschnitt, falscher Alias, falscher Standard, fehlender oder zusätzlicher Fall werden rot", () => {
+      const z = zeilen() ?? [];
+      expect(reviewRoutingBefunde(null, REVIEW_ROUTING, REVIEW_FAELLE)).not.toEqual([]);
+      expect(reviewRoutingBefunde(z.map((r) => [r[0], "`claude-opus-5-5`", r[2], r[3]]), REVIEW_ROUTING, REVIEW_FAELLE)).not.toEqual([]);
+      expect(reviewRoutingBefunde(z.map((r) => (r[0].includes("standard") ? [r[0], "`sonnet`", r[2], r[3]] : r)), REVIEW_ROUTING, REVIEW_FAELLE)).not.toEqual([]);
+      expect(reviewRoutingBefunde(z.filter((r) => !r[0].includes("abschaffung")), REVIEW_ROUTING, REVIEW_FAELLE)).not.toEqual([]);
+      expect(reviewRoutingBefunde([...z, ["`extra`", "`fable`", "`high`", "x"]], REVIEW_ROUTING, REVIEW_FAELLE)).not.toEqual([]);
+      expect(reviewRoutingBefunde(z, REVIEW_ROUTING, [...REVIEW_FAELLE, "Unbekannter Fall"])).not.toEqual([]);
+    });
+  });
+
+  describe("(k) Folge-Ticket (factory#577)", () => {
+    const ft = existsSync(join(WURZEL, SKILL_DIR, "folge-ticket.md")) ? lies(`${SKILL_DIR}/folge-ticket.md`) : "";
+    it("folge-ticket.md ist verlinkt und nennt die feste Frage und alle Prüfpunkte der Lib", () => {
+      expect(skill).toContain("(folge-ticket.md)");
+      expect(fehlende(ft, ["was haben wir vergessen?", "Unsicherheiten", "Webrecherche", "genau ein Folge-Ticket", ...FOLGE_PRUEFPUNKTE])).toEqual([]);
+      expect(FOLGE_PRUEFPUNKTE).toHaveLength(6);
+    });
+    it("Selbsttest: ein fehlender Prüfpunkt wird erkannt", () => {
+      expect(fehlende(ft.replace("fehlender Analysebereich", ""), FOLGE_PRUEFPUNKTE)).toEqual(["fehlender Analysebereich"]);
     });
   });
 
