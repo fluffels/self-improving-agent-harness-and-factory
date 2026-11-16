@@ -15,7 +15,7 @@
  * Anlaufstellen-Seite (nur wenn die Zielseite im Repo existiert, damit kein Bezieher nach dem Sync rot wird) und trägt die H2-Abschnitte
  * aus `dokuPflicht.readmeAbschnitte` der Projekt-Config (ohne den Schlüssel keine Abschnittsprüfung).
  *
- * Verfall (ADR 0027): Prüftermin laut Registerzeile `verfall-doku-pflicht-604` in `.github/aenderungsregister.json` (Fangquote).
+ * Verfall (ADR 0027): Prüftermin laut Registerzeile `verfall-doku-pflicht-604` des Änderungsregisters (Fangquote).
  *
  * Grenze (bewusst): die Pflicht prüft nur, DASS Doku mitläuft, nicht ob sie zur Änderung passt; das tun Review-Lens und `check:docdrift`.
  * Ein reiner Refactor in `scripts/` braucht darum eine Doku-Zeile oder den Override; die Fangquote steht im Änderungsregister.
