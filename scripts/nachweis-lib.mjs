@@ -65,6 +65,15 @@ export function hoechsteRunde(text) {
   return zahlen.reduce((a, b) => Math.max(a, b), 0);
 }
 
+/** Alle `Runde <n>:`-Zeilen der Fix-Commits (factory#535, Format: `scripts/lens-filter.mjs` `rundenZeile`) → `[{n, blocker, sollte, hinweis}]` nach Rundennummer; ein fehlendes Feld ist `null`. Zeilenverankert wie `hoechsteRunde`; bei doppelter Nummer gewinnt die letzte Zeile. Pur. */
+export function rundenZeilenAus(text) {
+  const je = new Map();
+  for (const m of String(text ?? "").replace(/\r/g, "").matchAll(/^(?:\* )?Runde (\d+):[ \t]*(.*)$/gm)) {
+    je.set(Number(m[1]), { n: Number(m[1]), blocker: brillenZahlenAus(m[2], "blocker"), sollte: brillenZahlenAus(m[2], "sollte"), hinweis: brillenZahlenAus(m[2], "hinweis") });
+  }
+  return [...je.values()].sort((a, b) => a.n - b.n);
+}
+
 /** Ursachen einer `<Präfix>Zusatzpass: R<k> <Ursache> — Entscheidung: <X>, weil <Y>`-Zeile (factory#534): jeder Pass über dem Cap trägt eine. */
 export const ZUSATZPASS_URSACHEN = Object.freeze(["Zusatzpass", "Abnahme-Fix", "CI-Fix-Delta", "Merge-Delta"]);
 

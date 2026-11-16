@@ -6,7 +6,7 @@
  * Squash-Message, Präfix aus der Projekt-Config), rote CI-Läufe (distinct Head-SHAs mit Fehlschlag zwischen PR-Erstellung und Merge), das
  * Label `labels.festgefahren` der Projekt-Config (aus den Label-Events, zählt auch bei später entferntem Label) und Nacharbeit: ein Revert
  * oder eine Folge-Fix-Commit-Zeile `Folge #<ticket-nr>` innerhalb von 14 Tagen nach dem Merge. Daraus die
- * Lens-Trefferquote je Brille und der Anteil ohne Nacharbeit. Seit factory#530 je Brille und Schwere (blockierend, sollte, Hinweis) Σ, Wert je PR und PRs mit Treffer (`kennzahlen.schwere`), nur über PRs mit `sollte=`/`hinweis=`-Feldern; die anderen stehen als `ohneSchwere`, nie als 0. Dazu je PR die Abnahme (`{durchgaenge}` | "entfaellt" | "override" | null) und die Quote im ersten Durchgang. Definitionen und Grenzen: docs/model-routing.md
+ * Lens-Trefferquote je Brille und der Anteil ohne Nacharbeit. Seit factory#530 je Brille und Schwere (blockierend, sollte, Hinweis) Σ, Wert je PR und PRs mit Treffer (`kennzahlen.schwere`), nur über PRs mit `sollte=`/`hinweis=`-Feldern; die anderen stehen als `ohneSchwere`, nie als 0. Seit factory#535 je Stichprobenarm (`kennzahlen.arme`: `vollablauf`, `schlank`, `ohneArm` als eigene Zahl) und die Schattenrunden des Vollablaufs samt blockierender Funde (`kennzahlen.arme.schatten`, fehlende `Runde <n>:`-Zeilen als `fehlendeRundenZeilen`, nie als 0). Dazu je PR die Abnahme (`{durchgaenge}` | "entfaellt" | "override" | null) und die Quote im ersten Durchgang. Definitionen und Grenzen: docs/model-routing.md
  * › Ergebnis je Ticket-Lauf.
  *
  *   node scripts/lauf-ergebnis.mjs --von <ISO> --bis <ISO> [--ticket <nr>…] [--ohne <nr>…] [--start-agent <typ>] [--je-agent <typ>…] [--json]
@@ -26,9 +26,9 @@ import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { labelAus, ladeProjektConfig, repoOwner } from "./projekt-config-lib.mjs";
 import { aktiverOverride, commitZeilenAus } from "./slice-override.mjs";
-import { hoechsterAbnahmeDurchgang, parseNachweis, runde1LoestFixAus, URSACHEN } from "./nachweis-lib.mjs";
+import { ARME, hoechsterAbnahmeDurchgang, parseNachweis, runde1LoestFixAus, rundenZeilenAus, URSACHEN } from "./nachweis-lib.mjs";
 import { issueKommentare } from "./fremdtext-lib.mjs";
-import { armeZuordnen, passtTicketFilter, TICKET_OPTIONEN, ticketFilterAus, ticketMeldung } from "./mess-lib.mjs";
+import { armeZuordnen, median, passtTicketFilter, TICKET_OPTIONEN, ticketFilterAus, ticketMeldung } from "./mess-lib.mjs";
 import { flagsLesen } from "./flag-lib.mjs";
 import { distinctRoteShas, ghText, holeRoteLaeufe } from "./ci-laeufe.mjs";
 import { ladeLaeufe, laufAus, mitVorlauf, ticketsMitStartImFenster } from "./subagent-laeufe.mjs";
@@ -148,6 +148,8 @@ export function bewertePrs({ prs, commits, ci, festgefahren, jetzt, konfigZeilen
       ticket,
       gemergt: pr.mergedAt,
       runden: review && Number.isInteger(review.runden) ? review.runden : null,
+      arm: review?.arm ?? null,
+      rundenZeilen: rundenZeilenAus(body),
       ...brillenFelder(review),
       abnahme: abnahmeVon(body, abnahme, konfigZeilen),
       reviewOverride: aktiverOverride(body, konfigZeilen.reviewOverride) !== null,
@@ -181,8 +183,83 @@ export function blockerMitTeilbrillen(z) {
   return [...z.blocker, ...(z.teilbrillen ?? [])];
 }
 
-/** Kennzahlen aus bewerteten Zeilen (`bewertePrs`); auch je Typ-Gruppe bei `--je-agent`. Pure. */
+/** Summe der Zahlen eines Brillen-Zahlen-Felds; `null`, wenn das Feld fehlt. Nicht endliche Werte zählen 0. Pur. */
+const feldSumme = (liste) => (liste === null || liste === undefined ? null : liste.reduce((a, b) => a + (Number.isFinite(b.n) ? b.n : 0), 0));
+
+/** Funde von Pass `k` eines Vollablauf-PRs (`{blocker, sollte}`, Summen, `sollte` ggf. null) oder `null`, wenn sie nicht belegt sind. Pass k trägt die Zahlen der Zeile `Runde k:`; Pass 1 fällt auf die Felder der Review-Zeile zurück, der letzte Pass ohne Zeile ist konvergiert (0 Funde, `ablauf-filter.md`). Pur. */
+function passFunde(z, k, zeilen) {
+  const zeile = zeilen.find((r) => r.n === k);
+  if (zeile) return zeile.blocker === null ? null : { blocker: feldSumme(zeile.blocker), sollte: feldSumme(zeile.sollte) };
+  if (k === 1 && z.blocker) return { blocker: feldSumme(z.blocker), sollte: feldSumme(z.sollte) };
+  return k === z.runden ? { blocker: 0, sollte: 0 } : null;
+}
+
+/**
+ * Schattenrunden eines PRs (factory#535): nur im Arm `vollablauf` (sonst `null`). Ein Pass k+1 ist eine Schattenrunde, wenn Pass k laut `Runde k:`-Zeile
+ * blocker 0 und sollte über 0 meldete (der schlanke Ablauf hätte dort aufgehört); ihre Blocker sind die Obergrenze dessen, was der schlanke Ablauf verpasst hätte.
+ * Fehlt für ein k < runden die Zahl (Zeile oder Feld), ist das eine Lücke: `{luecke: true, fehlend}`, keine Zählung, nie 0 (`fehlend: null` ohne Review-Nachweis). Pur.
+ */
+export function schattenrundenVon(z) {
+  if (z.arm !== "vollablauf") return null;
+  if (!Number.isInteger(z.runden)) return { luecke: true, fehlend: null };
+  const zeilen = z.rundenZeilen ?? [];
+  const funde = [];
+  const fehlend = [];
+  for (let k = 1; k <= z.runden; k++) {
+    const f = passFunde(z, k, zeilen);
+    // sollte entscheidet nur bei blocker 0 und nur, wenn noch ein Pass folgt.
+    const unklar = f === null || (k < z.runden && f.blocker === 0 && f.sollte === null);
+    if (unklar) fehlend.push(k);
+    funde[k] = f;
+  }
+  if (fehlend.length > 0) return { luecke: true, fehlend };
+  const schattenrunden = [];
+  for (let k = 1; k < z.runden; k++) {
+    if (funde[k].blocker === 0 && funde[k].sollte > 0) schattenrunden.push({ runde: k + 1, blocker: funde[k + 1].blocker });
+  }
+  return { schattenrunden, blockerSumme: schattenrunden.reduce((a, r) => a + r.blocker, 0), fehlend: [] };
+}
+
+/** Schattenrunden aller Vollablauf-PRs: je PR, gesamt (`null` statt 0 ohne auswertbaren PR) und die PRs mit fehlenden Runde-Zeilen. Pur. */
+export function schattenAus(eintraege) {
+  const jePr = [];
+  const fehlendeRundenZeilen = [];
+  for (const z of eintraege) {
+    const r = schattenrundenVon(z);
+    if (r === null) continue;
+    if (r.luecke) fehlendeRundenZeilen.push({ pr: z.pr, fehlend: r.fehlend });
+    else jePr.push({ pr: z.pr, ticket: z.ticket, schattenrunden: r.schattenrunden.length, blocker: r.blockerSumme });
+  }
+  const gesamt = jePr.length === 0 ? { prs: 0, schattenrunden: null, blocker: null } : { prs: jePr.length, schattenrunden: jePr.reduce((a, r) => a + r.schattenrunden, 0), blocker: jePr.reduce((a, r) => a + r.blocker, 0) };
+  return { jePr, gesamt, fehlendeRundenZeilen };
+}
+
+/**
+ * Kennzahlen je Stichprobenarm (factory#535): je Arm PRs, Runden (Median, Verteilung) und die Kennzahlen des Arms (Runde-1-Funde je Brille und Schwere, Nacharbeit, Abnahme).
+ * PRs ohne gültigen `arm=` stehen als eigene Zahl `ohneArm` und zählen in keinem Arm, nie als `schlank`. Pur.
+ */
+export function armeAus(eintraege) {
+  const out = {};
+  for (const arm of ARME) {
+    const gruppe = eintraege.filter((z) => z.arm === arm);
+    const runden = gruppe.map((z) => z.runden).filter((r) => r !== null);
+    const verteilung = {};
+    for (const r of runden) verteilung[r] = (verteilung[r] ?? 0) + 1;
+    out[arm] = { ...kennzahlenKern(gruppe), runden: { median: median(runden), verteilung } };
+  }
+  const ohne = eintraege.filter((z) => !ARME.includes(z.arm));
+  out.ohneArm = { prs: ohne.length, liste: ohne.map((z) => ({ pr: z.pr, arm: z.arm ?? null })) };
+  out.schatten = schattenAus(eintraege);
+  return out;
+}
+
+/** Kennzahlen aus bewerteten Zeilen (`bewertePrs`) samt Stichprobenarmen (factory#535, additiv); auch je Typ-Gruppe bei `--je-agent`. Pure. */
 export function kennzahlenAus(eintraege, offenMitFix = 0) {
+  return { ...kennzahlenKern(eintraege, offenMitFix), arme: armeAus(eintraege) };
+}
+
+/** Kennzahlen ohne Arm-Aufteilung (Kern von `kennzahlenAus`, je Arm wiederverwendet). Pure. */
+function kennzahlenKern(eintraege, offenMitFix = 0) {
   const mitNachweis = eintraege.filter((z) => z.runden !== null);
   // Schwere-Felder (factory#530): nur PRs mit sollte= UND hinweis= fließen in die Schwere-Zahlen; alle anderen stehen in ohneSchwere, nie als 0.
   const mitSchwere = mitNachweis.filter((z) => z.sollte !== null && z.hinweis !== null);
@@ -248,6 +325,31 @@ function schwereTabelle(k) {
   return zeilen;
 }
 
+/** Abschnitt „Stichprobenarme“ (factory#535): Arm-Tabelle, Schwere je Arm, PRs ohne `arm=`, Schattenrunden je PR und gesamt, Lücken. Ohne Vollablauf-PR steht „keine“, nie 0. Pure. */
+function armeAbschnitt(arme) {
+  const verteilung = (a) => Object.entries(a.runden.verteilung).map(([r, n]) => `${r}×${n}`).join(" ") || "–";
+  const median = (a) => (a.runden.median === null ? "–" : String(a.runden.median).replace(".", ","));
+  const out = ["", "Stichprobenarme (factory#535):", "", "| Arm | PRs | Runden Median | Verteilung | ohne Nacharbeit | Abnahme 1. Durchgang |", "|---|---|---|---|---|---|"];
+  for (const arm of ARME) {
+    const a = arme[arm];
+    out.push(`| ${arm} | ${a.prs} | ${median(a)} | ${verteilung(a)} | ${prozent(a.ohneNacharbeit, a.nachweisbareFenster)} | ${prozent(a.abnahme.ersterDurchgang, a.abnahme.gemessen)} |`);
+  }
+  for (const arm of ARME) out.push("", `Arm ${arm}:`, ...schwereTabelle(arme[arm]));
+  const nr = arme.ohneArm.liste.map((e) => `#${e.pr}`).join(", ");
+  out.push("", `ohne arm=: ${arme.ohneArm.prs}${arme.ohneArm.prs > 0 ? ` (${nr}; zählen in keinem Arm)` : ""}`);
+  const sch = arme.schatten;
+  if (sch.gesamt.prs === 0) out.push("Schattenrunden (Arm vollablauf): keine auswertbaren Vollablauf-PRs");
+  else {
+    out.push("", "| PR | Ticket | Schattenrunden | blockierende Funde |", "|---|---|---|---|");
+    for (const e of sch.jePr) out.push(`| #${e.pr} | ${e.ticket ? `#${e.ticket}` : "–"} | ${e.schattenrunden} | ${e.blocker} |`);
+    out.push("", `Schattenrunden gesamt: ${sch.gesamt.schattenrunden} in ${sch.gesamt.prs} PRs, blockierende Funde (Obergrenze dessen, was der schlanke Ablauf verpasst hätte): ${sch.gesamt.blocker}`);
+  }
+  if (sch.fehlendeRundenZeilen.length > 0) {
+    out.push(`Vollablauf-PRs mit fehlenden Runde-Zeilen (nicht gezählt): ${sch.fehlendeRundenZeilen.map((e) => `#${e.pr}${e.fehlend === null ? " (ohne Review-Nachweis)" : ` (Runde ${e.fehlend.join(", ")})`}`).join(", ")}`);
+  }
+  return out;
+}
+
 /** Markdown-Ausgabe: Tabelle je PR plus Aggregatzeilen. Pure. */
 export function formatiere({ zeilen, kennzahlen: k }) {
   const blocker = (z) => (z.blocker === null ? "–" : z.blocker.map((b) => `${b.lens}:${b.n}`).join(","));
@@ -265,6 +367,7 @@ export function formatiere({ zeilen, kennzahlen: k }) {
   out.push(`Abnahme im ersten Durchgang: ${prozent(a.ersterDurchgang, a.gemessen)}; entfällt ${a.entfaellt}, Override ${a.override}, ohne gültige Abnahme-Zeile ${a.ohne}`);
   out.push(`Abnahme-Ursache (Fälle mit Fix): ${URSACHEN.map((u) => `${u} ${a.ursachen[u]}`).join(", ")}, ohne Ursachen-Feld ${a.ursachen.ohne}`);
   out.push(`Abnahme-Fix: ${k.abnahmeFix.mitFix} PRs, davon mit Hand-off: ${prozent(k.abnahmeFix.mitFixUndFestgefahren, k.abnahmeFix.mitFix)}; offen (Hand-off, nicht gemergt): ${k.abnahmeFix.offenMitFix}`);
+  out.push(...armeAbschnitt(k.arme), "");
   out.push(`Σ CI-Fix-Runden: ${k.ciFixSumme}, Σ festgefahren: ${k.festgefahrenSumme}`);
   return out.join("\n");
 }
