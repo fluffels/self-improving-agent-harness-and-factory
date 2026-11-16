@@ -18,11 +18,14 @@ import { fixture } from "../support/tmp-fixture";
 const WURZEL = join(__dirname, "..", "..");
 const { wirdVerteilt } = besitzModul as unknown as { wirdVerteilt: (e: { ring: string }) => boolean };
 
-type Art = "skript" | "lib" | "daten";
+/** `skript`: sperrt auch nach dem Arbeitsverzeichnis (Lauf im Bezieher-Fixture bricht ab); `skript-wurzel`: sperrt nach dem Repo des Skripts (nur statisch belegt: `istBezieher(`); `lib`, `daten`: kein Einstieg. */
+type Art = "skript" | "skript-wurzel" | "lib" | "daten";
 const FABRIK_EIGEN: { pfad: string; art: Art }[] = [
   { pfad: "scripts/aenderungsregister.mjs", art: "skript" },
   { pfad: "scripts/aenderungsregister-lib.mjs", art: "lib" },
   { pfad: ".github/aenderungsregister.json", art: "daten" },
+  { pfad: "scripts/token-analyse-freigabe.mjs", art: "skript-wurzel" },
+  { pfad: "scripts/token-analyse-freigabe-lib.mjs", art: "lib" },
 ];
 
 /** Pur: Einträge des Manifests, die einen Pfad der Liste treffen (gleicher Pfad oder Verzeichnis-Präfix). */
@@ -60,7 +63,13 @@ describe("Fabrik-eigene Analyse-Dateien (factory#518)", () => {
     expect(nennungen({ "docs/x.md": "nichts dergleichen" }, FABRIK_EIGEN)).toHaveLength(0);
   });
 
-  describe("(c) jedes Skript der Liste bricht im Bezieher ab", () => {
+  it("(c) jedes Einstiegsskript der Liste sperrt im Bezieher (statisch: importiert und ruft istBezieher)", () => {
+    const einstiege = FABRIK_EIGEN.filter((x) => x.art === "skript" || x.art === "skript-wurzel");
+    expect(einstiege.length).toBeGreaterThan(1);
+    for (const f of einstiege) expect([f.pfad, /istBezieher\(/.test(readFileSync(join(WURZEL, f.pfad), "utf8"))]).toEqual([f.pfad, true]);
+  });
+
+  describe("(c) jedes Skript der Liste mit Arbeitsverzeichnis-Sperre bricht im Bezieher ab", () => {
     for (const f of FABRIK_EIGEN.filter((x) => x.art === "skript")) {
       it(f.pfad, () => {
         const cwd = fixture({ ".factory/sync-stand.json": "{}\n" });

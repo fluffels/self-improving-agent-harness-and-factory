@@ -51,6 +51,14 @@
     "art": "projekt",
     "grund": "Wiedervorlagen dieses Repos (Daten des Projekts)"
   },
+  "scripts/token-analyse-freigabe.mjs": {
+    "art": "projekt",
+    "grund": "Fabrik-eigene Token-Analyse (factory#518), nicht im Besitz-Manifest"
+  },
+  "scripts/token-analyse-freigabe-lib.mjs": {
+    "art": "projekt",
+    "grund": "Fabrik-eigene Token-Analyse (factory#518), nicht im Besitz-Manifest"
+  },
   ".github/aenderungsregister.json": {
     "art": "projekt",
     "grund": "Änderungsregister dieses Repos (Daten der Fabrik, factory#571)"

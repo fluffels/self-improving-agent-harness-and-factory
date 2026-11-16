@@ -618,17 +618,17 @@ describe("check-abnahme-nachweis: keine Basis, CLI", { timeout: 30_000 }, () => 
     expect(r.status).toBe(0);
     expect(r.stdout).toMatch(/Entwurf, nur Bericht/);
     expect(r.stdout).toMatch(/Zeile fehlt/);
-    expect(r.stdout).toMatch(/• Größenstufe: (S|voll)/);
+    expect(r.stdout).toMatch(/• Kombi-Lens-Grenze: (eingehalten|überschritten)/);
   });
-  test("Größenstufe wird bei Erfolg genannt, auch bei Abnahme-Zeile entfaellt (factory#402 L26)", () => {
+  test("Kombi-Lens-Grenze wird bei Erfolg genannt, auch bei Abnahme-Zeile entfaellt (factory#402 L26)", () => {
     const r = cli(cliRepo(`x\n\n${Z.abnahme}: entfaellt — kein Ticket`));
     expect(r.status).toBe(0);
-    expect(r.stdout).toMatch(/• Größenstufe: (S|voll)/);
+    expect(r.stdout).toMatch(/• Kombi-Lens-Grenze: (eingehalten|überschritten)/);
   });
   test("Rot: keine Stufenzeile in der Ausgabe (factory#402 L26)", () => {
     const r = cli(cliRepo("nur Code"));
     expect(r.status).toBe(1);
-    expect(r.stdout).not.toMatch(/Größenstufe:/);
+    expect(r.stdout).not.toMatch(/Kombi-Lens-Grenze:/);
   });
   test("Review-Override (L24a): die Ausgabe nennt, was entfällt; ohne die Zeile fehlt der Hinweis", () => {
     const abn = `${Z.abnahme}: head=${"c".repeat(40)} durchgaenge=1 urteil=K1:erfuellt`;
@@ -641,7 +641,7 @@ describe("check-abnahme-nachweis: keine Basis, CLI", { timeout: 30_000 }, () => 
     const r = cli(cliRepo(`x\n\n${Z.abnahmeOverride}: #9 Sitzung vor dem Werkzeug`));
     expect(r.status).toBe(0);
     expect(r.stdout).toMatch(new RegExp(`${Z.abnahmeOverride} — #9 Sitzung vor dem Werkzeug`));
-    expect(r.stdout).toMatch(/• Größenstufe: (S|voll)/);
+    expect(r.stdout).toMatch(/• Kombi-Lens-Grenze: (eingehalten|überschritten)/);
   });
   test("kaputte Config und --config ohne Pfad: Exit 1", () => {
     // Die Message trägt das Fremd-Präfix: mit der gültigen Fremd-Config grün (Exit 0), mit der kaputten kommt Exit 1 aus dem --config-Zweig (nicht aus der Zeile).
@@ -688,9 +688,8 @@ describe("Risikostufe: entfaellt wird nachgerechnet (factory#526)", () => {
     rot(bewerte({ abnahme: entf("Doku"), risikostufe: R2 }), /entfaellt ist bei Ticket #9 .* nicht erlaubt/);
     expect(bewerte({ risikostufe: R2 })).toEqual([]);
   });
-  test("K7: `entfaellt — klein:` gilt nur bei Größenstufe S und Risikostufe ≤ 1", () => {
-    expect(bewerte({ abnahme: entf("klein: Tippfehler"), stufe: "S", risikostufe: R1 })).toEqual([]);
-    rot(bewerte({ abnahme: entf("klein: Tippfehler"), stufe: "S", risikostufe: R2 }), /Risikostufe 2/);
-    rot(bewerte({ abnahme: entf("klein: Tippfehler"), stufe: "voll", risikostufe: R1 }), /nicht erlaubt/);
+  test("K2: die entfernte Klein-Form `entfaellt — klein:` ist bei jeder Stufe rot und nennt die Stufen-Form", () => {
+    for (const r of [R0, R1, R2]) rot(bewerte({ abnahme: entf("klein: Tippfehler"), risikostufe: r }), /nicht erlaubt.*Klein-Form ist entfernt.*entfaellt — stufe <0\|1>/);
+    expect(bewerte({ abnahme: entf("stufe 1"), risikostufe: R1 })).toEqual([]);
   });
 });

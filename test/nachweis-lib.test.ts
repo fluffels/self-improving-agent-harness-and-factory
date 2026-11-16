@@ -323,9 +323,10 @@ describe("Szenario-Prädikat (factory#402 L50): eine Definition für Urteile und
 describe("stufeZeile (factory#402 L26)", () => {
   const stufeZeile = (raw as unknown as { stufeZeile: (s: string | null) => string }).stufeZeile;
   it("nennt die Stufe, bei null ausdrücklich nicht berechenbar", () => {
-    expect(stufeZeile("S")).toBe("• Größenstufe: S");
-    expect(stufeZeile("voll")).toBe("• Größenstufe: voll");
-    expect(stufeZeile(null)).toBe("• Größenstufe: (nicht berechenbar)");
+    expect(stufeZeile("S")).toBe("• Kombi-Lens-Grenze: eingehalten");
+    expect(stufeZeile("voll")).toBe("• Kombi-Lens-Grenze: überschritten");
+    expect(stufeZeile(null)).toBe("• Kombi-Lens-Grenze: (nicht berechenbar)");
+    expect(stufeZeile(undefined as unknown as null)).toBe("• Kombi-Lens-Grenze: (nicht berechenbar)");
   });
 });
 

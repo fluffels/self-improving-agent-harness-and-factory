@@ -1,6 +1,6 @@
 # Ablauf: Risikoklasse hoch
 
-Bedingte Datei von `SKILL.md` (Kern: `.agents/skills/review-lenses/SKILL.md`): lies sie, sobald `node scripts/risikostufe.mjs` `RISIKOSTUFE: 2` meldet (schließt `RISIKO: hoch` aus `node scripts/groessenstufe.mjs` ein; factory#334, factory#527). Werte für die Platzhalter `<gruppe.schlüssel>` stehen im Block darunter und werden wörtlich eingesetzt.
+Bedingte Datei von `SKILL.md` (Kern: `.agents/skills/review-lenses/SKILL.md`): lies sie, sobald `node scripts/risikostufe.mjs` `RISIKOSTUFE: 2` meldet (schließt `RISIKO: hoch` aus `node scripts/risikostufe.mjs` ein; factory#334, factory#527). Werte für die Platzhalter `<gruppe.schlüssel>` stehen im Block darunter und werden wörtlich eingesetzt.
 
 <!-- factory:projektwerte:start -->
 Projektwerte aus `.factory/projekt.json` (generiert von `node scripts/projektwerte.mjs --write`, nicht von Hand ändern).
