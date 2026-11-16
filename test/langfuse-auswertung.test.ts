@@ -752,7 +752,7 @@ describe("Leere Hook-Generations (factory#522)", () => {
 });
 
 describe("Preislücke (factory#522, AK4)", () => {
-  const ohnePreis = (r: ReturnType<typeof g>) => ({ ...r, sum_totalCost: null });
+  const ohnePreis = (r: ReturnType<typeof g>): ReturnType<typeof g> => ({ ...r, sum_totalCost: null as unknown as number });
   const mitLeer = (rows: ReturnType<typeof g>[]) => [exp("gesamt", rows), tageVoll, leerVon(rows)];
   test("betrag: mit Preis die Zahl, komplett ohne Preis die Lücke, gemischt „mindestens“", () => {
     expect(L.betrag({ cost: 5, count: 3 })).toBe("5.00 $");

@@ -79,6 +79,9 @@ function kostenAusSoll(soll) {
   return { kosten, ohnePreis };
 }
 
+/** `leer` (Observations des Diffs, sonst Zählzeilen mit Modell claude) und ob die Zählebene nach Modell getrennt ist. */
+const leerFelder = (diff, ist) => ({ leer: diff?.leer?.length ?? ist.leer ?? 0, modellGetrennt: ist.modellGetrennt === true });
+
 /**
  * Eine Session bewerten. `ist` = `{ calls, tokens, kosten, leer?, modellGetrennt? }` (calls null zählt als 0, `leer` = Zeilen mit Modell claude der Zählebene, kosten fehlend/null = unbekannt), `diff` optional aus `diffMultimenge`
  * (sonst Zählebene: fehlend = max(0, Soll − Ist), Dubletten = max(0, Ist − Soll)). Status: `läuft` (Ruhefrist),
@@ -127,8 +130,7 @@ export function bewerteSession({ soll, ist, mtime, groesse = null, now, diff = n
     hinweisUeberpreis,
     fehlend,
     dubletten,
-    leer: diff?.leer?.length ?? ist.leer ?? 0,
-    modellGetrennt: ist.modellGetrennt === true,
+    ...leerFelder(diff, ist),
     quote: soll.length ? (soll.length - fehlend) / soll.length : 1,
     fehlendeCalls: diff ? diff.fehlend.map((e) => ({ messageId: e.messageId, ts: e.ts, model: e.model })) : null,
     schluessel: diff?.art ?? "zählung",

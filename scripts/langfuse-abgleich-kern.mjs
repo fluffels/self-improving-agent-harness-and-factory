@@ -191,6 +191,15 @@ export function istAbfragen({ von, bis, session = null }) {
 const zahl = (v) => (v !== null && v !== "" && Number.isFinite(Number(v)) ? Number(v) : null);
 export const leereSumme = () => ({ input: 0, output: 0, cacheRead: 0, cacheWrite: 0 });
 
+/** Zählzeile: Modell `claude` zählt als `leer`, alles andere als Call; eine Zeile mit Schlüssel `providedModelName` kennzeichnet den Export als modellgetrennt. */
+function zaehleZeile(e, r) {
+  const count = zahl(r.count_count);
+  if (count === null) return;
+  if (r.providedModelName === LEER_MODELL) e.leer = (e.leer ?? 0) + count;
+  else e.calls = (e.calls ?? 0) + count;
+  if ("providedModelName" in r) e.modellGetrennt = true;
+}
+
 /**
  * Metrics-Zeilen (`{data:[…]}` oder nacktes Array; Zahlen auch als String) → `Map<sessionId, { calls, tokens, kosten }>`.
  * `calls` ohne Zählzeile null, `tokens` ohne usageType-Zeilen null, `kosten` (Summe `totalCost` in $) ohne Kostenzeile null (nie 0).
@@ -205,10 +214,7 @@ export function istAusMetrics(zeilen) {
     if (typeof r?.sessionId !== "string") throw new Error("Unbekannte Metrics-Zeile ohne sessionId (View observations, Dimension sessionId erwartet).");
     const e = map.get(r.sessionId) ?? { calls: null, tokens: null, kosten: null };
     map.set(r.sessionId, e);
-    const count = zahl(r.count_count);
-    if (count !== null && r.providedModelName === LEER_MODELL) e.leer = (e.leer ?? 0) + count;
-    else if (count !== null) e.calls = (e.calls ?? 0) + count;
-    if (count !== null && "providedModelName" in r) e.modellGetrennt = true;
+    zaehleZeile(e, r);
     const kosten = zahl(r.sum_totalCost);
     if (kosten !== null) e.kosten = (e.kosten ?? 0) + kosten;
     const wert = zahl(r.sum_usageByType);

@@ -730,7 +730,7 @@ describe("Leere Hook-Generations und Preislücke (factory#522)", () => {
     data: rows.map(([providedModelName, count_count, sum_totalTokens]) => ({ providedModelName, count_count, sum_totalCost: 0, sum_totalTokens })),
   });
   const leerOk = (claude = 42) => leerEx([["claude-opus-5-5", 10, 100], ["claude-sonnet-5-5", 6, 100], ["claude", claude, 0]]);
-  const ohnePreis = (r: ReturnType<typeof g>) => ({ ...r, sum_totalCost: null });
+  const ohnePreis = (r: ReturnType<typeof g>): ReturnType<typeof g> => ({ ...r, sum_totalCost: null as unknown as number });
 
   test("wochenRezept enthält genau einen Export leer mit Projektfilter, ohne Modellfilter, im Fenster der Woche", () => {
     const rez = W.wochenRezept({ montag: MONTAG, jetzt: JETZT.toISOString(), projektFilter: PF }) as unknown as Array<{ art: string; abfrage: { filters: Array<{ column: string }>; fromTimestamp: string } }>;
