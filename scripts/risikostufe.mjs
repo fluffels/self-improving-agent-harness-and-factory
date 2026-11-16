@@ -10,7 +10,9 @@
  *   node scripts/risikostufe.mjs --liste          die wirksame Muster-Liste (`<muster>⇥<quelle>`); nicht ladbar: Zeile „nicht ladbar“ und Exit 1
  *   --json                                        Treffer und Gründe als JSON
  *
- * Ausgabe: `RISIKOSTUFE: <0|1|2> — <Gründe>`; Exit 0 bei berechneter Stufe, 2 bei einem Aufruf-Fehler (`AUFRUF_EXIT`). Jeder Fehler beim Rechnen ist Stufe 2 (fail-closed), kein Absturz.
+ * Ausgabe, vier Zeilen: `RISIKOSTUFE: <0|1|2> — <Gründe>`, `RISIKO: hoch | normal | doku — <Grund>` (factory#333: Risikoklasse aus den Pfadmustern der Projekt-Config `risiko.hoch`, sonst der Standardliste; reiner `*.md`-Diff ist `doku`),
+ * `SWEEP: voll | stichprobe — <Grund>` (factory#272: Sweep-Tiefe der Test-Lens; fehlt die Zeile, gilt `voll`) und `KOMBI: ja | nein — <Gründe>` (factory#529: der Diff liegt unter der Kombi-Lens-Grenze, `GROESSENSTUFE_S` in `groessenstufe-lib.mjs`; `ja` erlaubt bei Risikostufe ≤ 1 die Kombi-Lens). `--json` trägt zusätzlich `risiko` (mit allen Treffern), `sweep` und `kombi`.
+ * Exit 0 bei berechneter Stufe, 2 bei einem Aufruf-Fehler (`AUFRUF_EXIT`). Jeder Fehler beim Rechnen ist Stufe 2 (fail-closed), kein Absturz.
  */
 import { execFileSync } from "node:child_process";
 import { resolveBase } from "./check-basis.mjs";
@@ -25,10 +27,27 @@ const AUFRUF = "Aufruf: node scripts/risikostufe.mjs [--commit <sha> | --pfade <
 const FLAGS = { commit: { type: "string" }, ticket: { type: "string" }, pfade: { type: "boolean" }, liste: { type: "boolean" }, json: { type: "boolean" } };
 const MAX_GRUENDE_TEXT = 5;
 
-/** Die Zeile für Menschen: `RISIKOSTUFE: <n> — <Gründe>`, höchstens `MAX_GRUENDE_TEXT` Gründe plus Zahl der weiteren (`--json` trägt alle). Pur. */
-export const stufeZeile = ({ stufe, gruende }) => {
+const einzeilig = (g) => String(g).replace(/\s*[\r\n]+\s*/g, " ").trim();
+
+/** Höchstens `MAX_GRUENDE_TEXT` Gründe einzeilig, mit der Zahl der weiteren (`--json` trägt alle). Pur. */
+const gruendeText = (gruende) => {
   const rest = gruende.length - MAX_GRUENDE_TEXT;
-  return `RISIKOSTUFE: ${stufe} — ${gruende.slice(0, MAX_GRUENDE_TEXT).map((g) => String(g).replace(/\s*[\r\n]+\s*/g, " ").trim()).join("; ")}${rest > 0 ? ` (+${rest} weitere)` : ""}`;
+  return `${gruende.slice(0, MAX_GRUENDE_TEXT).map(einzeilig).join("; ")}${rest > 0 ? ` (+${rest} weitere)` : ""}`;
+};
+
+/** Die Zeile für Menschen: `RISIKOSTUFE: <n> — <Gründe>`. Pur. */
+export const stufeZeile = ({ stufe, gruende }) => `RISIKOSTUFE: ${stufe} — ${gruendeText(gruende)}`;
+
+/** Die Risiko-Zeile für Menschen: `RISIKO: <klasse> — <Gründe>`. Pur. */
+export const risikoZeile = ({ klasse, gruende }) => `RISIKO: ${klasse} — ${gruendeText(gruende)}`;
+
+/** Die Sweep-Zeile für Menschen (factory#272): `SWEEP: <tiefe> — <Gründe>`; fehlt `sweep`, ist es `voll` (fail-closed). Pur. */
+export const sweepZeile = ({ sweep }) => (sweep ? `SWEEP: ${sweep.tiefe} — ${gruendeText(sweep.gruende)}` : "SWEEP: voll — nicht berechnet");
+
+/** Die Kombi-Zeile für Menschen (factory#529): `KOMBI: ja` bzw. `KOMBI: nein — <Gründe>`; fehlt `kombi`, ist es `nein` (fail-closed). Pur. */
+export const kombiZeile = ({ kombi }) => {
+  if (!kombi) return "KOMBI: nein — nicht berechnet";
+  return kombi.zulaessig ? "KOMBI: ja" : `KOMBI: nein — ${gruendeText(kombi.gruende)}`;
 };
 
 const aufrufFehler = (text) => ({ code: AUFRUF_EXIT, ausgabe: `${text}\n${AUFRUF}` });
@@ -84,7 +103,7 @@ export function laufe(argv, io = {}) {
   const fehler = aufrufFehlerText(r.werte, r.positionale);
   if (fehler !== null) return aufrufFehler(fehler);
   if (liste) return listeAusgabe(lader, json);
-  const antwort = (e) => ({ code: 0, ausgabe: json ? JSON.stringify({ stufe: e.stufe, gruende: e.gruende, treffer: e.treffer, pfade: e.pfade }) : stufeZeile(e) });
+  const antwort = (e) => ({ code: 0, ausgabe: json ? JSON.stringify({ stufe: e.stufe, gruende: e.gruende, treffer: e.treffer, pfade: e.pfade, risiko: e.risiko, sweep: e.sweep, kombi: e.kombi }) : [stufeZeile(e), risikoZeile(e.risiko), sweepZeile(e), kombiZeile(e)].join("\n") });
   if (pfade) return antwort(risikostufeAusPfaden(r.positionale, lader));
   if (ticket !== undefined) {
     const e = ticketEingang(ticket, { ghJson: gh, ladeConfig });

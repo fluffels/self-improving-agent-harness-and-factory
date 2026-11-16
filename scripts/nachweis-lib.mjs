@@ -13,7 +13,7 @@ import { escapeRegex } from "./regex-lib.mjs";
 export const HEX = "[0-9a-f]{7,40}";
 /** Brillen-Schlüssel (Quelle für Review-Zeile, Lens-Auftrag-Guard und die Dateien `brille-<Schlüssel>.md` des Skills `review-lenses`). */
 export const CODE_LENSES = ["architektur", "requirement-treue", "test-adaequanz"];
-/** Kombi-Lens der Größenstufe S (factory#271): eine Lens statt der drei Code-Brillen; sie zählt nur bei berechnetem S als Code-Satz (check-review-nachweis). */
+/** Kombi-Lens (factory#271): eine Lens statt der drei Code-Brillen; sie zählt nur unter der Kombi-Lens-Grenze als Code-Satz (check-review-nachweis). */
 export const KOMBI_LENS = "kombiniert";
 /** Sicherheits-Lens der Risikoklasse hoch (factory#334): läuft zusätzlich zu den Code-Brillen, Prüffragen in `brille-sicherheit.md`. */
 export const SICHERHEITS_LENS = "sicherheit";
@@ -167,12 +167,12 @@ function abnahmefixAus(reviewWert) {
   return wert.trim() === "1" ? 1 : { ungueltig: wert };
 }
 
-/** Liest den Grund einer Plan- oder Abnahme-Ausnahme der Größenstufe S (factory#271): `klein: <Begründung>`. `null`, wenn der Grund nicht mit `klein` beginnt;
- *  `{art:"klein", begruendung}` mit nicht leerer Begründung, sonst `{art:"klein-ohne-begruendung"}`. Ob die Stufe stimmt, prüft der Wächter gegen den Diff. Pur. */
+/** Erkennt die entfernte Klein-Form einer Plan- oder Abnahme-Ausnahme (factory#271, entfernt mit factory#529; die Wächter weisen sie ab): `klein: <Begründung>`. `null`, wenn der Grund nicht mit `klein` beginnt;
+ *  `{art:"klein", begruendung}` mit nicht leerer Begründung, sonst `{art:"klein-ohne-begruendung"}`. Nur der Erkenner für die Abweisung. Pur. */
 export function kleinGrund(grund) {
   const g = String(grund ?? "").trim();
-  if (!/^klein\b/.test(g)) return null;
-  const m = /^klein\s*:\s*(\S.*)$/.exec(g);
+  if (!/^klein\b/i.test(g)) return null;
+  const m = /^klein\s*:\s*(\S.*)$/i.exec(g);
   return m ? { art: "klein", begruendung: m[1].trim() } : { art: "klein-ohne-begruendung" };
 }
 
@@ -196,11 +196,11 @@ export function stufenAusnahmeFehler(schluessel, form, behauptet, risikostufe) {
 /** Der Grund einer `ohne — <Grund>`-Form (Plan- und Review-Zeile) oder `null`. Pur. */
 const ohneGrund = (wert) => /^ohne\s*[—–-]+\s*(\S.*)$/.exec(wert)?.[1].trim() ?? null;
 
-/** Wert der Plan-Zeile: `{art:"planer"}` | `{art:"skizze"}` (`<planer> — skizze`, factory#271) | `{art:"ohne", grund}` | `{art:"ungueltig", zeile}` | `null` (keine Zeile). Pur. */
+/** Wert der Plan-Zeile: `{art:"planer"}` | `{art:"skizze"}` (entfernte Skizzen-Altform, factory#271, wird erkannt und abgewiesen) | `{art:"ohne", grund}` | `{art:"ungueltig", zeile}` | `null` (keine Zeile). Pur. */
 function planAus(planWert, planer) {
   if (planWert === null) return null;
   if (planWert === planer) return { art: "planer" };
-  if (new RegExp(`^${escapeRegex(planer)}\\s*[—–-]+\\s*skizze$`).test(planWert)) return { art: "skizze" };
+  if (new RegExp(`^${escapeRegex(planer)}\\s*[—–-]+\\s*skizze$`, "i").test(planWert)) return { art: "skizze" };
   const ohne = ohneGrund(planWert);
   return ohne === null ? { art: "ungueltig", zeile: planWert } : { art: "ohne", grund: ohne };
 }
@@ -304,9 +304,9 @@ function abnahmeFehler(wert, head, durch, u) {
 /** Klassen der Abnahme-Ursache (factory#260): Verhalten widerspricht dem Kriterium, Szenario prüft darüber hinaus, Kriterium lässt eine andere Lesart zu. */
 export const URSACHEN = Object.freeze(["kriterium", "szenario", "umsetzung"]);
 
-/** CLI-Zeile zur Größenstufe (factory#402 L26): beide Nachweis-Checks nennen sie auch bei Erfolg, damit die Nachmessung der S-Läufe sie aus der CI-Ausgabe liest.
- *  `null` (nicht berechenbar, z.B. im Override-Zweig ohne lesbaren Diff) wird ausdrücklich so genannt, nie verschwiegen. Pur. */
-export const stufeZeile = (stufe) => `• Größenstufe: ${stufe ?? "(nicht berechenbar)"}`;
+/** CLI-Zeile zur Kombi-Lens-Grenze (factory#402 L26, factory#529): beide Nachweis-Checks nennen sie auch bei Erfolg, damit die Nachmessung der Läufe mit `lenses=kombiniert` sie aus der CI-Ausgabe liest.
+ *  `stufe` ist das Rechenergebnis von `groessenstufe-lib.mjs` (`"S"` = unter der Grenze); `null` (nicht berechenbar, z.B. im Override-Zweig ohne lesbaren Diff) wird ausdrücklich so genannt, nie verschwiegen. Pur. */
+export const stufeZeile = (stufe) => `• Kombi-Lens-Grenze: ${stufe === null || stufe === undefined ? "(nicht berechenbar)" : stufe === "S" ? "eingehalten" : "überschritten"}`;
 
 /** CLI-Zeile zur berechneten Risikostufe (factory#526); `null` (nicht berechnet) wird ausdrücklich genannt. Pur. */
 export const risikostufeZeile = (r) => `• Risikostufe: ${r?.stufe ?? "(nicht berechenbar)"}`;
