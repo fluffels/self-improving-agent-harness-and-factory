@@ -69,7 +69,10 @@ describe("Schema des Änderungsregisters", () => {
   it("ein Prüftermin ≠ Datum + 28 Tage ist ohne pruefTerminGrund rot, mit Grund grün", () => {
     expect(fehler(mit({ pruefTermin: "2026-12-20" })).join("\n")).toMatch(/weicht vom Standard 2026-12-14/);
     expect(fehler(mit({ pruefTermin: "2026-12-20", pruefTerminGrund: "Merge erst am 22." }))).toEqual([]);
-    expect(fehler(mit({ pruefTermin: "2026-12-20", pruefTerminGrund: "  " })).length).toBeGreaterThan(0);
+    const leer = fehler(mit({ pruefTermin: "2026-12-20", pruefTerminGrund: "  " })).join("\n");
+    expect(leer).toMatch(/weicht vom Standard/);
+    expect(leer).toMatch(/pruefTerminGrund: nicht leerer Text/);
+    expect(fehler(mit({ pruefTermin: "2026-13-01", pruefTerminGrund: "x" })).join("\n")).toMatch(/pruefTermin: Datum/);
   });
 
   it("standardPruefTermin: Monatswechsel, Jahreswechsel, Schaltjahr", () => {
@@ -123,6 +126,44 @@ const ADR = `# ADR
 | 2030-01-01 | a | b | c | d |
 `;
 
+describe("Teilobjekte, Skalare und Nicht-Objekte", () => {
+  const t = (): Zeile => basis().toleranz as Zeile;
+  const faelle: [string, Zeile, RegExp][] = [
+    ["basis kein Objekt", { basis: 5 }, /basis: Objekt/],
+    ["basis Zusatzfeld", { basis: { fenster: "x", wert: null, extra: 1 } }, /basis: unbekannte Felder extra/],
+    ["basis.fenster leer", { basis: { fenster: "", wert: null } }, /basis.fenster/],
+    ["mindestdaten kein Objekt", { mindestdaten: 5 }, /mindestdaten: Objekt/],
+    ["mindestdaten Zusatzfeld", { mindestdaten: { n: 1, einheit: "prs", extra: 1 } }, /mindestdaten: unbekannte Felder extra/],
+    ["mindestdaten.n keine Ganzzahl", { mindestdaten: { n: 1.5, einheit: "prs" } }, /mindestdaten.n/],
+    ["mindestdaten.einheit unbekannt", { mindestdaten: { n: 1, einheit: "stunden" } }, /mindestdaten.einheit/],
+    ["adr kein Objekt", { adr: 5 }, /adr: Objekt/],
+    ["adr Zusatzfeld", { adr: { datum: "2026-11-16", pr: "factory#1", extra: 1 } }, /adr: unbekannte Felder extra/],
+    ["adr.datum ungültig", { adr: { datum: "2026-13-01", pr: "factory#1" } }, /adr.datum/],
+    ["adr.pr leer", { adr: { datum: "2026-11-16", pr: "" } }, /adr.pr/],
+    ["toleranz null", { toleranz: null }, /toleranz: Objekt/],
+    ["toleranz Zusatzfeld", { toleranz: { ...t(), extra: 1 } }, /toleranz: unbekannte Felder extra/],
+    ["toleranz.qualitaetsmass unbekannt", { toleranz: { ...t(), qualitaetsmass: "erfunden" } }, /toleranz.qualitaetsmass: unbekannte Messgröße/],
+    ["toleranz.einheit unbekannt", { toleranz: { ...t(), einheit: "stunden" } }, /toleranz.einheit/],
+    ["aenderung leer", { aenderung: " " }, /aenderung: nicht leerer Text/],
+    ["wirkung leer", { wirkung: "" }, /wirkung: nicht leerer Text/],
+    ["rueckfall leer", { rueckfall: " " }, /rueckfall: nicht leerer Text/],
+    ["id mit Unterstrich am Ende", { id: "abc_X" }, /id: nur/],
+    ["id leer", { id: "" }, /id: nur/],
+    ["id Zahl", { id: 5 }, /id: nur/],
+  ];
+  it.each(faelle)("%s ist rot", (_name, aenderung, muster) => {
+    expect(fehler(mit(aenderung)).join("\n")).toMatch(muster);
+  });
+
+  it("Nicht-Objekte: Register keine Liste, Zeile null oder Array", () => {
+    expect(lib.pruefeRegister("x").join("\n")).toMatch(/Liste erwartet/);
+    expect(lib.pruefeRegister([null]).join("\n")).toMatch(/Objekt erwartet/);
+    expect(lib.pruefeRegister([[]]).join("\n")).toMatch(/Objekt erwartet/);
+    expect(lib.pruefeAdrVerweise([{ id: "ohne-adr" }], [])).toEqual([]);
+    expect(() => lib.standardPruefTermin("kein-datum")).toThrow(/kein Datum/);
+  });
+});
+
 describe("Ledger in ADR 0027", () => {
   const ledger = lib.ledgerZeilen(ADR);
 
@@ -133,6 +174,21 @@ describe("Ledger in ADR 0027", () => {
   it("adr auf eine nicht existierende Ledger-Zeile ist rot, auf eine existierende grün", () => {
     expect(lib.pruefeAdrVerweise([basis()], ledger)).toEqual([]);
     expect(lib.pruefeAdrVerweise([mit({ adr: { datum: "2026-11-16", pr: "factory#9" } })], ledger).join("\n")).toMatch(/zeigt auf keine Ledger-Zeile/);
+  });
+
+  it("adr mit abweichendem Datum bei gleichem PR ist rot", () => {
+    expect(lib.pruefeAdrVerweise([mit({ adr: { datum: "2026-11-15", pr: "factory#1" } })], ledger).join("\n")).toMatch(/zeigt auf keine Ledger-Zeile/);
+  });
+
+  it("ledgerZeilen: ohne Überschrift, Unterüberschrift, Suffix, zu wenige Zellen, fehlende Pipe, Abbruch bei Überschrift", () => {
+    const tab = "| 2026-11-16 | a | b | factory#1 | c |";
+    expect(lib.ledgerZeilen(tab)).toEqual([]);
+    expect(lib.ledgerZeilen(`### Gelockert\n\n${tab}`)).toEqual([]);
+    expect(lib.ledgerZeilen(`## Gelockert (alt)\n\n${tab}`)).toEqual([]);
+    expect(lib.ledgerZeilen(`## Gelockert\n\n| 2026-11-16 |\n`)).toEqual([]);
+    expect(lib.ledgerZeilen(`## Gelockert\n\n2026-11-16 | a | b | factory#1 | c |`)).toEqual([]);
+    expect(lib.ledgerZeilen(`## Gelockert\n\n${tab}\n## Ende\n${tab}`)).toHaveLength(1);
+    expect(lib.ledgerZeilen(`## Gelockert\n\n${tab}\n#### Ende\n${tab}`)).toHaveLength(1);
   });
 
   it("Ledger-Zeile ab EINFUEHRUNG ohne Register-Id ist rot, mit unbekannter Id rot, davor ohne Id grün", () => {
