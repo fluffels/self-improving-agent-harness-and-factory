@@ -172,11 +172,6 @@
       "count": 1
     }
   },
-  "scripts/langfuse-vorbedingung.mjs": {
-    "complexity": {
-      "count": 1
-    }
-  },
   "scripts/lauf-ergebnis.mjs": {
     "complexity": {
       "count": 1

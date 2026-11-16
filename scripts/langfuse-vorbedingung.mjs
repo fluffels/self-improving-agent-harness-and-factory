@@ -105,17 +105,9 @@ function aufrufLesen(argv) {
   return text ? { fehler: `${text}. ${USAGE}` } : { sessionstart: werte.sessionstart === true, json: werte.json === true };
 }
 
-export async function main(argv = process.argv.slice(2), env = process.env, out = console.log, err = console.error, { fetchImpl = fetch, fristMs = FRIST_MS, home = homedir(), lies, ...mcpOptionen } = {}) {
-  const aufruf = aufrufLesen(argv);
-  if (aufruf.fehler) {
-    err(aufruf.fehler);
-    return AUFRUF_EXIT;
-  }
-  const { sessionstart, json } = aufruf;
-  const baseUrl = langfuseBasisUrl({ LANGFUSE_BASE_URL: basisUrlAus(env, home, lies) });
-  const urteil = await pruefeLangfuse({ baseUrl, fetchImpl, fristMs });
+/** Ausgabe und Exit ohne MCP-Prüfung (Ausfall, `--json`, `--sessionstart`): Exit 0 erreichbar, 1 aus (`--sessionstart` immer 0); der Datenschutz-Hinweis ändert den Exit nie. */
+function ausgabe({ urteil, baseUrl, sessionstart, json, out, err }) {
   const basisLokal = basisUrlLokal(baseUrl);
-  if (urteil.ok && !sessionstart) return mcpLauf({ env, home, baseUrl, json, out, err, ...mcpOptionen });
   if (json) {
     out(JSON.stringify({ erreichbar: urteil.ok, grund: urteil.ok ? null : urteil.grund, basisLokal }));
     return urteil.ok ? 0 : 1;
@@ -132,6 +124,19 @@ export async function main(argv = process.argv.slice(2), env = process.env, out 
   err(`${urteil.grund}. ${HINWEIS}`);
   if (datenschutz) err(datenschutz);
   return 1;
+}
+
+export async function main(argv = process.argv.slice(2), env = process.env, out = console.log, err = console.error, { fetchImpl = fetch, fristMs = FRIST_MS, home = homedir(), lies, ...mcpOptionen } = {}) {
+  const aufruf = aufrufLesen(argv);
+  if (aufruf.fehler) {
+    err(aufruf.fehler);
+    return AUFRUF_EXIT;
+  }
+  const { sessionstart, json } = aufruf;
+  const baseUrl = langfuseBasisUrl({ LANGFUSE_BASE_URL: basisUrlAus(env, home, lies) });
+  const urteil = await pruefeLangfuse({ baseUrl, fetchImpl, fristMs });
+  if (urteil.ok && !sessionstart) return mcpLauf({ env, home, baseUrl, json, out, err, ...mcpOptionen });
+  return ausgabe({ urteil, baseUrl, sessionstart, json, out, err });
 }
 
 if (istDirektaufruf(import.meta.url)) process.exitCode = await main();
