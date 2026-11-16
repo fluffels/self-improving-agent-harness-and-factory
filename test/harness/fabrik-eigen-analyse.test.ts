@@ -29,6 +29,8 @@ const FABRIK_EIGEN: Eintrag[] = [
   { pfad: "scripts/aenderungsregister.mjs", art: "skript" },
   { pfad: "scripts/aenderungsregister-lib.mjs", art: "lib" },
   { pfad: ".github/aenderungsregister.json", art: "daten" },
+  { pfad: "scripts/regel-verfall.mjs", art: "skript" },
+  { pfad: "scripts/regel-verfall-lib.mjs", art: "lib" },
   { pfad: "scripts/token-analyse-freigabe.mjs", art: "skript-wurzel" },
   { pfad: "scripts/token-analyse-freigabe-lib.mjs", art: "lib" },
   { pfad: "scripts/token-analyse-ablage-lib.mjs", art: "lib" },
