@@ -3,7 +3,7 @@
 import { afterEach, describe, test } from "vitest";
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -99,6 +99,10 @@ function lauf(over: Record<string, unknown> = {}, opt: { config?: Record<string,
   writeFileSync(join(root, "projekt.json"), JSON.stringify(opt.config ?? CONFIG));
   mkdirSync(join(root, ".factory"), { recursive: true });
   writeFileSync(join(root, ".factory", "projekt.json"), JSON.stringify(opt.config ?? CONFIG));
+  mkdirSync(join(root, ".claude"), { recursive: true });
+  const settingsPfad = join(root, ".claude", "settings.json");
+  const settings = existsSync(settingsPfad) ? (JSON.parse(readFileSync(settingsPfad, "utf8")) as Record<string, unknown>) : {};
+  writeFileSync(settingsPfad, JSON.stringify({ ...settings, env: { CC_LANGFUSE_TRACE_TAGS: String((opt.config ?? CONFIG).repo).split("/").pop() } })); // Repo-Tag des Fixtures (factory#523)
   const fremd = opt.relativ ? dirname(root) : opt.fremderRoot ? mkdtempSync(join(tmpdir(), "doctor-fremd-")) : root;
   if (fremd !== root && !opt.relativ) ordner.push(fremd);
   const welt: Record<string, unknown> = { ...GESUND, ...over };
@@ -192,6 +196,20 @@ describe("Altnamen der Kern-Umgebungsvariablen (--pruefen)", () => {
     mkdirSync(join(root, ".factory"), { recursive: true });
     writeFileSync(join(root, ".factory", "besitz.json"), '{"eintraege":[]}');
     assert.doesNotMatch(lauf(), /besitz\.json nicht lesbar/);
+  });
+  test("pruefLauf: der Punkt Repo-Tag läuft auch ohne Langfuse-Punkt und meldet fehlenden Repo-Namen samt Fix (factory#523)", () => {
+    const root = mkdtempSync(join(tmpdir(), "doctor-"));
+    ordner.push(root);
+    writeFileSync(join(root, "projekt.json"), JSON.stringify(CONFIG));
+    writeFileSync(join(root, "ruleset.json"), JSON.stringify(SPIEGEL));
+    const punkte = () => (rawPruefLauf as (a: Record<string, unknown>) => { ergebnis: { punkt: string; ok: boolean; fix?: string }[] })({ rootDir: root, configPfad: join(root, "projekt.json"), gh: () => "{}", langfuse: null }).ergebnis.filter((e) => e.punkt === "Repo-Tag");
+    assert.equal(punkte().length, 1);
+    assert.equal(punkte()[0]?.ok, false); // ohne Settings: nicht prüfbar
+    mkdirSync(join(root, ".claude"));
+    writeFileSync(join(root, ".claude", "settings.json"), JSON.stringify({ env: { CC_LANGFUSE_TRACE_TAGS: "anderes" } }));
+    assert.match(punkte()[0]?.fix ?? "", /demo/);
+    writeFileSync(join(root, ".claude", "settings.json"), JSON.stringify({ env: { CC_LANGFUSE_TRACE_TAGS: "anderes,demo" } }));
+    assert.equal(punkte()[0]?.ok, true);
   });
   test("pruefLauf ohne umgebung (Wochenlauf) prüft den Altnamen nicht, auch bei gesetzter Prozess-Umgebung", () => {
     const root = mkdtempSync(join(tmpdir(), "doctor-"));

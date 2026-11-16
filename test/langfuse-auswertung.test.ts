@@ -40,12 +40,13 @@ const L = libRaw as unknown as {
   EFFORT_STUFEN: string[];
   ROW_LIMIT: number;
   quelleVon: (t: string | null, n: string | null) => string;
-  rezept: (o: { von: string; bis: string; rollen?: string[]; efforts?: string[]; codexRollen?: string[]; projektFilter?: unknown }) => { art: string; name: string; abfrage: Abfr & { fromTimestamp: string; toTimestamp: string } }[];
+  rezept: (o: { von: string; bis: string; rollen?: string[]; efforts?: string[]; codexRollen?: string[]; projektFilter?: unknown; repoTags?: string[] }) => { art: string; name: string; abfrage: Abfr & { fromTimestamp: string; toTimestamp: string } }[];
   leseExport: (j: unknown, pfad: string) => unknown;
   betrag: (p: { cost: number; count: number; ohnePreis?: number; modelle?: string[] }) => string;
   bericht: (e: unknown[]) => Bericht;
   renderMarkdown: (b: Bericht) => string;
   tagesLuecken: (von: string, bis: string, data: unknown[]) => string[];
+  REPO_TAG_STICHTAG: string;
 };
 const C = cliRaw as unknown as {
   parseArgs: (a: string[]) => unknown;
@@ -82,7 +83,11 @@ const leerVon = (zeilen: ReturnType<typeof g>[], claude = { count: 0, tokens: 0 
   return { ...exp("leer", rows), abfrage: { view: "observations", filters: [FILTER], dimensions: [{ field: "providedModelName" }], fromTimestamp: VON, toTimestamp: BIS } };
 };
 const leerOk = leerVon(gesamtRows, { count: 42, tokens: 0 });
-const basis = [gesamt, tageVoll, latenzOk, leerOk];
+/** Export `repo` (factory#523): ein Export je Repo-Tag mit `name` und dem Filter tags any of [<tag>, project:<tag>]. */
+const repoEx = (tag: string, data: unknown[], filters: unknown[] = [FILTER]) => ({ ...exp("repo", data, [...filters, { column: "tags", operator: "any of", type: "arrayOptions", value: [tag, `project:${tag}`] }]), name: `repo ${tag}` });
+const repoA = repoEx("repoA", [g(...R1, 10, 5, 3), g(...R2, 20, 10, 3)]);
+const repoB = repoEx("repoB", [g(...R3, 4, 2, 7)]);
+const basis = [gesamt, tageVoll, latenzOk, leerOk, repoA, repoB];
 const alleRollen = [meta("agent_type", "Plan", [g(...R1, 10, 5, 3), g(...R2, 20, 10, 3)]), meta("agent_role", "main", [g(...R3, 4, 2, 7)])];
 const alleEfforts = [meta("effort", "high", [g(...R1, 10, 5, 3), g(...R2, 20, 10, 3)]), meta("reasoning_effort", "high", [g(...R3, 4, 2, 7)])];
 const unzZeile = (t: Tab) => t.zeilen[t.zeilen.length - 1];
@@ -109,7 +114,8 @@ describe("unzugeordnet (AK7)", () => {
   test("steht mit 0, wenn alles zugeordnet ist (Gesamtzeile und jede Tabelle)", () => {
     const b = rep(...basis, ...alleRollen, ...alleEfforts);
     expect(b.unzugeordnet).toEqual({ count: 0, cost: 0 });
-    for (const t of [b.rolle, b.effort, b.repo, b.modell]) expect(unzZeile(t)).toMatchObject({ name: "unzugeordnet", count: 0, cost: 0 });
+    for (const t of [b.rolle, b.effort, b.modell]) expect(unzZeile(t)).toMatchObject({ name: "unzugeordnet", count: 0, cost: 0 });
+    expect(b.repo.zeilen.map((z) => z.name)).toEqual(["repoA", "repoB"]); // ohne Rest keine Zeile „ohne Repo-Tag“
     expect(L.renderMarkdown(b)).toContain("unzugeordnet: 0 Calls (0.00 $) ohne Rolle oder ohne Modell.");
   });
   test("ohne agent_type-Zelle geht der Rest nach unzugeordnet", () => {
@@ -138,10 +144,10 @@ describe("unzugeordnet (AK7)", () => {
     expect(b.unzugeordnet).toEqual({ count: 5, cost: 2 });
     expect(b.rolle.zeilen.find((z) => z.name === "Explore")).toMatchObject({ count: 5 });
   });
-  test("Repo default oder leer ist unzugeordnet", () => {
+  test("das Repo kommt nie aus environment: ohne Repo-Export steht alles unter „ohne Repo-Tag“, auch bei environment gleich Repo-Name", () => {
     const b = rep(exp("gesamt", [g(...R1, 1, 1), g("Abgleich", "Call", "claude-opus-5-5", "default", 2, 2), g("Abgleich", "Call", "claude-opus-5-5", "", 3, 3), g("Abgleich", "Call", "claude-opus-5-5", null, 4, 4)]), tageVoll);
-    expect(b.repo.zeilen.map((z) => z.name)).toEqual(["repoA", "unzugeordnet"]);
-    expect(unzZeile(b.repo)).toMatchObject({ count: 9, cost: 9 });
+    expect(b.repo.zeilen.map((z) => z.name)).toEqual(["ohne Repo-Tag"]);
+    expect(unzZeile(b.repo)).toMatchObject({ count: 10, cost: 10 });
   });
 });
 
@@ -477,7 +483,7 @@ describe("Randfälle", () => {
     expect(rep(...basis, meta("agent_type", "Plan", [g(...R1, 11, 5, 3)])).luecken.join("\n")).toMatch(/1 Zeile\(n\) mit Rest unter 0/);
   });
   test("Kosten je Quelle addieren sich über Zeilen derselben Tabellenzeile", () => {
-    const b = rep(exp("gesamt", [g(...R1, 1, 1), g("Claude Code Turn", "Subagent LLM Call", "claude-sonnet-5-5", "repoA", 2, 2)]), tageVoll);
+    const b = rep(exp("gesamt", [g(...R1, 1, 1), g("Claude Code Turn", "Subagent LLM Call", "claude-sonnet-5-5", "repoA", 2, 2)]), tageVoll, repoEx("repoA", [g(...R1, 1, 1, 3), g("Claude Code Turn", "Subagent LLM Call", "claude-sonnet-5-5", "repoA", 2, 2, 3)]));
     expect(b.repo.zeilen.find((z) => z.name === "repoA")?.quellen.live).toBe(3);
   });
   test("Sortierung: Kosten absteigend, bei Gleichstand nach Name (unabhängig von der Zeilenfolge)", () => {
@@ -494,7 +500,7 @@ describe("Randfälle", () => {
 
 describe("Funde Runde 1", () => {
   test("ein Rest ohne Calls und mit positivem Rundungsrauschen ist keine Lücke", () => {
-    const b = rep(exp("gesamt", [g(...R1, 10, 5.0000000000001)]), tageVoll, exp("latenz", [g(...R1, 10, 5.0000000000001, 0)]), meta("agent_type", "Plan", [g(...R1, 10, 5, 3)]), meta("effort", "high", [g(...R1, 10, 5, 3)]), leerVon([g(...R1, 10, 5)]));
+    const b = rep(exp("gesamt", [g(...R1, 10, 5.0000000000001)]), tageVoll, exp("latenz", [g(...R1, 10, 5.0000000000001, 0)]), meta("agent_type", "Plan", [g(...R1, 10, 5, 3)]), meta("effort", "high", [g(...R1, 10, 5, 3)]), repoEx("repoA", [g(...R1, 10, 5, 3)]), leerVon([g(...R1, 10, 5)]));
     expect(b.luecken).toEqual([]);
     expect(b.unzugeordnet.count).toBe(0);
   });
@@ -537,7 +543,7 @@ describe("Funde Runde 1", () => {
   test("fehlende Schlüssel (nicht nur null oder leer) für Modell und Umgebung sind unzugeordnet", () => {
     const b = rep(exp("gesamt", [{ traceName: "Abgleich", name: "Call", count_count: 2, sum_totalCost: 1 }]), tageVoll);
     expect(b.modell.zeilen[0]).toMatchObject({ name: "unzugeordnet", count: 2 });
-    expect(b.repo.zeilen[0]).toMatchObject({ name: "unzugeordnet", count: 2 });
+    expect(b.repo.zeilen[0]).toMatchObject({ name: "ohne Repo-Tag", count: 2 });
   });
   test("ein null-Eintrag in den Filtern wirft keinen TypeError", () => {
     const so = { column: "metadata", key: "agent_type", operator: "=", value: "Plan", type: "stringObject" };
@@ -557,14 +563,94 @@ describe("Funde Runde 1", () => {
       if (!a.timeDimension) return [z];
       return ["2026-11-01", "2026-11-02", "2026-11-03"].map((t) => ({ ...z, time_dimension: t }));
     };
-    const rez = L.rezept({ von: VON, bis: BIS });
+    const rez = L.rezept({ von: VON, bis: BIS, repoTags: ["repoA"] });
     const nimm = (art: string, key?: string, wert?: string) => rez.find((r) => r.art === art && (key === undefined || (r.abfrage.filters?.[1]?.key === key && r.abfrage.filters[1].value === wert)));
-    const wahl = [nimm("gesamt"), nimm("tage"), nimm("latenz"), nimm("leer"), nimm("metadaten", "agent_type", "hauptchat"), nimm("metadaten", "effort", "high")];
-    const b = L.bericht(wahl.map((r) => lese({ art: r?.art, abfrage: r?.abfrage, data: r ? zeilen(r.abfrage) : [] })));
+    const wahl = [nimm("gesamt"), nimm("tage"), nimm("latenz"), nimm("leer"), nimm("metadaten", "agent_type", "hauptchat"), nimm("metadaten", "effort", "high"), nimm("repo")];
+    const b = L.bericht(wahl.map((r) => lese({ art: r?.art, name: r?.name, abfrage: r?.abfrage, data: r ? zeilen(r.abfrage) : [] })));
     expect(nimm("tage")?.abfrage.dimensions).toEqual([]);
     expect(b.luecken).toEqual([]);
     expect(b.unzugeordnet).toEqual({ count: 0, cost: 0 });
     expect(b.rolle.zeilen[0]).toMatchObject({ name: "hauptchat", count: 10 });
+    expect(b.repo.zeilen.map((z) => z.name)).toEqual(["repoA"]);
+  });
+});
+
+describe("Repo-Tag (factory#523)", () => {
+  const ohneTag = ["Claude Code Turn", "LLM Call", "claude-haiku-5", "repoA"] as const; // environment gleich Repo-Name, aber ohne Repo-Tag
+  test("Rezept: je Repo-Tag ein Export mit tags-Filter [Tag, project:Tag], Basis- und Leer-Filter, Dimensionen und Metriken; ohne repoTags keiner", () => {
+    expect(L.rezept({ von: VON, bis: BIS }).some((r) => r.art === "repo")).toBe(false);
+    const r = L.rezept({ von: VON, bis: BIS, repoTags: ["a", "b"] }).filter((x) => x.art === "repo");
+    expect(r.map((x) => x.name)).toEqual(["repo a", "repo b"]);
+    const f = r[0]?.abfrage.filters as unknown as { column: string; value: unknown }[];
+    expect(f.at(-1)).toEqual({ column: "tags", operator: "any of", type: "arrayOptions", value: ["a", "project:a"] });
+    expect(f.some((x) => x.column === "providedModelName")).toBe(true);
+    expect(f.some((x) => x.column === "type")).toBe(true);
+    expect(r[0]?.abfrage.dimensions?.map((d) => d.field)).toEqual(["traceName", "name", "providedModelName", "environment"]);
+    expect(r[0]?.abfrage.metrics?.map((m) => m.measure)).toEqual(["count", "totalCost", "latency"]);
+  });
+  test("Rezept mit Projektfilter: der Repo-Export trägt beide tags-Filter und der Leser nimmt ihn an", () => {
+    const pf = { column: "tags", operator: "any of", type: "arrayOptions", value: ["factory", "repoA", "project:repoA"] };
+    const r = L.rezept({ von: VON, bis: BIS, projektFilter: pf, repoTags: ["repoA"] }).find((x) => x.art === "repo");
+    expect(r?.abfrage.filters?.filter((x) => x.column === "tags")).toHaveLength(2);
+    expect(() => lese({ art: "repo", name: r?.name, abfrage: r?.abfrage, data: [] })).not.toThrow();
+  });
+  test("Leser: Export repo ohne name oder ohne passenden tags-Filter ist ein Formfehler", () => {
+    expect(() => lese({ ...repoA, name: undefined })).toThrow(/name `repo <Repo-Tag>`/);
+    expect(() => lese({ ...repoA, name: "repo " })).toThrow(/name/);
+    expect(() => lese(repoEx("repoA", [], [FILTER]) && { ...repoA, name: "repo repoB" })).toThrow(/tags any of \[repoB, project:repoB\]/);
+    const ohneFilter = { ...repoA, abfrage: { ...repoA.abfrage, filters: [FILTER, LEER_FILTER] } };
+    expect(() => lese(ohneFilter)).toThrow(/tags any of/);
+    const nurEins = { ...repoA, abfrage: { ...repoA.abfrage, filters: [FILTER, LEER_FILTER, { column: "tags", operator: "any of", type: "arrayOptions", value: ["repoA"] }] } };
+    expect(() => lese(nurEins)).toThrow(/tags any of/);
+  });
+  test("zwei Exporte desselben Repo-Tags sind mehrfach, verschiedene Tags nicht", () => {
+    expect(() => rep(...basis, repoA)).toThrow(/Export repo repo=repoA mehrfach/);
+    expect(() => rep(...basis)).not.toThrow();
+  });
+  test("Repo kommt aus dem Repo-Tag: eine Generation ohne Tag steht als Lücke „ohne Repo-Tag“ mit Anzahl, Kosten und Grund, nie unter einem Repo", () => {
+    const b = rep(exp("gesamt", [...gesamtRows, g(...ohneTag, 3, 1.5)]), tageVoll, repoA, repoB);
+    expect(b.repo.zeilen.map((z) => [z.name, z.count, z.cost])).toEqual([["repoA", 30, 15], ["repoB", 4, 2], ["ohne Repo-Tag", 3, 1.5]]);
+    expect(unzZeile(b.repo).name).toBe("ohne Repo-Tag");
+    const l = b.luecken.find((x) => x.startsWith("ohne Repo-Tag:"));
+    expect(l).toContain("3 Calls, 1.50 $");
+    expect(l).toContain("Session außerhalb eines Repos");
+    expect(l).toContain("CC_LANGFUSE_TRACE_TAGS");
+    expect(l).not.toContain("Stichtag"); // Fenster nach dem Stichtag
+    expect(L.renderMarkdown(b)).toContain("| ohne Repo-Tag | 3 |");
+  });
+  test("Stichtag: beginnt das Fenster davor, nennt der Grund ihn; danach nicht", () => {
+    const vor = (von: string) => {
+      const ex = (j: { abfrage: object }) => ({ ...j, abfrage: { ...j.abfrage, fromTimestamp: von } });
+      return rep(...[exp("gesamt", [...gesamtRows, g(...ohneTag, 3, 1.5)]), tageVoll, repoA, repoB].map(ex)).luecken.find((x) => x.startsWith("ohne Repo-Tag:")) ?? "";
+    };
+    expect(vor("2026-11-15T00:00:00Z")).toContain(`Daten vor dem Stichtag ${L.REPO_TAG_STICHTAG}`);
+    expect(vor(`${L.REPO_TAG_STICHTAG}T00:00:00Z`)).not.toContain("Stichtag");
+  });
+  test("ohne Repo-Export: alle Calls ohne Repo-Tag mit Grund, keine Repo-Zeile außer der Lücke", () => {
+    const b = rep(...basis.filter((e) => e.art !== "repo"));
+    expect(b.repo.zeilen.map((z) => [z.name, z.count])).toEqual([["ohne Repo-Tag", 34]]);
+    expect(b.luecken.find((x) => x.startsWith("ohne Repo-Tag:"))).toContain("34 Calls, 17.00 $ (Grund: kein Repo-Export");
+  });
+  test("Kosten null (ohne Preis) in der Lücke: „Lücke: ohne Preis“ bzw. „mindestens“, nie 0 $", () => {
+    const b = rep(exp("gesamt", [...gesamtRows, { ...g(...ohneTag, 3, 0), sum_totalCost: null }]), tageVoll, repoA, repoB);
+    const l = b.luecken.find((x) => x.startsWith("ohne Repo-Tag:")) ?? "";
+    expect(l).toContain("Lücke: ohne Preis (claude-haiku-5)");
+    expect(l).not.toContain("0.00 $");
+    expect(L.renderMarkdown(b)).toMatch(/\| ohne Repo-Tag \| 3 \|.*Lücke: ohne Preis/);
+  });
+  test("Mehrfachzuordnung (Generation mit zwei Repo-Tags) ist „Exporte nicht konsistent“, kein negatives Repo", () => {
+    const b = rep(...basis, repoEx("repoC", [g(...R3, 4, 2, 7)]));
+    expect(b.luecken.join("\n")).toMatch(/Repo: Exporte nicht konsistent/);
+    expect(b.repo.zeilen.every((z) => z.count >= 0 && z.cost >= 0)).toBe(true);
+  });
+  test("ohne Calls ohne Repo-Tag: keine Zeile und keine Lücke", () => {
+    const b = rep(...basis);
+    expect(b.repo.zeilen.some((z) => z.name === "ohne Repo-Tag")).toBe(false);
+    expect(b.luecken.some((x) => x.startsWith("ohne Repo-Tag"))).toBe(false);
+  });
+  test("negative Latenz in einer Repo-Zelle macht die Gruppe zur Lücke, nicht zum Repo", () => {
+    const b = rep(...basis.filter((e) => e !== repoA), repoEx("repoA", [g(...R1, 10, 5, -1), g(...R2, 20, 10, 3)]));
+    expect(b.luecken.join("\n")).toMatch(/Repo: 1 Gruppe\(n\) mit negativer Latenz/);
   });
 });
 

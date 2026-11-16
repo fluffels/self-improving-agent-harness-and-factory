@@ -15,7 +15,7 @@
  * abgezogen (Stichprobe factory#286: keine belegt).
  */
 
-import { TRACE_NAME } from "./langfuse-otlp.mjs";
+import { TRACE_NAME, codexProjektTag } from "./langfuse-otlp.mjs";
 
 export const TRACE_NAME_ABGLEICH = TRACE_NAME;
 export const EFFORT_STUFEN = ["low", "medium", "high", "xhigh", "max"];
@@ -30,7 +30,11 @@ export const UNZUGEORDNET = "unzugeordnet";
 export const ROLLE_SCHLUESSEL = ["agent_type", "agent_role"];
 export const EFFORT_SCHLUESSEL = ["effort", "reasoning_effort"];
 export const QUELLEN = ["live", "nachgeliefert", "codex", "sonstige"];
-export const ARTEN = ["gesamt", "tage", "latenz", "metadaten", "leer"];
+export const ARTEN = ["gesamt", "tage", "latenz", "metadaten", "leer", "repo"];
+/** Zeile der Repo-Tabelle für Generations ohne Repo-Tag (factory#523): nie unter einem Repo, nie als 0 $. */
+export const REPO_REST = "ohne Repo-Tag";
+/** Stichtag des Repo-Tags (Tag der Umstellung): Daten davor tragen keins, der Bericht nennt das im Grund der Lücke `ohne Repo-Tag`. */
+export const REPO_TAG_STICHTAG = "2026-11-16";
 /** Modellname der leeren Hook-GENERATIONs des Plugins (factory#522: Modell `claude`, leere Usage, eine je Tool-Call). */
 export const LEER_MODELL = "claude";
 /** Platzhalter-Modell ohne Usage: Dashboards (Filter) und Transkript (`istEchtesModell`) zählen es nicht, die Auswertung verwirft die Zeilen nach dem Lesen (factory#583; der Query-Filter bleibt). */
@@ -75,10 +79,12 @@ const basisAbfrage = (von, bis, projektFilter) => ({
   toTimestamp: bis,
   config: { row_limit: ROW_LIMIT },
 });
+/** Filter eines Repo-Exports: `tags any of [<Repo-Tag>, project:<Repo-Tag>]` (das zweite Tag tragen die Codex-Observations). */
+const repoTagFilter = (tag) => ({ column: "tags", operator: "any of", type: "arrayOptions", value: [tag, codexProjektTag(tag)] });
 const dim = (felder) => felder.map((field) => ({ field }));
 
 /** Abfragen für den Agentenlauf (MCP `queryMetrics`); jede gespeicherte Antwort wird `{ art, abfrage, data }`. */
-export function rezept({ von, bis, rollen = [], efforts = EFFORT_STUFEN, codexRollen = ["main", "subagent"], projektFilter }) {
+export function rezept({ von, bis, rollen = [], efforts = EFFORT_STUFEN, codexRollen = ["main", "subagent"], projektFilter, repoTags = [] }) {
   const basisFilter = basisAbfrage(von, bis, projektFilter).filters;
   const b = (extra) => ({ ...basisAbfrage(von, bis, projektFilter), filters: [...basisFilter, LEER_FILTER], ...extra });
   const out = [
@@ -103,6 +109,9 @@ export function rezept({ von, bis, rollen = [], efforts = EFFORT_STUFEN, codexRo
       }),
     });
   }
+  for (const tag of repoTags) {
+    out.push({ art: "repo", name: `repo ${tag}`, abfrage: b({ dimensions: dim(DIMS_GESAMT), metrics: [{ measure: "count", aggregation: "count" }, { measure: "totalCost", aggregation: "sum" }, { measure: "latency", aggregation: "min" }], filters: [...basisFilter, LEER_FILTER, repoTagFilter(tag)] }) });
+  }
   const leerAbfrage = { ...basisAbfrage(von, bis, projektFilter), dimensions: dim(["providedModelName"]), metrics: [{ measure: "count", aggregation: "count" }, { measure: "totalCost", aggregation: "sum" }, { measure: "totalTokens", aggregation: "sum" }], orderBy: [{ field: "count_count", direction: "desc" }] };
   out.push({ art: "leer", name: "leer", abfrage: leerAbfrage });
   return out;
@@ -120,6 +129,17 @@ const hatGenerationFilter = (abfrage) =>
 const istLeerFilter = (f) => f?.column === "providedModelName" && f.operator === "none of" && Array.isArray(f.value) && f.value.includes(LEER_MODELL);
 const hatFilter = (abfrage, pred) => Array.isArray(abfrage?.filters) && abfrage.filters.some(pred);
 const hatModellDimension = (abfrage) => Array.isArray(abfrage?.dimensions) && abfrage.dimensions.some((d) => d?.field === "providedModelName");
+
+/** Der Repo-Tag eines Exports `repo` aus seinem `name` (`repo <tag>`); verlangt den passenden `tags`-Filter (ein Projektfilter mit `tags` darf daneben stehen). */
+function repoTagVon(json, pfad) {
+  const tag = typeof json.name === "string" && json.name.startsWith("repo ") ? json.name.slice(5).trim() : "";
+  if (tag === "") throw fehler(pfad, "Export repo braucht den name `repo <Repo-Tag>`");
+  const soll = repoTagFilter(tag);
+  if (!hatFilter(json.abfrage, (f) => f?.column === soll.column && f.operator === soll.operator && JSON.stringify(f.value) === JSON.stringify(soll.value))) {
+    throw fehler(pfad, `Export repo ${tag} braucht den Filter tags any of [${soll.value.join(", ")}]`);
+  }
+  return tag;
+}
 
 const fensterLesbar = (a) => !Number.isNaN(Date.parse(a.fromTimestamp)) && !Number.isNaN(Date.parse(a.toTimestamp));
 
@@ -187,6 +207,7 @@ export function leseExport(json, pfad) {
   if (json.art === "leer") ex.zeilen = json.data.map((r, i) => leerZeileVon(r, pfad, i));
   else ex.zeilen = json.art === "tage" ? [] : json.data.map((r, i) => zeileVon(r, json.art, pfad, i));
   ex.zeilen = ex.zeilen.filter((z) => z.providedModelName !== SYNTHETIC_MODELL);
+  if (json.art === "repo") return { ...ex, schluessel: "repo", wert: repoTagVon(json, pfad) };
   return json.art === "metadaten" ? { ...ex, ...metaFilter(json.abfrage, pfad) } : ex;
 }
 
@@ -234,9 +255,10 @@ export function betrag({ cost, count, ohnePreis = 0, modelle = [] }) {
   return `mindestens ${usd(cost)}, ohne ${ohnePreis} Calls`;
 }
 
+/** Eine Gruppe ohne `repo`: das Repo kommt aus dem Repo-Tag (Export `repo`), nie aus `environment` (factory#523). */
 function anreichern(z) {
   const modell = leer(z.providedModelName) ? UNZUGEORDNET : z.providedModelName;
-  return { ...z, modell, modelle: z.ohnePreis > 0 ? [modell] : [], quelle: quelleVon(z.traceName, z.name), repo: leer(z.environment) || z.environment === "default" ? UNZUGEORDNET : z.environment };
+  return { ...z, modell, modelle: z.ohnePreis > 0 ? [modell] : [], quelle: quelleVon(z.traceName, z.name) };
 }
 
 /** Teilt `gesamt` in Basis (geht in die bereinigten Summen), Audit-Kopien und Gruppen mit negativer Latenz. */
@@ -258,7 +280,8 @@ function teile(gesamtZeilen, latenzZeilen) {
   return { basis, audit: summeP(audit), negativ: { gruppen: neg.length, ...summeP(neg) }, ausgeschlossen, ohnePreis };
 }
 
-const zellenLabel = (z) => (z.wert === "unbekannt" ? UNZUGEORDNET : z.schluessel === "agent_type" ? z.wert : `${z.schluessel}:${z.wert}`);
+const istUnbekannt = (z) => z.schluessel !== "repo" && z.wert === "unbekannt";
+const zellenLabel = (z) => (z.schluessel === "repo" ? z.wert : istUnbekannt(z) ? UNZUGEORDNET : z.schluessel === "agent_type" ? z.wert : `${z.schluessel}:${z.wert}`);
 
 /** Posten der Metadaten-Zellen; merkt Summen je Gruppe, Gruppen mit negativer Latenz und Zellen ohne Gegenstück. */
 function zellenPosten(teil, metaExporte) {
@@ -273,7 +296,7 @@ function zellenPosten(teil, metaExporte) {
       st.kaputt.add(z.key);
     } else {
       st.zugeteilt.set(z.key, summeP([st.zugeteilt.get(z.key) ?? { count: 0, cost: 0 }, z]));
-      st.posten.push({ key: z.key, quelle: b.quelle, label: zellenLabel(z), count: z.count, cost: z.cost, ohnePreis: z.ohnePreis, modelle: z.ohnePreis > 0 ? [b.modell] : [], art: z.wert === "unbekannt" ? "unbekannt" : "wert" });
+      st.posten.push({ key: z.key, quelle: b.quelle, label: zellenLabel(z), count: z.count, cost: z.cost, ohnePreis: z.ohnePreis, modelle: z.ohnePreis > 0 ? [b.modell] : [], art: istUnbekannt(z) ? "unbekannt" : "wert" });
     }
   }
   return st;
@@ -283,27 +306,27 @@ function zellenPosten(teil, metaExporte) {
 /** Ein Rest ist unstimmig, wenn er Calls oder Kosten unter 0 hat oder Kosten ohne Calls (die Zelle war billiger als die Gruppe bei gleichen Calls). */
 const restKaputt = (r) => r.count < 0 || r.cost < -EPS || (r.count === 0 && r.cost > EPS);
 
-function restPosten(teil, st) {
+function restPosten(teil, st, restLabel = UNZUGEORDNET) {
   const out = { posten: [], inkonsistent: 0, luecke: { count: 0, cost: 0 } };
   for (const b of teil.basis.values()) {
     const z = st.zugeteilt.get(b.key) ?? { count: 0, cost: 0 };
     const rest = { count: b.count - z.count, cost: b.cost - z.cost, ohnePreis: Math.max(0, (b.ohnePreis ?? 0) - (z.ohnePreis ?? 0)) };
     if (st.kaputt.has(b.key)) out.luecke = summeP([out.luecke, b]);
     else if (restKaputt(rest)) out.inkonsistent += 1;
-    else out.posten.push({ key: b.key, quelle: b.quelle, label: UNZUGEORDNET, count: rest.count, cost: Math.max(0, rest.cost), ohnePreis: rest.ohnePreis, modelle: rest.ohnePreis > 0 ? b.modelle : [], art: "rest" });
+    else out.posten.push({ key: b.key, quelle: b.quelle, label: restLabel, count: rest.count, cost: Math.max(0, rest.cost), ohnePreis: rest.ohnePreis, modelle: rest.ohnePreis > 0 ? b.modelle : [], art: "rest" });
   }
   return out;
 }
 
-/** Posten je Zelle und Rest je Basiszeile für eine Dimension (Rolle oder Effort). */
-function dimensionPosten(teil, metaExporte, name) {
+/** Posten je Zelle und Rest je Basiszeile für eine Dimension (Rolle, Effort oder Repo); `restLabel` benennt den Rest, `keinExport` ersetzt die Standard-Lücke ohne Export (`null`: keine, der Aufrufer nennt sie). */
+function dimensionPosten(teil, metaExporte, name, { restLabel = UNZUGEORDNET, keinExport } = {}) {
   const st = zellenPosten(teil, metaExporte);
-  const rest = restPosten(teil, st);
+  const rest = restPosten(teil, st, restLabel);
   const luecken = [];
-  if (!metaExporte.length) luecken.push(`${name}: kein Metadaten-Export, nichts zugeordnet (alles unzugeordnet)`);
+  if (!metaExporte.length && keinExport !== null) luecken.push(keinExport ?? `${name}: kein Metadaten-Export, nichts zugeordnet (alles unzugeordnet)`);
   if (st.kaputt.size) luecken.push(`${name}: ${st.kaputt.size} Gruppe(n) mit negativer Latenz in einer Metadaten-Zelle, ${rest.luecke.count} Calls (${betrag(rest.luecke)}) aus den Summen genommen`);
   if (rest.inkonsistent || st.ohneGegenstueck) luecken.push(`${name}: Exporte nicht konsistent (${rest.inkonsistent} Zeile(n) mit Rest unter 0 oder Kosten ohne Calls, ${st.ohneGegenstueck} Zelle(n) ohne Gegenstück in gesamt; Fenster in der Vergangenheit wählen)`);
-  return { posten: [...st.posten, ...rest.posten], luecken };
+  return { posten: [...st.posten, ...rest.posten], luecken, hatExport: metaExporte.length > 0 };
 }
 
 const usd = (x) => `${x.toFixed(2)} $`;
@@ -317,24 +340,26 @@ const addPosten = (ziel, p) => {
   ziel.modelle = vereinige(ziel.modelle, p.modelle);
 };
 
-export function tabelle(posten) {
-  const zeilen = new Map([[UNZUGEORDNET, { name: UNZUGEORDNET, ...leerePosten(), quellen: {}, quellenInfo: {} }]]);
+/** `restLabel` ist die Restzeile (immer die letzte); `restImmer: false` lässt sie ohne Calls weg (Repo: nur eine Lücke mit Zahl wird gezeigt). */
+export function tabelle(posten, restLabel = UNZUGEORDNET, restImmer = true) {
+  const zeilen = new Map(restImmer ? [[restLabel, { name: restLabel, ...leerePosten(), quellen: {}, quellenInfo: {} }]] : []);
   const davon = { unbekannt: leerePosten(), ohneSchluessel: leerePosten() };
   for (const p of posten) {
+    if (!restImmer && p.label === restLabel && p.count === 0 && !(p.ohnePreis > 0)) continue;
     const z = zeilen.get(p.label) ?? { name: p.label, ...leerePosten(), quellen: {}, quellenInfo: {} };
     addPosten(z, p);
     z.quellen[p.quelle] = (z.quellen[p.quelle] ?? 0) + p.cost;
     z.quellenInfo[p.quelle] ??= leerePosten();
     addPosten(z.quellenInfo[p.quelle], p);
     zeilen.set(p.label, z);
-    if (p.label === UNZUGEORDNET) {
+    if (p.label === restLabel) {
       const ziel = p.art === "unbekannt" ? davon.unbekannt : davon.ohneSchluessel;
       addPosten(ziel, p);
     }
   }
   const alle = [...zeilen.values()];
-  const rest = alle.filter((z) => z.name === UNZUGEORDNET);
-  const rang = alle.filter((z) => z.name !== UNZUGEORDNET).sort((a, b) => b.cost - a.cost || sortName(a.name, b.name));
+  const rest = alle.filter((z) => z.name === restLabel);
+  const rang = alle.filter((z) => z.name !== restLabel).sort((a, b) => b.cost - a.cost || sortName(a.name, b.name));
   return { zeilen: [...rang, ...rest], summe: summe(alle), preis: nurPreis(summeP(alle)), davon };
 }
 
@@ -357,6 +382,7 @@ export function bericht(exporte) {
   const tageFehlend = tage ? tagesLuecken(gesamt.von, gesamt.bis, tage.data) : null;
   const rolle = dimensionPosten(teil, exporte.filter((e) => e.art === "metadaten" && ROLLE_SCHLUESSEL.includes(e.schluessel)), "Rolle");
   const effort = dimensionPosten(teil, exporte.filter((e) => e.art === "metadaten" && EFFORT_SCHLUESSEL.includes(e.schluessel)), "Effort");
+  const repo = dimensionPosten(teil, exporte.filter((e) => e.art === "repo"), "Repo", { restLabel: REPO_REST, keinExport: null });
   const unz = unzugeordnetGesamt(teil, rolle);
   const leer2 = leerAuswerten(exporte.find((e) => e.art === "leer"), summe(gesamt.zeilen).count);
   const luecken = [
@@ -367,6 +393,8 @@ export function bericht(exporte) {
     ...(teil.negativ.gruppen ? [`negative Latenzen: ${teil.negativ.gruppen} Gruppe(n) mit min_latency unter 0, ${teil.negativ.count} Calls (${betrag(teil.negativ)}), aus allen Summen genommen`] : []),
     ...rolle.luecken,
     ...effort.luecken,
+    ...repo.luecken,
+    ...repoLuecke(repo, gesamt.von),
     ...leer2.luecken,
   ];
   const basisSumme = summeP([...teil.basis.values()]);
@@ -381,13 +409,22 @@ export function bericht(exporte) {
     negativ: { gruppen: teil.negativ.gruppen, count: teil.negativ.count, cost: teil.negativ.cost },
     quelle: tabelle(postenAusBasis(teil.basis, "quelle")),
     modell: tabelle(postenAusBasis(teil.basis, "modell")),
-    repo: tabelle(postenAusBasis(teil.basis, "repo")),
+    repo: tabelle(repo.posten, REPO_REST, false),
     rolle: tabelle(rolle.posten),
     effort: tabelle(effort.posten),
     unzugeordnet: summe([unz]),
     luecken,
     dubletten: "Dubletten Live/Nachgeliefert: nicht abgezogen (Stichprobe factory#286: keine belegt)",
   };
+}
+
+/** Lücke `ohne Repo-Tag` (factory#523): Generations ohne Repo-Tag stehen mit Anzahl, Kosten (nie 0 $) und Grund, nie unter einem Repo; ohne Calls keine Lücke. */
+function repoLuecke(repo, von) {
+  const rest = summeP(repo.posten.filter((p) => p.label === REPO_REST));
+  if (!(rest.count > 0) && !(rest.ohnePreis > 0)) return [];
+  const gruende = repo.hatExport ? ["Session außerhalb eines Repos", "Bezieher ohne Repo-Tag in CC_LANGFUSE_TRACE_TAGS"] : ["kein Repo-Export (Rezept: --rezept liefert einen Export je Repo-Tag)"];
+  if (Date.parse(von) < Date.parse(`${REPO_TAG_STICHTAG}T00:00:00Z`)) gruende.push(`Daten vor dem Stichtag ${REPO_TAG_STICHTAG}`);
+  return [`${REPO_REST}: ${rest.count} Calls, ${betrag(rest)} (Grund: ${gruende.join(", ")})`];
 }
 
 /**
