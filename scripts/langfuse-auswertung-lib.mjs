@@ -285,7 +285,7 @@ function restPosten(teil, st) {
   for (const b of teil.basis.values()) {
     const z = st.zugeteilt.get(b.key) ?? { count: 0, cost: 0 };
     const rest = { count: b.count - z.count, cost: b.cost - z.cost, ohnePreis: Math.max(0, (b.ohnePreis ?? 0) - (z.ohnePreis ?? 0)) };
-    if (st.kaputt.has(b.key)) out.luecke = summe([out.luecke, b]);
+    if (st.kaputt.has(b.key)) out.luecke = summeP([out.luecke, b]);
     else if (restKaputt(rest)) out.inkonsistent += 1;
     else out.posten.push({ key: b.key, quelle: b.quelle, label: UNZUGEORDNET, count: rest.count, cost: Math.max(0, rest.cost), ohnePreis: rest.ohnePreis, modelle: rest.ohnePreis > 0 ? b.modelle : [], art: "rest" });
   }
@@ -298,7 +298,7 @@ function dimensionPosten(teil, metaExporte, name) {
   const rest = restPosten(teil, st);
   const luecken = [];
   if (!metaExporte.length) luecken.push(`${name}: kein Metadaten-Export, nichts zugeordnet (alles unzugeordnet)`);
-  if (st.kaputt.size) luecken.push(`${name}: ${st.kaputt.size} Gruppe(n) mit negativer Latenz in einer Metadaten-Zelle, ${rest.luecke.count} Calls (${usd(rest.luecke.cost)}) aus den Summen genommen`);
+  if (st.kaputt.size) luecken.push(`${name}: ${st.kaputt.size} Gruppe(n) mit negativer Latenz in einer Metadaten-Zelle, ${rest.luecke.count} Calls (${betrag(rest.luecke)}) aus den Summen genommen`);
   if (rest.inkonsistent || st.ohneGegenstueck) luecken.push(`${name}: Exporte nicht konsistent (${rest.inkonsistent} Zeile(n) mit Rest unter 0 oder Kosten ohne Calls, ${st.ohneGegenstueck} Zelle(n) ohne Gegenstück in gesamt; Fenster in der Vergangenheit wählen)`);
   return { posten: [...st.posten, ...rest.posten], luecken };
 }
@@ -361,7 +361,7 @@ export function bericht(exporte) {
     ...(tageFehlend?.length ? [`Tage ohne Daten: ${tageFehlend.join(", ")}`] : []),
     ...(latenz ? [] : ["negative Latenzen nicht geprüft (Export latenz fehlt)"]),
     ...preisLuecke(teil.ohnePreis),
-    ...(teil.negativ.gruppen ? [`negative Latenzen: ${teil.negativ.gruppen} Gruppe(n) mit min_latency unter 0, ${teil.negativ.count} Calls (${usd(teil.negativ.cost)}), aus allen Summen genommen`] : []),
+    ...(teil.negativ.gruppen ? [`negative Latenzen: ${teil.negativ.gruppen} Gruppe(n) mit min_latency unter 0, ${teil.negativ.count} Calls (${betrag(teil.negativ)}), aus allen Summen genommen`] : []),
     ...rolle.luecken,
     ...effort.luecken,
     ...leer2.luecken,

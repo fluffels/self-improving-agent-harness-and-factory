@@ -794,3 +794,12 @@ describe("Leere Hook-Generations und Preislücke (factory#522)", () => {
     expect(r.exitCode).toBe(1);
   });
 });
+
+describe("Datenlücke ohne Rolle oder Modell mit Preislücke (factory#522)", () => {
+  test("Zeilen ohne Modell und ohne Preis: die Lücken-Zeile zeigt „Lücke“ statt 0.00 $", async () => {
+    const gW = [{ ...g("Claude Code Turn", "LLM Call", "", "default", 5, 0), providedModelName: null, sum_totalCost: null }];
+    const leer = { art: "leer", abfrage: { view: "observations", filters: [TYPE, PF], dimensions: [{ field: "providedModelName" }], fromTimestamp: F.von, toTimestamp: F.bis }, data: [{ providedModelName: null, count_count: 5, sum_totalCost: null, sum_totalTokens: 0 }] };
+    const r = await lauf([], { ...satz(), "gesamtW.json": exp("gesamt", F.von, F.bis, gW), "leer.json": leer });
+    expect(r.stdout).toMatch(/Zeilen ohne Rolle oder Modell: 5 Calls \(Lücke: ohne Preis \(unzugeordnet\)\)/);
+  });
+});

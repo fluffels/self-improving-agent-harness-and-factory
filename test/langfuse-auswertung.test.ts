@@ -839,3 +839,33 @@ describe("Preislücke und Filter, Nachschärfung Runde 1 (factory#522)", () => {
     expect(b.luecken.join("\n")).not.toContain("mit Usage");
   });
 });
+
+describe("Preislücke in Gesamtzeile und Datenlücken, Nachschärfung Runde 2 (factory#522)", () => {
+  const ohnePreis = (r: ReturnType<typeof g>): ReturnType<typeof g> => ({ ...r, sum_totalCost: null as unknown as number });
+  test("negative Latenz ohne Preis: Gesamtzeile und Datenlücke zeigen die Lücke, nie 0.00 $", () => {
+    const rows = [g(...R1, 10, 5), ohnePreis(g(...R2, 4, 0))];
+    const b = rep(exp("gesamt", rows), tageVoll, leerVon(rows), exp("latenz", [g(...R1, 10, 5, 0), ohnePreis(g(...R2, 4, 0, -1))]));
+    const md = L.renderMarkdown(b);
+    expect(md).toContain("ohne negative Latenzen 4 Calls Lücke: ohne Preis (claude-opus-5-5),");
+    expect(b.luecken.join("\n")).toContain("4 Calls (Lücke: ohne Preis (claude-opus-5-5)), aus allen Summen genommen");
+    expect(b.luecken.join("\n")).not.toContain("(0.00 $)");
+  });
+  test("Rolle: Gruppe mit negativer Latenz in einer Metadaten-Zelle und ohne Preis: Datenlücke mit Lücke statt 0.00 $", () => {
+    const rows = [ohnePreis(g(...R1, 4, 0)), g(...R2, 20, 10)];
+    const b = rep(exp("gesamt", rows), tageVoll, leerVon(rows), meta("agent_type", "Plan", [ohnePreis(g(...R1, 4, 0, -1))]));
+    expect(b.luecken.join("\n")).toContain("4 Calls (Lücke: ohne Preis (claude-sonnet-5-5)) aus den Summen genommen");
+  });
+  test("Davon unzugeordnet: Wert unbekannt ohne Preis zeigt die Lücke", () => {
+    const rows = [ohnePreis(g(...R1, 4, 0))];
+    const b = rep(exp("gesamt", rows), tageVoll, leerVon(rows), meta("agent_type", "unbekannt", [ohnePreis(g(...R1, 4, 0, 3))]));
+    expect(L.renderMarkdown(b)).toContain("Davon unzugeordnet: unbekannt 4 Calls (Lücke: ohne Preis (claude-sonnet-5-5));");
+  });
+  test("Rest nach einer Zelle: die Calls ohne Preis der Zelle werden abgezogen, der Rest zeigt dann nur den $-Betrag", () => {
+    const rows = [{ ...g(...R1, 10, 5), sum_totalCost: 5 }, ohnePreis(g("Claude Code Turn", "LLM Call", "claude-sonnet-5-5", "repoB", 3, 0))];
+    // Gesamtgruppe 1 (10 Calls, 5 $) und Gruppe 2 (3 ohne Preis) haben verschiedene Schlüssel; die Zelle nimmt nur Gruppe 2 vollständig.
+    const b = rep(exp("gesamt", rows), tageVoll, leerVon(rows), meta("agent_type", "Plan", [ohnePreis(g("Claude Code Turn", "LLM Call", "claude-sonnet-5-5", "repoB", 3, 0, 3))]));
+    const md = L.renderMarkdown(b);
+    expect(md).toContain("| Plan | 3 | Lücke: ohne Preis (claude-sonnet-5-5) |");
+    expect(md).toContain("| unzugeordnet | 10 | 5.00 $ |");
+  });
+});
