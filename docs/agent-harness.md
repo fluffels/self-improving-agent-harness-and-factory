@@ -22,7 +22,7 @@ Das ist selbst ein **Architekturziel** („eine KI ändert das billig **und** si
 | Kennzahl | Wert | Zählregel |
 |---|---|---|
 | Prüfschritte in `verify` | 16 | eigene Schritte der Kette `verify` in package.json, verschachtelte Ketten aufgelöst, je Schritt einmal |
-| Skripte | ≥ 250 | Dateien `.mjs`/`.cjs` unter `scripts/` (rekursiv), ab 10 auf Zehner abgerundet |
+| Skripte | ≥ 260 | Dateien `.mjs`/`.cjs` unter `scripts/` (rekursiv), ab 10 auf Zehner abgerundet |
 | Wächter-Tests | ≥ 150 | `*.test.ts` unter `test/harness/` (rekursiv) mit dem Marker `@harness-waechter` im Kopf, ab 10 auf Zehner abgerundet |
 | CI-Workflows | 21 | `*.yml`/`*.yaml` direkt unter `.github/workflows/` |
 | ADRs | 24 | `NNNN-*.md` unter `docs/adr/` (ohne `README.md`), nach `adr-liste` |

@@ -1287,6 +1287,11 @@
       "grund": "Prüft das Änderungsregister der Fabrik (.github/aenderungsregister.json, nicht im Besitz)"
     },
     {
+      "muster": "test/harness/waechter-einfrieren.test.ts",
+      "art": "projekt-test",
+      "grund": "Prüft eingefrorene Wächter gegen Änderungsregister und vite.config.ts der Fabrik (factory#611, nicht im Besitz)"
+    },
+    {
       "muster": "test/harness/regel-verfall.test.ts",
       "art": "projekt-test",
       "grund": "Prüft Verfall-Manifest und Sicherheits-Ausnahmeliste der Fabrik (factory#608, nicht im Besitz)"
