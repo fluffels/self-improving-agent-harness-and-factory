@@ -1,11 +1,12 @@
 /**
  * @harness-waechter
- * Wächter: das Umgebungsvariablen-Inventar (`docs/referenz/befehle.md` › „Umgebungsvariablen“, Ring `Kern`) und die gelesenen
- * Kern-Variablen (`umgebungsWert(<env>, "FACTORY_<NAME>")` in `scripts/**\/*.mjs`) decken sich als Menge.
- * Grenze: direkte `process.env.FACTORY_…`-Zugriffe und Workflows liegen außerhalb des Scans.
+ * Wächter: das Umgebungsvariablen-Inventar (`docs/referenz/befehle.md` › „Umgebungsvariablen“, Ring `Kern` und `Fabrik`) und die gelesenen
+ * Variablen (`umgebungsWert(<env>, "FACTORY_<NAME>")` in `scripts/**\/*.mjs`) decken sich als Menge; der Ring stimmt mit dem Besitz-Manifest
+ * (`.factory/besitz.json`) überein (`Kern`: mindestens ein Leser im Besitz, `Fabrik`: kein Leser im Besitz).
+ * Grenze: Scan nur `umgebungsWert`-Aufrufe in `scripts/**\/*.mjs`; direkte `process.env.FACTORY_…`-Zugriffe und Workflows liegen außerhalb.
  */
 import { describe, expect, test } from "vitest";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
@@ -30,19 +31,50 @@ export const sammleCode = rawSammle as (datei: string, text: string) => CodeFund
 /** Dieselbe Lib sammelt über einen Ordner, damit Wächter und Doctor nicht zwei Läufe über die Dateien pflegen. */
 const sammleOrdner = rawSammleIn as (ordner: string, bezug: string) => CodeFunde;
 
-/** Pur: Namen der Kern-Zeilen unter `## Umgebungsvariablen` (Ring in Spalte 2, Name in Spalte 1). */
-export function sammleInventar(md: string): Set<string> {
-  const namen = new Set<string>();
+/** Pur: Name → Ring der Zeilen mit Ring `Kern` oder `Fabrik` unter `## Umgebungsvariablen` (Ring in Spalte 2, Name in Spalte 1). */
+export function sammleInventar(md: string): Map<string, string> {
+  const ringe = new Map<string, string>();
   let drin = false;
   for (const zeile of md.split("\n")) {
     if (/^## /.test(zeile)) drin = zeile.trim() === "## Umgebungsvariablen";
     if (!drin || !zeile.startsWith("|")) continue;
     const spalten = zeile.split("|").slice(1, -1).map((s) => s.trim());
-    if (spalten[1] !== "Kern") continue;
+    if (spalten[1] !== "Kern" && spalten[1] !== "Fabrik") continue;
     const m = /^`([^`]+)`$/.exec(spalten[0]);
-    if (m) namen.add(m[1]);
+    if (m) ringe.set(m[1], spalten[1]);
   }
-  return namen;
+  return ringe;
+}
+
+/** Pur: Ring-Abweichungen. `Kern`-Zeile nur von Skripten außerhalb des Besitz-Manifests gelesen oder `Fabrik`-Zeile von einem Skript im Besitz gelesen = Fehler. */
+export function pruefeRing(funde: Record<string, Set<string>>, besitzPfade: Set<string>, inventarRinge: Map<string, string>): string[] {
+  const fehler: string[] = [];
+  for (const [name, ring] of inventarRinge) {
+    const leser = Object.keys(funde).filter((d) => funde[d].has(name));
+    if (leser.length === 0) continue;
+    const imBesitz = leser.filter((d) => besitzPfade.has(d));
+    if (ring === "Kern" && imBesitz.length === 0) fehler.push(`${name} hat Ring Kern, wird aber nur von Fabrik-eigenen Skripten gelesen (${leser.join(", ")}): Ring Fabrik setzen`);
+    if (ring === "Fabrik" && imBesitz.length > 0) fehler.push(`${name} hat Ring Fabrik, wird aber von Besitz-Skripten gelesen (${imBesitz.join(", ")}): Ring Kern setzen`);
+  }
+  return fehler;
+}
+
+/** Skripte (`scripts/**\/*.mjs`) mit `umgebungsWert`-Literalen je Datei, relativ zur Wurzel. */
+function sammleJeDatei(ordner: string): Record<string, Set<string>> {
+  const funde: Record<string, Set<string>> = {};
+  const gehe = (dir: string) => {
+    for (const e of readdirSync(dir)) {
+      const p = join(dir, e);
+      if (statSync(p).isDirectory()) gehe(p);
+      else if (e.endsWith(".mjs")) {
+        const rel = p.slice(WURZEL.length).split("\\").join("/");
+        const f = sammleCode(rel, readFileSync(p, "utf8"));
+        if (f.literale.size > 0) funde[rel] = f.literale;
+      }
+    }
+  };
+  gehe(ordner);
+  return funde;
 }
 
 /** Pur: Abweichungen zwischen Code und Inventar; leer = gleich. */
@@ -66,11 +98,18 @@ export function vergleiche(code: CodeFunde, inventar: Set<string>, ausnahmen: Re
   return fehler;
 }
 
+const namen = (md: string) => new Set(sammleInventar(md).keys());
+
 describe("Umgebungsvariablen-Inventar gegen den Code", () => {
-  test("Kern-Inventar und gelesene FACTORY_-Variablen sind mengengleich", () => {
+  test("Inventar (Kern und Fabrik) und gelesene FACTORY_-Variablen sind mengengleich", () => {
     const code = sammleOrdner(join(WURZEL, "scripts"), WURZEL);
-    const inventar = sammleInventar(readFileSync(join(WURZEL, BEFEHLE), "utf8"));
+    const inventar = namen(readFileSync(join(WURZEL, BEFEHLE), "utf8"));
     expect(vergleiche(code, inventar, AUSNAHMEN)).toEqual([]);
+  });
+  test("der Ring jeder Inventarzeile stimmt mit dem Besitz-Manifest überein", () => {
+    const ringe = sammleInventar(readFileSync(join(WURZEL, BEFEHLE), "utf8"));
+    const besitz = new Set<string>((JSON.parse(readFileSync(join(WURZEL, ".factory/besitz.json"), "utf8")).eintraege as { pfad: string }[]).map((e) => e.pfad));
+    expect(pruefeRing(sammleJeDatei(join(WURZEL, "scripts")), besitz, ringe)).toEqual([]);
   });
 });
 
@@ -80,27 +119,39 @@ describe("Wächter-Hilfsfunktionen (Negativfälle)", () => {
   const zeile = (n: string, ring = "Kern") => `| \`${n}\` | ${ring} | a | b |`;
 
   test("Gleichheit: keine Abweichung", () => {
-    expect(vergleiche(code(["FACTORY_A"]), sammleInventar(tabelle([zeile("FACTORY_A")])), {})).toEqual([]);
+    expect(vergleiche(code(["FACTORY_A"]), namen(tabelle([zeile("FACTORY_A")])), {})).toEqual([]);
   });
   test("Inventarzeile ohne Literal", () => {
-    expect(vergleiche(code([]), sammleInventar(tabelle([zeile("FACTORY_A")])), {})).toHaveLength(1);
+    expect(vergleiche(code([]), namen(tabelle([zeile("FACTORY_A")])), {})).toHaveLength(1);
   });
   test("Literal ohne Inventarzeile", () => {
-    expect(vergleiche(code(["FACTORY_A"]), sammleInventar(tabelle([zeile("FACTORY_B")])), {})).toHaveLength(2);
+    expect(vergleiche(code(["FACTORY_A"]), namen(tabelle([zeile("FACTORY_B")])), {})).toHaveLength(2);
   });
   test("Variablenname statt Literal", () => {
     const f = sammleCode("scripts/x.mjs", "const v = umgebungsWert(env, name);\n");
     expect(f.ohneLiteral).toEqual(["scripts/x.mjs:1"]);
-    expect(vergleiche(f, sammleInventar(tabelle([zeile("FACTORY_A")])), {}).some((m) => m.includes("ohne Literal"))).toBe(true);
+    expect(vergleiche(f, namen(tabelle([zeile("FACTORY_A")])), {}).some((m) => m.includes("ohne Literal"))).toBe(true);
   });
   test("leere Tabelle", () => {
-    expect(vergleiche(code([]), sammleInventar(tabelle([])), {}).some((m) => m.includes("Inventar leer"))).toBe(true);
+    expect(vergleiche(code([]), namen(tabelle([])), {}).some((m) => m.includes("Inventar leer"))).toBe(true);
   });
   test("Ring Projekt und Tabellen anderer Abschnitte zählen nicht", () => {
-    expect([...sammleInventar(tabelle([zeile("FACTORY_P", "Projekt")]))]).toEqual([]);
+    expect([...namen(tabelle([zeile("FACTORY_P", "Projekt")]))]).toEqual([]);
+  });
+  test("Ring Fabrik zählt zur Menge", () => {
+    expect(vergleiche(code(["FACTORY_F"]), namen(tabelle([zeile("FACTORY_F", "Fabrik")])), {})).toEqual([]);
+    expect(sammleInventar(tabelle([zeile("FACTORY_F", "Fabrik"), zeile("FACTORY_K")]))).toEqual(new Map([["FACTORY_F", "Fabrik"], ["FACTORY_K", "Kern"]]));
+  });
+  test("Ringabgleich gegen den Besitz", () => {
+    const besitz = new Set(["scripts/k.mjs"]);
+    const funde = { "scripts/k.mjs": new Set(["FACTORY_K"]), "scripts/f.mjs": new Set(["FACTORY_F", "FACTORY_X"]) };
+    expect(pruefeRing(funde, besitz, new Map([["FACTORY_K", "Kern"], ["FACTORY_F", "Fabrik"]]))).toEqual([]);
+    expect(pruefeRing(funde, besitz, new Map([["FACTORY_F", "Kern"]]))).toHaveLength(1);
+    expect(pruefeRing(funde, besitz, new Map([["FACTORY_K", "Fabrik"]]))).toHaveLength(1);
+    expect(pruefeRing(funde, besitz, new Map([["FACTORY_X", "Fabrik"]]))).toEqual([]);
   });
   test("Ausnahme ohne Grund, ohne Inventarzeile oder trotz Literal", () => {
-    const inv = sammleInventar(tabelle([zeile("FACTORY_T")]));
+    const inv = namen(tabelle([zeile("FACTORY_T")]));
     expect(vergleiche(code([]), inv, { FACTORY_T: " " }).some((m) => m.includes("ohne Grund"))).toBe(true);
     expect(vergleiche(code([]), inv, { FACTORY_U: "x" }).some((m) => m.includes("keine Inventarzeile"))).toBe(true);
     expect(vergleiche(code(["FACTORY_T"]), inv, { FACTORY_T: "x" }).some((m) => m.includes("entfernen"))).toBe(true);
