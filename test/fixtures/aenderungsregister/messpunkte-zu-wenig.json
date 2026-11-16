@@ -1,0 +1,8 @@
+{
+  "art": "aenderungsregister-messpunkte",
+  "quelle": "lauf-ergebnis",
+  "punkte": [
+    { "messgroesse": "nacharbeit-quote", "zeitpunkt": "2026-09-10", "einheitId": "pr-1", "wert": 10 },
+    { "messgroesse": "nacharbeit-quote", "zeitpunkt": "2026-10-10", "einheitId": "pr-3", "wert": 11 }
+  ]
+}

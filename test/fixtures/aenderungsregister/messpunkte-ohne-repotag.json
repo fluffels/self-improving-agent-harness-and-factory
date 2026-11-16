@@ -1,0 +1,8 @@
+{
+  "art": "aenderungsregister-messpunkte",
+  "quelle": "langfuse",
+  "punkte": [
+    { "messgroesse": "kosten-je-ticket-rolle", "parameter": "planer", "zeitpunkt": "2026-09-10", "einheitId": "t-1", "wert": 5 },
+    { "messgroesse": "kosten-je-ticket-rolle", "parameter": "planer", "zeitpunkt": "2026-10-10", "einheitId": "t-3", "wert": 4 }
+  ]
+}

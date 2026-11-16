@@ -1,0 +1,10 @@
+{
+  "art": "aenderungsregister-messpunkte",
+  "quelle": "lauf-ergebnis",
+  "punkte": [
+    { "messgroesse": "ci-fix-runden", "zeitpunkt": "2026-09-10", "einheitId": "pr-1", "wert": 10 },
+    { "messgroesse": "ci-fix-runden", "zeitpunkt": "2026-09-20", "einheitId": "pr-2", "wert": 10 },
+    { "messgroesse": "ci-fix-runden", "zeitpunkt": "2026-10-10", "einheitId": "pr-3", "wert": 30 },
+    { "messgroesse": "ci-fix-runden", "zeitpunkt": "2026-10-20", "einheitId": "pr-4", "wert": 30 }
+  ]
+}

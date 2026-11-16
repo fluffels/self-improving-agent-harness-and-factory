@@ -1,0 +1,18 @@
+{
+  "version": 1,
+  "zeilen": [
+    {
+      "id": "solo-verstoss",
+      "datum": "2026-10-01",
+      "aenderung": "Fixture: einzelne fällige Änderung ohne Überlappung",
+      "wirkung": "Die CI-Fix-Runden bleiben.",
+      "messgroesse": "ci-fix-runden",
+      "basis": { "fenster": "4 Wochen vor Merge", "wert": null },
+      "toleranz": { "qualitaetsmass": "ci-fix-runden", "richtung": "steigt", "schwelle": 2, "einheit": "absolut" },
+      "rueckfall": "Revert des Merge-Commits der Fixture-Änderung per PR.",
+      "pruefTermin": "2026-10-29",
+      "mindestdaten": { "n": 2, "einheit": "prs" },
+      "adr": { "datum": "2026-10-01", "pr": "fix#4" }
+    }
+  ]
+}

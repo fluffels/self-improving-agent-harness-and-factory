@@ -1,0 +1,46 @@
+{
+  "version": 1,
+  "zeilen": [
+    {
+      "id": "fix-faellig",
+      "datum": "2026-10-01",
+      "aenderung": "Fixture: fällige Änderung der Planer-Rolle",
+      "wirkung": "Die Kosten der Rolle sinken, die Qualität bleibt.",
+      "messgroesse": "kosten-je-ticket-rolle",
+      "parameter": "planer",
+      "basis": { "fenster": "4 Wochen vor Merge", "wert": null },
+      "toleranz": { "qualitaetsmass": "nacharbeit-quote", "richtung": "steigt", "schwelle": 2, "einheit": "prozentpunkte" },
+      "rueckfall": "Revert des Merge-Commits der Fixture-Änderung per PR.",
+      "pruefTermin": "2026-10-29",
+      "mindestdaten": { "n": 2, "einheit": "tickets" },
+      "adr": { "datum": "2026-10-01", "pr": "fix#1" }
+    },
+    {
+      "id": "fix-spaeter",
+      "datum": "2026-12-04",
+      "aenderung": "Fixture: noch nicht fällige Änderung",
+      "wirkung": "Die Kosten der Rolle sinken, die Qualität bleibt.",
+      "messgroesse": "kosten-je-ticket-rolle",
+      "parameter": "umsetzer",
+      "basis": { "fenster": "4 Wochen vor Merge", "wert": null },
+      "toleranz": { "qualitaetsmass": "ci-fix-runden", "richtung": "steigt", "schwelle": 1, "einheit": "absolut" },
+      "rueckfall": "Revert per PR.",
+      "pruefTermin": "2027-01-01",
+      "mindestdaten": { "n": 2, "einheit": "tickets" },
+      "adr": { "datum": "2026-12-04", "pr": "fix#2" }
+    },
+    {
+      "id": "fix-ueberlappt",
+      "datum": "2026-10-05",
+      "aenderung": "Fixture: Änderung, deren Fenster das der ersten Zeile berührt",
+      "wirkung": "Die CI-Fix-Runden bleiben.",
+      "messgroesse": "ci-fix-runden",
+      "basis": { "fenster": "4 Wochen vor Merge", "wert": null },
+      "toleranz": { "qualitaetsmass": "nacharbeit-quote", "richtung": "steigt", "schwelle": 2, "einheit": "prozentpunkte" },
+      "rueckfall": "Revert per PR.",
+      "pruefTermin": "2026-11-02",
+      "mindestdaten": { "n": 2, "einheit": "prs" },
+      "adr": { "datum": "2026-10-05", "pr": "fix#3" }
+    }
+  ]
+}
