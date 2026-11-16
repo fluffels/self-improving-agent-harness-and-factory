@@ -341,9 +341,9 @@ export function profilImportVerstoesse(eintraege: Eintrag[], lies: (pfad: string
 
 /** Sicherheits-Regel des Profils (factory#519, AK4): jede Einheit der statischen Import-Hülle der `SICHERHEITS_EINSTIEGE` (profil-lib.mjs), die `profil` trägt, ist ein Verstoß
  *  (der Einstieg selbst eingeschlossen). Aus Nicht-Code-Einstiegen (Workflows, Agenten, Skills, Hook-Dateien) folgt sie jedem genannten `scripts/<x>.mjs`, aus Code den statischen Importen. Grenze: dynamische Importe, `spawn` mit Skriptname und zur Laufzeit gebaute Pfade sieht die Hülle nicht. Abhilfe: `profil` entfernen. */
-export function profilSicherheitsVerstoesse(eintraege: Eintrag[], lies: (pfad: string) => string | null): string[] {
+export function profilSicherheitsVerstoesse(eintraege: Eintrag[], lies: (pfad: string) => string | null, einstiegsDateien: string[] = []): string[] {
   const ganze = new Map(eintraege.filter((e) => istGanzeDatei(e)).map((e) => [e.pfad, e]));
-  const offen = [...ganze.keys()].filter((p) => profilLib.istSicherheitsEinstieg(p));
+  const offen = [...ganze.keys()].filter((p) => profilLib.istSicherheitsEinstieg(p)).concat(einstiegsDateien);
   const huelle = new Set<string>();
   while (offen.length > 0) {
     const von = offen.pop() as string;
@@ -358,6 +358,12 @@ export function profilSicherheitsVerstoesse(eintraege: Eintrag[], lies: (pfad: s
     for (const nach of nachPfade) if (nach !== undefined) offen.push(nach);
   }
   return [...huelle].filter((p) => ganze.get(p)?.profil !== undefined).sort();
+}
+
+/** Einstiege der Sicherheits-Hülle im Repo, auch solche, die nicht Besitz-Einheit sind (ein Workflow wie `ci.yml` steht als Vorlage oder Teil im Manifest, nicht als Ganz-Datei): jede versionierte Datei, die ein Muster von `SICHERHEITS_EINSTIEGE` trifft, dazu `package.json` (Skripte, auch über `npm run`). */
+function repoEinstiege(): string[] {
+  const getrackt = execFileSync("git", ["ls-files"], { cwd: WURZEL, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 }).split("\n").filter((p) => p !== "");
+  return [...getrackt.filter((p) => profilLib.istSicherheitsEinstieg(p)), "package.json"];
 }
 
 /** Einheiten im Ring kern-nach-entkopplung (Ganz-Datei-Code), die dort nicht gebraucht werden: keine Literal-Einträge in der Baseline
@@ -919,6 +925,16 @@ describe("profilImportVerstoesse und profilSicherheitsVerstoesse (Profil, factor
     const lies = mit({ ".claude/agents/a.md": "node scripts/g1.mjs", "x/review-lenses/SKILL.md": "node scripts/g2.mjs" });
     assert.deepEqual(profilSicherheitsVerstoesse(e, lies), ["scripts/g1.mjs", "scripts/g2.mjs"]);
   });
+  test("Negativfall (K4-Lücke): ein Workflow, der selbst nicht im Manifest steht, ruft ein Skript mit profil auf", () => {
+    const e = [ein("scripts/gate.mjs", V), ein("scripts/anderes.mjs", V)];
+    const lies = mit({ ".github/workflows/ci.yml": "run: node scripts/gate.mjs --audit-level high" });
+    assert.deepEqual(profilSicherheitsVerstoesse(e, lies, [".github/workflows/ci.yml"]), ["scripts/gate.mjs"]);
+    assert.deepEqual(profilSicherheitsVerstoesse(e, lies), [], "ohne die Repo-Datei als Einstieg bleibt die Lücke (darum reicht der echte Wächter sie mit)");
+  });
+  test("Negativfall: package.json-Skripte sind Einstiege, auch über npm run", () => {
+    const e = [ein("scripts/gate.mjs", V)];
+    assert.deepEqual(profilSicherheitsVerstoesse(e, mit({ "package.json": '{"scripts":{"check:x":"node scripts/gate.mjs"}}' }), ["package.json"]), ["scripts/gate.mjs"]);
+  });
   test("profil an einer Einheit außerhalb der Hülle ist kein Verstoß", () => {
     assert.deepEqual(profilSicherheitsVerstoesse(E, mit({ "scripts/check-x.mjs": 'import { x } from "./lib.mjs";' })), []);
   });
@@ -1106,7 +1122,7 @@ describe("Kern-Reinheit (#1610)", () => {
   });
 
   test("keine Einheit der Sicherheits-Hülle trägt profil: das Minimalprofil lässt nie ein Sicherheits-Gate oder einen Sicherheits-Hook weg (factory#519, AK4)", () => {
-    assert.deepEqual(profilSicherheitsVerstoesse(manifest.eintraege, lesenWurzel), []);
+    assert.deepEqual(profilSicherheitsVerstoesse(manifest.eintraege, lesenWurzel, repoEinstiege()), []);
   });
 
   test("jedes Hook-Skript aus .claude/settings.json (außer der Statuszeile) steht in der Einstiegsliste SICHERHEITS_EINSTIEGE (profil-lib.mjs, factory#519)", () => {
