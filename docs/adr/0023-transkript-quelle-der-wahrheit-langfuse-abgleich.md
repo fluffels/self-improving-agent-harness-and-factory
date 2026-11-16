@@ -1,7 +1,7 @@
 # ADR 0023: Das Transkript ist die Quelle der Wahrheit, Langfuse wird abgeglichen
 
 > Architecture Decision Record. Format: Kontext → Entscheidung → Konsequenzen → Re-Evaluierung.
-> Status: **akzeptiert** · Datum: 2026-10-09 · Ticket: #1578
+> Status: **akzeptiert, Erfassungsweg im Projekt-Scope: abgelöst durch ADR 0036** · Datum: 2026-10-09 · Ticket: #1578
 
 ## Status
 

@@ -17,10 +17,10 @@
 | [0015](/docs/adr/0015-projekt-brain.md) | Projekt-Brain — `docs/` nach Second-Brain-Prinzipien, token-sparsam und messbar | akzeptiert | 07.10.2026 |
 | [0016](/docs/adr/0016-langfuse-takt-woechentlich.md) | Langfuse-Takt — wöchentlicher Workflow statt Board-Position | akzeptiert | 07.10.2026 |
 | [0017](/docs/adr/0017-lebende-doku-generierte-abschnitte.md) | Lebende Doku — generierte Abschnitte, und ein Diagramm ist eine Regel | akzeptiert | 07.10.2026 |
-| [0019](/docs/adr/0019-langfuse-plugin-im-user-scope.md) | Das Langfuse-Plugin bleibt auch im User-Scope aktiv | akzeptiert | 07.10.2026 |
+| [0019](/docs/adr/0019-langfuse-plugin-im-user-scope.md) | Das Langfuse-Plugin bleibt auch im User-Scope aktiv | akzeptiert, präzisiert durch ADR 0036 | 07.10.2026 |
 | [0021](/docs/adr/0021-agenten-sandbox-wsl2.md) | Agenten-Sandbox über eine eigene WSL2-Distribution | akzeptiert | 08.10.2026 |
 | [0022](/docs/adr/0022-dark-factory-kern-und-verteilung.md) | Dark Factory — Kern-Schnitt des Harness und Verteilung per Sync mit Besitz-Manifest | akzeptiert, Workflow-Pfad entfernt: präzisiert durch ADR 0028, Ring Oberfläche: präzisiert durch ADR 0029, Ticket-Ablauf im Ring kern und Produkt-Skill im Projekt: präzisiert durch ADR 0028, Fortschreibung #1806, Betrieb ohne Harness im Projekt-Repo: Fortschreibung #1829 | 08.10.2026 |
-| [0023](/docs/adr/0023-transkript-quelle-der-wahrheit-langfuse-abgleich.md) | Das Transkript ist die Quelle der Wahrheit, Langfuse wird abgeglichen | akzeptiert | 09.10.2026 |
+| [0023](/docs/adr/0023-transkript-quelle-der-wahrheit-langfuse-abgleich.md) | Das Transkript ist die Quelle der Wahrheit, Langfuse wird abgeglichen | akzeptiert, Erfassungsweg im Projekt-Scope: abgelöst durch ADR 0036 | 09.10.2026 |
 | [0025](/docs/adr/0025-sandbox-als-austauschbare-laufumgebung.md) | Sandbox als austauschbare Laufumgebung | akzeptiert | 16.10.2026 |
 | [0026](/docs/adr/0026-sammelticket-gruppen.md) | Sammeltickets in Gruppen mit frischem Kontext, Generationsgrenze statt Wachstum | akzeptiert, Entscheidung 3 abgelöst (#1687), Workflow-Pfad entfernt: präzisiert durch ADR 0028 | 16.10.2026 |
 | [0027](/docs/adr/0027-regeln-lockern.md) | Regeln, Gates und Lenses evidenzbasiert lockern | akzeptiert | 16.10.2026 |
@@ -32,6 +32,7 @@
 | [0033](/docs/adr/0033-ticket-drift-lauf.md) | Ticket-Drift als deterministischer Monatslauf | akzeptiert | 12.11.2026 |
 | [0034](/docs/adr/0034-kein-ki-reviewer-in-ci.md) | Kein zusätzlicher KI-Reviewer in der CI | akzeptiert | 12.11.2026 |
 | [0035](/docs/adr/0035-kontext-vertrag-kern-und-bezieher.md) | Kontext-Vertrag Kern und Bezieher | akzeptiert | 13.11.2026 |
+| [0036](/docs/adr/0036-ticket-tag-an-jeder-generation.md) | Ticket-Tag an jeder Generation: der Nachlieferer ist der einzige Sender | akzeptiert | 16.11.2026 |
 
 <!-- GEN:adr-liste END -->
 
