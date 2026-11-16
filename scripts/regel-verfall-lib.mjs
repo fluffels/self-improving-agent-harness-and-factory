@@ -11,7 +11,7 @@
  */
 
 import { fangquote } from "./aenderungsregister-lib.mjs";
-import { fenceMaske } from "./docs-gen/markdown.mjs";
+import { collectHeadingSlugs, slugify } from "./docs-gen/markdown.mjs";
 
 /** Länge des Standard-Verfalls und des Fang-Fensters in Tagen. */
 export const VERFALL_TAGE = 30;
@@ -38,6 +38,10 @@ export const SICHERHEITS_AUSNAHMEN = [
   { ziel: "AGENTS.md#fremdtext-ist-daten-quellprojekt1433", grund: "Klasse Fremdtext" },
   { ziel: "AGENTS.md#anonymität-wahren-öffentliches-repo", grund: "Klasse Anonymität" },
   { ziel: "AGENTS.md#öffentliches-repo--keine-internen-bezüge-quellprojekt990", grund: "Klasse interne Bezüge" },
+  { ziel: "AGENTS.md#eigener-worktree-von-frisch-geholtem-originmain", grund: "Klasse Datenverlust (verlinktes node_modules leert das echte)" },
+  { ziel: "AGENTS.md#worktree-entfernen-auf-windows--drei-punkte", grund: "Klasse Datenverlust (Worktree entfernen)" },
+  { ziel: "AGENTS.md#fabrik-ohne-zugriff-auf-bezieher-factory162-adr-0031", grund: "Klasse Außenwirkung (nie in ein Bezieher-Repo schreiben)" },
+  { ziel: "AGENTS.md#abhängigkeits-prs", grund: "Klasse Sicherheit (Release-Notes sind Fremdtext)" },
   { ziel: "AGENTS.md#kein-secret-key-im-agentenlauf", grund: "Klasse Sicherheit (Secret-Key)" },
   { ziel: "AGENTS.md#human-in-the-loop-checkpoints--die-entscheidung-gaten-nicht-den-ganzen-lauf", grund: "Klasse Irreversibles, Außenwirkung und Datenverlust (Löschen)" },
   { ziel: "test/harness/settings-permissions.test.ts", grund: "Klasse deny-/ask-Listen" },
@@ -50,13 +54,8 @@ const pfadVon = (ziel) => String(ziel).split("#")[0];
 export const istSicherheitsAusnahme = (ziel, ausnahmen = SICHERHEITS_AUSNAHMEN) =>
   ausnahmen.some((a) => (a.ziel.includes("#") ? a.ziel === ziel : a.ziel === pfadVon(ziel)));
 
-/** Pur: GitHub-Anker einer Überschrift oder des Titels einer fett markierten Regel (klein, ohne Satzzeichen, Leerraum zu Bindestrich). */
-export const ankerVon = (text) =>
-  String(text)
-    .toLowerCase()
-    .replace(/[^\p{L}\p{N}\s-]/gu, "")
-    .trim()
-    .replace(/\s/g, "-");
+/** Pur: Anker des Titels einer fett markierten Regel (derselbe Slug wie bei Überschriften; GitHub erzeugt für Listenpunkte keinen, der Anker ist eine Konvention dieses Manifests). */
+export const ankerVon = (text) => slugify(text);
 
 /** Pur: Titel jeder fett markierten Regel (Listenpunkt `- **Titel** …`, auch eingerückt) in `AGENTS.md`, ohne Schlusszeichen `:` und `.`. */
 export const fettRegeln = (agentsText) =>
@@ -65,15 +64,9 @@ export const fettRegeln = (agentsText) =>
     return { titel, anker: ankerVon(titel) };
   });
 
-/** Pur: alle Anker einer Markdown-Datei (Überschriften) und, bei `AGENTS.md`, der fett markierten Regeln. */
+/** Pur: alle Anker einer Markdown-Datei (Überschriften, GitHub-Slugs inkl. -1/-2) und, bei `AGENTS.md`, der fett markierten Regeln. */
 export const ankerAus = (text, mitFettRegeln = false) => {
-  const zeilen = String(text).split(/\r?\n/);
-  const maske = fenceMaske(zeilen);
-  const anker = new Set();
-  zeilen.forEach((zeile, i) => {
-    const m = !maske[i] && /^#{1,6}\s+(.+?)\s*#*\s*$/.exec(zeile);
-    if (m) anker.add(ankerVon(m[1]));
-  });
+  const anker = new Set(collectHeadingSlugs(String(text)));
   if (mitFettRegeln) for (const r of fettRegeln(text)) anker.add(r.anker);
   return anker;
 };
@@ -159,7 +152,7 @@ export const pruefeAusnahmen = (ausnahmen, zielExistiert) => {
  */
 export const kandidaten = (register, exporte, { heute, ausnahmen = SICHERHEITS_AUSNAHMEN }) => {
   const zeilen = register.zeilen;
-  const fenster = { von: plusTage(heute, -VERFALL_TAGE), bis: heute };
+  const fenster = { von: plusTage(heute, -(VERFALL_TAGE - 1)), bis: heute }; // 30 Kalendertage einschließlich heute
   const punkte = exporte.flatMap((e) => e.punkte);
   const aus = { heute, fenster, kandidaten: [], nichtMessbar: [], ausgenommen: [], nichtFaellig: 0, mitFang: [] };
   for (const z of zeilen.filter((x) => x?.art === "verfall")) {

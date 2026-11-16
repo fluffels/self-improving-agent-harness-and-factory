@@ -231,3 +231,97 @@ describe("Regel-Verfall: Skript", () => {
     expect([...lib.ankerAus("# Titel A\n```\n# kein Anker\n```\n## Titel (B)\n")]).toEqual(["titel-a", "titel-b"]);
   });
 });
+
+describe("Regel-Verfall: Lücken der Erstfassung (Review Runde 1)", () => {
+  const heute = "2026-02-15";
+  const z1 = [zeile("verfall-routine", ROUTINE)];
+  const nur = (tag: string, wert: number) => [{ punkte: [punkt(ROUTINE, tag, "l1", wert), punkt(ROUTINE, "2026-02-14", "l2", 0)] }];
+
+  it("das Fenster sind 30 Kalendertage einschließlich heute: heute-29 zählt, heute-30 und morgen nicht", () => {
+    expect(lib.kandidaten({ zeilen: z1 }, nur("2026-01-17", 1), { heute }).kandidaten).toEqual([]);
+    expect(lib.kandidaten({ zeilen: z1 }, nur("2026-01-16", 1), { heute }).kandidaten).toHaveLength(1);
+    expect(lib.kandidaten({ zeilen: z1 }, nur("2026-02-15", 1), { heute }).kandidaten).toEqual([]);
+    expect(lib.kandidaten({ zeilen: z1 }, nur("2026-02-16", 1), { heute }).kandidaten).toHaveLength(1);
+  });
+
+  it("Zeilen anderer Art im Register werden nirgends als Verfall gezählt", () => {
+    const fremd = { id: "x-1", art: "umstellung", datum: "2026-01-01" };
+    const e = lib.kandidaten({ zeilen: [fremd, ...z1] }, nur("2026-02-10", 0), { heute });
+    expect(e.nichtMessbar).toEqual([]);
+    expect(e.kandidaten).toHaveLength(1);
+    const neu = lib.fehlendeZeilen({ zeilen: [{ id: "verfall-b", art: "umstellung" }], waechterPfade: ["test/harness/b.test.ts"], agentsText: "", heute });
+    expect(neu[0].id).toBe("verfall-b-2");
+    const alt = lib.fehlendeZeilen({ zeilen: [{ id: "u", art: "umstellung", ziel: "test/harness/b.test.ts" }], waechterPfade: ["test/harness/b.test.ts"], agentsText: "", heute });
+    expect(alt).toHaveLength(1);
+    expect(lib.pruefeAbdeckung({ zeilen: [{ id: "u", art: "umstellung", ziel: "test/harness/b.test.ts" }], waechterPfade: ["test/harness/b.test.ts"], agentsText: "" })).toHaveLength(1);
+  });
+
+  it("--generieren erhält Version und fremde Zeilen und hängt nur an", () => {
+    const fremd = register().zeilen.find((z) => z.art !== "verfall") as Zeile;
+    let geschrieben = "";
+    skript.ausfuehren({ generieren: true, register: "r.json", exporte: [], heute }, {
+      bezieher: false,
+      lies: () => JSON.stringify({ version: 7, zeilen: [fremd, zeile("verfall-x", "test/harness/x.test.ts")] }),
+      schreibe: (_p: string, t: string) => (geschrieben = t),
+      waechter: () => ["test/harness/x.test.ts", "test/harness/y.test.ts"],
+      agentsText: () => "",
+    });
+    const j = JSON.parse(geschrieben) as { version: number; zeilen: Zeile[] };
+    expect(j.version).toBe(7);
+    expect(j.zeilen.map((z) => z.id)).toEqual([fremd.id, "verfall-x", "verfall-y"]);
+  });
+
+  it("Ids: Umlaut und ß, Kürzung auf 40 Zeichen ohne Schluss-Bindestrich, Kollision bekommt eine freie Id, doppelte Titel nur einmal", () => {
+    const text = "- **Größe über Maß:** a\n- **Größe über Mass:** b\n- **Größe über Maß.** c\n- **Eine sehr lange Regel mit vielen Worten drin damit gekürzt wird:** d\n";
+    const neu = lib.fehlendeZeilen({ zeilen: [], waechterPfade: [], agentsText: text, heute });
+    expect(neu.map((z) => z.id)).toEqual(["verfall-agents-grosse-uber-mass", "verfall-agents-grosse-uber-mass-2", "verfall-agents-eine-sehr-lange-regel-mit-vielen-worten"]);
+    expect(neu.map((z) => z.ziel)).toEqual(["AGENTS.md#größe-über-maß", "AGENTS.md#größe-über-mass", "AGENTS.md#eine-sehr-lange-regel-mit-vielen-worten-drin-damit-gekürzt-wird"]);
+    const mitBindestrich = lib.fehlendeZeilen({ zeilen: [], waechterPfade: [], agentsText: "- **Aaaa bbbb cccc dddd eeee ffff gggg hhhh iiii x:** a\n", heute });
+    expect(String(mitBindestrich[0].id)).toBe("verfall-agents-aaaa-bbbb-cccc-dddd-eeee-ffff-gggg-hhhh");
+  });
+
+  it("pruefeAusnahmen meldet Einträge ohne ziel oder grund, ohne abzustürzen", () => {
+    let aufrufe = 0;
+    const m = lib.pruefeAusnahmen([{ grund: "x" }, { ziel: "a.md" }, null], () => {
+      aufrufe += 1;
+      return true;
+    });
+    expect(m).toHaveLength(3);
+    expect(aufrufe).toBe(0);
+  });
+
+  it("ankerAus: Überschriften nur am Zeilenanfang mit Leerzeichen, Duplikate mit -1, fett markierte Regeln nur auf Wunsch", () => {
+    const t = "# Eins\ntext ## kein Anker\n#hashtag\n# Eins\n- **Regel A:** x\nSatz - **kein Punkt**\n";
+    expect([...lib.ankerAus(t)]).toEqual(["eins", "eins-1"]);
+    expect([...lib.ankerAus(t, true)]).toEqual(["eins", "eins-1", "regel-a"]);
+    expect(lib.fettRegeln(t).map((r) => r.anker)).toEqual(["regel-a"]);
+    expect([...lib.ankerAus("## ⭐ Oberste Regel\n")]).toEqual(["-oberste-regel"]);
+  });
+
+  it("zielExistiert: ein fett markierter Titel zählt nur in AGENTS.md", () => {
+    expect(skript.zielExistiert("AGENTS.md#kein-secret-key-im-agentenlauf")).toBe(true);
+    expect(skript.zielExistiert("AGENTS.md#-assignee--sofort-weiter")).toBe(true);
+    expect(skript.zielExistiert("README.md#kein-secret-key-im-agentenlauf")).toBe(false);
+  });
+
+  it("--kandidaten: Export und --heute wirken, --json gibt JSON, ungültige Zeilen und Exporte sind Exit 1, ein unbekanntes Flag Exit 2", () => {
+    const reg = JSON.stringify({ version: 1, zeilen: [zeile("verfall-routine", ROUTINE)] });
+    const export1 = JSON.stringify({ art: "fangquote-messpunkte", quelle: "gate-fundquote", punkte: [punkt(ROUTINE, "2026-02-10", "l1", 0)] });
+    const lies = (p: string) => (p === "e.json" ? export1 : p === "kaputt.json" ? "{" : p === "falsch.json" ? JSON.stringify({ art: "x" }) : p === "reg-falsch.json" ? JSON.stringify({ version: 1, zeilen: [{ id: "a" }] }) : reg);
+    const d = { bezieher: false, lies, heute: "2099-01-01" };
+    const a = { kandidaten: true, register: "r.json", exporte: ["e.json"], heute: "2026-02-15", json: true };
+    const r = skript.ausfuehren(a, d);
+    expect(r.exitCode).toBe(0);
+    expect((JSON.parse(r.text) as Ergebnis).kandidaten).toHaveLength(1);
+    expect(skript.ausfuehren({ ...a, json: false }, d).text).toContain("Kandidaten (fällig, kein Fang im Fenster): 1");
+    expect((JSON.parse(skript.ausfuehren({ ...a, heute: undefined }, d).text) as Ergebnis).kandidaten).toHaveLength(0); // heute aus den Abhängigkeiten (2099): Export liegt außerhalb des Fensters
+    expect(skript.ausfuehren({ ...a, heute: "2026-01-15" }, d).text).toContain('"nichtFaellig": 1');
+    expect(skript.ausfuehren({ ...a, exporte: ["kaputt.json"] }, d).exitCode).toBe(1);
+    expect(skript.ausfuehren({ ...a, exporte: ["falsch.json"] }, d).exitCode).toBe(1);
+    expect(skript.ausfuehren({ ...a, register: "reg-falsch.json" }, d).exitCode).toBe(1);
+    expect(skript.ausfuehren(skript.parseArgs(["--kandidaten", "--unbekannt"]), d).exitCode).toBe(2);
+    const p = skript.parseArgs(["--kandidaten"]) as unknown as { exporte: string[]; register: string };
+    expect(p.exporte).toEqual([]);
+    expect(p.register).toMatch(/aenderungsregister\.json$/);
+  });
+});

@@ -24,7 +24,7 @@ Ergänzt [ADR 0027](../0027-regeln-lockern.md) (Punkte 4 und 8); die Ledger-Zeil
 
 - Jede `test/harness/*.test.ts` und jede fett markierte Regel in `AGENTS.md` hat eine Verfall-Zeile (`node scripts/regel-verfall.mjs --generieren`: `ablauf` = `aufgenommen` + 30 Tage, Ziele mit Zeile werden übersprungen). Eine neue Datei oder Regel ohne Zeile macht `test/harness/regel-verfall.test.ts` rot; so verfällt Neues standardmäßig (Bremse der Härtungsschleife).
 - `node scripts/regel-verfall.mjs --kandidaten` nennt jedes Ziel mit `heute >= ablauf` und ohne Fang in den letzten 30 Tagen samt Läufen und Fängen; Lücken (Regel ohne `durch`, keine Messpunkte) stehen getrennt als „nicht messbar“ und sind nie Kandidat. Die geschlossene Liste `SICHERHEITS_AUSNAHMEN` (`scripts/regel-verfall-lib.mjs`) nimmt die Klassen aus ADR 0027 Punkt 6 aus; ein Eintrag ohne existierendes Ziel ist rot. Ein Ziel mit Anker prüft der Wächter als Überschrift, in `AGENTS.md` auch als Titel einer fett markierten Regel.
-- Prüftermin: Registerzeile `verfall-regel-verfall` (`ablauf` 2026-12-16): Fand der Wächter in 30 Tagen echte Lücken (neue Datei oder Regel ohne Zeile, Ausnahme ohne Ziel), oder erzeugte er nur Handarbeit durch umbenannte Regel-Titel (ändert sich der Titel, ändert sich der Anker)?
+- Prüftermin: Registerzeile `verfall-regel-verfall` (`ablauf` 2026-12-16): Fand der Wächter in 30 Tagen echte Lücken (neue Datei oder Regel ohne Zeile, Ausnahme ohne Ziel), oder erzeugte er nur Handarbeit durch umbenannte Regel-Titel (ändert sich der Titel, ändert sich der Anker und die Verfallsuhr beginnt neu)? Und: bekommen die AGENTS.md-Regel-Zeilen ein `durch`, damit sie messbar werden (heute dauerhaft „nicht messbar“)?
 
 ## Auflösung des Sammeleintrags (factory#574)
 
