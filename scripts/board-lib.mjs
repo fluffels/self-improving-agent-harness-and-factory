@@ -207,6 +207,8 @@ export const STATUS_TITEL = "Langfuse-Status überprüfen";
 export const NOTFAELLE = [
   { art: "rot-main", marker: "🚨 CI rot auf main", quelle: ".github/workflows/alarm-rot-main.yml" },
   { art: "security", marker: "🔒 Security:", quelle: "docs/ticket-reihenfolge.md" },
+  // Der Titel entsteht im Fabrik-eigenen Auslöser der Token-Analyse; der Marker steht darum in der Doku. Das Anlegen übernimmt ein Auslöser des Projekts, ohne ihn bleibt die Art wirkungslos.
+  { art: "token-analyse", marker: "💸 Token-Analyse", quelle: "docs/ticket-reihenfolge.md" },
   { art: "dependabot", marker: "🤖 Dependabot-PRs auflösen", quelle: ".github/workflows/dependabot-inbox.yml" },
   { art: "forum", marker: "Forum #", quelle: ".github/workflows/forum-inbox.yml" },
   // Der Titel entsteht in scripts/wiedervorlage.mjs (der Workflow ruft nur das Skript), darum steht der Marker dort.

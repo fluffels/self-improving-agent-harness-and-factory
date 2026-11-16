@@ -31,6 +31,8 @@ const FABRIK_EIGEN: Eintrag[] = [
   { pfad: ".github/aenderungsregister.json", art: "daten" },
   { pfad: "scripts/token-analyse-freigabe.mjs", art: "skript-wurzel" },
   { pfad: "scripts/token-analyse-freigabe-lib.mjs", art: "lib" },
+  { pfad: "scripts/token-analyse-ausloesen.mjs", art: "skript" },
+  { pfad: "scripts/token-analyse-ausloesen-lib.mjs", art: "lib" },
   ...["SKILL", "teil-1", "teil-2", "teil-3", "teil-4", "teil-5", "teil-6"].map((n): Eintrag => ({ pfad: `.agents/skills/token-analyse/${n}.md`, art: "skill", kennung: SKILL_KENNUNG })),
   { pfad: [".claude", "skills", "token-analyse", "SKILL.md"].join("/"), art: "skill", kennung: SKILL_KENNUNG }, // zusammengesetzt: der Zeiger-Scan (skills-sync) verbietet die volle Pfadform in versionierten Dateien
   { pfad: ".claude/agents/analyse-recherche.md", art: "agent", kennung: "analyse-recherche" },
