@@ -687,14 +687,16 @@ export const RESTE_SAMMELEINTRAG: Rest[] = [
 /** Nur das Ledger in ADR 0027 (Punkt 8: alte Zeilen bleiben) trägt den Namen; bewusst nicht `AUSNAHMEN`, das nähme ganz `docs/adr/` aus, die Fortschreibungen sollen gescannt werden. */
 export const AUSNAHMEN_SAMMELEINTRAG: Ausnahme[] = [
   { praefix: "docs/adr/0027-regeln-lockern.md", grund: "Ledger-Zeilen sind historisch und bleiben unverändert (ADR 0027 Punkt 8)" },
-  { praefix: "test/harness/entfernte-pfade.test.ts", grund: "dieser Wächter trägt das Muster selbst" },
 ];
 
+/** Eine Stelle für Repo-Scan und Fixtures, damit die Ausnahmeliste im echten Scan nicht unbemerkt durch `AUSNAHMEN` ersetzt werden kann. */
+const scanSammel = (dateien: Datei[]) => findeReste(dateien, RESTE_SAMMELEINTRAG, AUSNAHMEN_SAMMELEINTRAG);
+
 describe("Kein Sammeleintrag des Regel-Verfalls mehr (factory#574)", () => {
-  const sammel = (inhalt: string, pfad = "docs/x.md") => findeReste([{ pfad, inhalt }], RESTE_SAMMELEINTRAG, AUSNAHMEN_SAMMELEINTRAG);
+  const sammel = (inhalt: string, pfad = "docs/x.md") => scanSammel([{ pfad, inhalt }]);
 
   test("das Repo ist frei vom Namen außerhalb des Ledgers", () => {
-    const treffer = findeReste(getrackteTextdateien(), RESTE_SAMMELEINTRAG, AUSNAHMEN_SAMMELEINTRAG);
+    const treffer = scanSammel(getrackteTextdateien());
     assert.deepEqual(treffer, [], `${meldungMitFix(treffer, RESTE_SAMMELEINTRAG)}\nTreffer: ${treffer.join(", ")}`);
   });
 
@@ -706,6 +708,7 @@ describe("Kein Sammeleintrag des Regel-Verfalls mehr (factory#574)", () => {
 
   test("Grenze: nur der exakte Name; das Ledger in ADR 0027 und ein Bezieher-Muster sind erlaubt", () => {
     assert.deepEqual(sammel(SAMMEL_NAME, "docs/adr/0027-regeln-lockern.md"), []);
+    assert.ok(AUSNAHMEN_SAMMELEINTRAG.every((a) => !"docs/adr/fortschreibungen/x.md".startsWith(a.praefix)), "Fortschreibungen müssen gescannt werden");
     assert.deepEqual(sammel("Eintrag regeln-verfall-<JJJJ-MM> und regeln-verfall-2028-01"), []);
   });
 

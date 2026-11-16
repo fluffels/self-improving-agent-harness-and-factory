@@ -34,7 +34,7 @@ Ergänzt [ADR 0027](../0027-regeln-lockern.md) (Punkte 4 und 8); die Ledger-Zeil
   - `verfall-modulkopien-244`: Hat das Drift-Gate in Bezieher-Läufen echte Modulkopien gefunden oder nur Fehlalarme? Ohne Fund lockern oder streichen.
   - `verfall-eingangsgrenze-sammelzeilen`: Gingen durch die Grenze belegte Kosmetik- oder Hypothese-Befunde verloren, die später als Defekt wiederkamen? Ja: lockern oder streichen.
   - `verfall-workflow-skripte` (factory#394): Meldete der Wächter echte Lücken (Skripte ohne Schutzlisten-Eintrag, Importe außerhalb der Builtins) oder nur Fehlalarme?
-  - `verfall-risikostufe-01-529`: Nachmessung der Läufe mit `lenses=kombiniert` oder `— stufe` seit 2026-11-11 (ab 5 wie in `docs/model-routing.md`, Kombi-Lens-Grenze); danach bleibt die Stufe, oder Revert bzw. niedrigere Grenze nach ADR 0027 Punkt 4.
+  - `verfall-risikostufe-01-529`, `verfall-risikostufe-ablauf`: Nachmessung der Läufe mit `lenses=kombiniert` oder `— stufe` seit 2026-11-11 (ab 5 wie in `docs/model-routing.md`, Kombi-Lens-Grenze); danach bleibt die Stufe, oder Revert bzw. niedrigere Grenze nach ADR 0027 Punkt 4.
   - `verfall-waechter-voll-396`: Wächter-Tests sind `SWEEP: voll`; Fund auf Wächter-Hilfslogik in einem nur dadurch vollen PR: bleibt, sonst Lockern-Kandidat.
   - `verfall-ausgabe-diaet-310`: `node scripts/kontext-treiber.mjs --von <A> --bis <B> --agent sih-umsetzer --je-ticket --json`, Wert `gesamt.wachstum.ergebnis` und `gesamt.gesamt.requests` gegen die Basis 437,0 (2026-10-28 bis 2026-11-11); liegt der Wert der drei Status-Läufe nach dem Merge von factory#310 darüber: Revert der Ausnahme per PR.
   - `verfall-fabrik-regeltext` (factory#222): Brachte der Form-4-Wächter echte Funde, oder sind es über 15 Einträge „beide“ bzw. wiederholte Fehltreffer?
@@ -47,6 +47,8 @@ Ergänzt [ADR 0027](../0027-regeln-lockern.md) (Punkte 4 und 8); die Ledger-Zeil
   - `verfall-probe-vorab-541`: `git log --since 2026-11-15 --grep 'Folge #'` und `node scripts/lauf-ergebnis.mjs --von <Merge von factory#541> --bis <Termin> --json`: Gab es ein Probe-Ticket mit Vorab-Bewertung oder einen Modellwechsel, dessen Umbau Nacharbeit auslöste? Ohne Fall um 8 Wochen schieben.
   - `verfall-token-budget-560`, `verfall-token-budget-regel`: Aus vorhandenen Daten, ohne eigenen Messlauf: Wurde die Regel verletzt (Gegenprobe, Messlauf oder Zusatzpass im Lauf; Beleg: PR-Texte und `Review:`-Zeilen seit dem Merge von factory#560), und löste ein Verstoß Nacharbeit aus (`Folge #` binnen 14 Tagen)? Danach schärfen, um 8 Wochen schieben oder löschen.
   - `verfall-agent-harness-gliederung`: Gliederungs-Wächter der `docs/agent-harness.md`: Fund oder Fehlalarm; ohne Fund lockern oder streichen.
+- Die Auslösung am Termin kommt erst mit den Folgekindern von factory#518 (factory#608 Regel-Verfall-Leser, factory#578 Auslöser); bis dahin gibt der Ablauf kein Signal, das wird hingenommen. Sicherheitsrelevante Zeilen (`verfall-sicherheits-workflows`, `verfall-sicherheits-checks-335`) gehören in die Ausnahmeliste von factory#608.
+- `aufgenommen` der Wächter-Zeilen `verfall-lens-auftrag-zusatzpass` und `verfall-bedingte-dateien` ist das Datum der Regel (2026-11-11), nicht der Datei.
 - Am Termin entscheidet die Evidenz je Zeile (ADR 0027 Punkt 2): belegter Fund, die Regel bleibt; kein Fund, sie wird Lockern-Kandidat.
 
 ## Re-Evaluierung
