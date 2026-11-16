@@ -13,7 +13,7 @@
  *
  * Grenzen: zwischen Schrittende und Merge bleibt ein Fenster von Sekunden (größer, wenn ein anderer Required-Check später fertig wird);
  * der Fetch braucht Lesezugriff ohne persistierte Credentials (öffentliches Repo); ein Re-Run nutzt denselben Merge-Ref.
- * Verfall: Prüftermin im Eintrag `regeln-verfall-2027-03` in `.github/wiedervorlagen.json` (ADR 0027).
+ * Verfall: Prüftermin laut Registerzeile `verfall-basis-nachlauf-499` der Fabrik (ADR 0027).
  *
  * Reines Node-Skript (nur Builtins); die Entscheidung ist pur exportiert, die Seiteneffekte laufen über `io`.
  */

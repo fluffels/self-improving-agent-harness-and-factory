@@ -10,7 +10,7 @@
  *       `args` von `.claude/settings.json` (fehlt die Datei, wird sie übersprungen).
  * Grenzen (nicht erkannt): berechnete Spezifizierer, `tsx` und `npx`, `npm run`-Ketten, Skripte außerhalb von `scripts/`, Markdown (das prüft
  * `check:docdrift`); Text in Kommentaren zählt mit (fail-closed, dann den Kommentar umschreiben).
- * Verfall: Prüftermin im Eintrag `regeln-verfall-2027-03` von `.github/wiedervorlagen.json` (ADR 0027).
+ * Verfall: Prüftermin: Registerzeile `verfall-skript-verweise` in `.github/aenderungsregister.json` (ADR 0027).
  */
 import { describe, expect, test } from "vitest";
 import { existsSync, readdirSync, readFileSync } from "node:fs";

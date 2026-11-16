@@ -7,7 +7,7 @@
  * (je Kern, leer = nur der Pfad); (b) die Datei existiert, steht in `AGENTEN_SKILL_BUDGETS` und im Besitz-Manifest, ihr Kopf nennt den Kern; (c) jede Datei im Ordner nach dem Namensmuster des Kerns
  * steht im Katalog (Waise rot), ein Verweis ohne Datei ist rot; (d) nur mit `codexQuelle`: Codex-Rolle und gemeinsames Skill-Verzeichnis. Plattform-Weiche (eigener Block): Windows-Sonderfälle (`WINDOWS_TOKENS`)
  * stehen nicht im Kern-Rumpf (ohne Frontmatter und Projektwerte-Block), die weiteren Leser (`WEICHE_LESER`) ebenso.
- * Grenze: geprüft wird die Verdrahtung, nicht das Lesen im Lauf; die Windows-Tokens sind eine geschlossene Liste. Verfall: Prüftermin laut `.github/wiedervorlagen.json` (Eintrag `regeln-verfall-2027-03`, ADR 0027). Begriffe: `docs/harness-glossar.md` › Plattform-Weiche, Bedingte Datei (Skill). */
+ * Grenze: geprüft wird die Verdrahtung, nicht das Lesen im Lauf; die Windows-Tokens sind eine geschlossene Liste. Verfall: Prüftermin: Registerzeile `verfall-bedingte-dateien` in `.github/aenderungsregister.json` (ADR 0027). Begriffe: `docs/harness-glossar.md` › Plattform-Weiche, Bedingte Datei (Skill). */
 import { describe, test } from "vitest";
 import assert from "node:assert/strict";
 import { existsSync, readdirSync, readFileSync } from "node:fs";

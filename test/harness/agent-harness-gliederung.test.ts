@@ -1,7 +1,7 @@
 /* Wächter für die Gliederung von docs/agent-harness.md (factory#23) – ohne eigenes check-Skript.
  *
  * @harness-waechter – einziger Durchsetzer seiner Regel, darum im geschützten test/harness/.
- * Verfall: Prüftermin laut .github/wiedervorlagen.json (Eintrag regeln-verfall-2027-03, ADR 0027).
+ * Verfall: Prüftermin: Registerzeile `verfall-agent-harness-gliederung` in `.github/aenderungsregister.json` (ADR 0027).
  *
  * Regel: Die Langfassung eines Gates steht in seinem eigenen `###`-Abschnitt von §3 (WAS, WARUM, Absicherung);
  * §3a hält nur Regeln zu Ablauf, Review und Eskalation. Geprüft werden (a) je Schlüssel der geschlossenen Liste

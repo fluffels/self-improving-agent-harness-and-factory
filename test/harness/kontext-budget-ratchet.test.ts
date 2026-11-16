@@ -11,7 +11,7 @@
  * Senken ist frei, mit einer Ausnahme: `PROJEKT_BLOCK_RAUM` darf nicht sinken (das bricht den Kontext-Vertrag der Bezieher), außer mit Beleg UND nicht leerer `<Präfix>Bezieher-Migration:`-Zeile; Steigen ist frei. Ein git-Fehler beim Lesen der Commits gilt als „kein Beleg“ (fail-closed).
  * Kein Werkzeug hebt ein Budget an: ein Scan über `scripts/**`, `.github/workflows/*.yml` und `.claude/hooks/**` verlangt, dass der Beleg-Schlüssel nur in `scripts/slice-override.mjs` steht und keine Schreib-Funktion die Lib oder `check-context-size` anfasst.
  * Grenze: der Scan kennt eine geschlossene Muster-Liste; indirekte Pfade (zusammengesetzte Dateinamen, Shell-Umleitung) erkennt er nicht, ihre Wirkung fängt der Ratchet gegen die Basis ab. Wer ein Budget anhebt UND die Datei um den Betrag wachsen lässt, ist ohne Beleg rot.
- * Verfall: Prüftermin laut `.github/wiedervorlagen.json` (Eintrag `regeln-verfall-2027-03`, ADR 0027). */
+ * Verfall: Prüftermin: Registerzeile `verfall-kontext-budget-ratchet` in `.github/aenderungsregister.json` (ADR 0027). */
 import { describe, test } from "vitest";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
