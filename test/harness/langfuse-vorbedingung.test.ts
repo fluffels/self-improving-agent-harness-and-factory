@@ -370,7 +370,7 @@ describe("MCP-Verbindung der Session (factory#323 L1/L7/L18)", () => {
   });
   test("--json bei Health aus: keine MCP-Prüfung, kein Feld `mcp`", async () => {
     const r = await lauf(["--json"], CC, () => GETRENNT, antwort(500));
-    expect(Object.keys(JSON.parse(r.out[0]) as object)).toEqual(["erreichbar", "grund"]);
+    expect(Object.keys(JSON.parse(r.out[0]) as object)).toEqual(["erreichbar", "grund", "basisLokal"]);
     expect(r.gelesen()).toBe(0);
   });
 });
