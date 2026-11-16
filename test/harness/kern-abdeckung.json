@@ -59,6 +59,18 @@
     "art": "projekt",
     "grund": "Fabrik-eigene Token-Analyse (factory#518), nicht im Besitz-Manifest"
   },
+  "scripts/token-analyse-ablage-lib.mjs": {
+    "art": "projekt",
+    "grund": "Fabrik-eigene Token-Analyse (factory#518), nicht im Besitz-Manifest"
+  },
+  "scripts/token-analyse-tickets.mjs": {
+    "art": "projekt",
+    "grund": "Fabrik-eigene Token-Analyse (factory#518), nicht im Besitz-Manifest"
+  },
+  "scripts/token-analyse-tickets-lib.mjs": {
+    "art": "projekt",
+    "grund": "Fabrik-eigene Token-Analyse (factory#518), nicht im Besitz-Manifest"
+  },
   ".github/aenderungsregister.json": {
     "art": "projekt",
     "grund": "Änderungsregister dieses Repos (Daten der Fabrik, factory#571)"
@@ -96,6 +108,14 @@
     "grund": "Fabrik-eigene Token-Analyse (factory#518), nicht im Besitz-Manifest"
   },
   ".agents/skills/token-analyse/teil-6.md": {
+    "art": "projekt",
+    "grund": "Fabrik-eigene Token-Analyse (factory#518), nicht im Besitz-Manifest"
+  },
+  ".agents/skills/token-analyse/plan-review.md": {
+    "art": "projekt",
+    "grund": "Fabrik-eigene Token-Analyse (factory#518), nicht im Besitz-Manifest"
+  },
+  ".agents/skills/token-analyse/folge-ticket.md": {
     "art": "projekt",
     "grund": "Fabrik-eigene Token-Analyse (factory#518), nicht im Besitz-Manifest"
   },

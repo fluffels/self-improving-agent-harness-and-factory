@@ -5,21 +5,15 @@
  * Repo, Worktrees und Bezieher-Checkouts. Gelesen wird nur aus Checkouts des angemeldeten Kontos (`gh api user`) über die Allowlist der Lib;
  * die Ausgabe nennt nur `Bezieher <k>`. Exit: 0 gut oder Teil 6 entfällt mit Hinweis, 1 Abbruch, 2 Aufruf oder Bezieher.
  */
-import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, statSync, writeFileSync } from "node:fs";
-import { basename, dirname, join, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { join, resolve } from "node:path";
 import { istDirektaufruf } from "./direktaufruf.mjs";
-import { ghText } from "./gh-cli.mjs";
-import { umgebungsWert } from "./projekt-config-lib.mjs";
 import { istBezieher } from "./sync-stand-lib.mjs";
 import {
-  SCHUTZ_UMGEBUNG,
   bezieherLabel,
   befehlMitSchutz,
   enthaeltNamen,
   letzterSchnappschuss,
-  parseFreigabeliste,
   pruefeAblage,
   pruefeBefehl,
   pruefeBezieher,
@@ -28,18 +22,9 @@ import {
   schnappschussName,
 } from "./token-analyse-freigabe-lib.mjs";
 
-const REPO_WURZEL = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-/** Realpath, auch für einen Pfad, den es noch nicht gibt (nächster vorhandener Vorfahr plus Rest). */
-export function realMitVorfahr(pfad) {
-  const abs = resolve(pfad);
-  const rest = [];
-  for (let cur = abs; ; cur = dirname(cur)) {
-    if (existsSync(cur)) return join(realpathSync.native(cur), ...rest.reverse());
-    if (dirname(cur) === cur) return abs;
-    rest.push(basename(cur));
-  }
-}
+import { REPO_WURZEL, ablageFehler, abhaengigkeiten, ladeListe, realMitVorfahr, standardRunner } from "./token-analyse-ablage-lib.mjs";
 
+export { realMitVorfahr, standardRunner }; // von den Tests und früheren Aufrufern hier erwartet
 /** Text der `.git/config` (bei Worktree-Dateien dem `gitdir:` folgen, nur lesend); `null`, wenn es kein Checkout ist. */
 export function liesGitConfig(wurzel) {
   try {
@@ -55,58 +40,9 @@ export function liesGitConfig(wurzel) {
   }
 }
 
-/** Der einzige Prozessaufruf: ohne Shell, mit Schutz-Umgebung. Tests injizieren einen Mitschnitt. */
-export function standardRunner(argv, { cwd } = {}) {
-  const r = spawnSync(argv[0], argv.slice(1), { encoding: "utf8", shell: false, cwd, env: { ...process.env, ...SCHUTZ_UMGEBUNG }, maxBuffer: 64 * 1024 * 1024, windowsHide: true });
-  return { status: r.status, stdout: r.stdout ?? "", stderr: r.stderr ?? "" };
-}
-
-function standardLogin() {
-  try {
-    return ghText(["api", "user", "--jq", ".login"], { timeout: 20000 }).trim() || null;
-  } catch {
-    return null;
-  }
-}
-
-function standardWorktrees(repoWurzel) {
-  const r = standardRunner(["git", "-C", repoWurzel, "worktree", "list", "--porcelain"]);
-  return r.stdout.split(/\r?\n/).filter((z) => z.startsWith("worktree ")).map((z) => z.slice("worktree ".length));
-}
-
-export function abhaengigkeiten(deps = {}) {
-  const repoWurzel = deps.repoWurzel ?? REPO_WURZEL;
-  return {
-    repoWurzel: realMitVorfahr(repoWurzel),
-    worktrees: (deps.worktrees ?? standardWorktrees(repoWurzel)).map(realMitVorfahr),
-    login: () => (deps.login === undefined ? standardLogin() : deps.login),
-    runner: deps.runner ?? standardRunner,
-  };
-}
-
-/** Liest die Freigabeliste; `{ hinweis }` wenn Variable oder Datei fehlen, `{ fehler }` bei kaputter Liste. */
-export function ladeListe(env) {
-  const pfad = (umgebungsWert(env, "FACTORY_ANALYSE_FREIGABE") ?? "").trim();
-  if (!pfad) return { hinweis: "Hinweis: Teil 6 entfällt (keine Freigabeliste: FACTORY_ANALYSE_FREIGABE nicht gesetzt)" };
-  if (!existsSync(pfad)) return { hinweis: "Hinweis: Teil 6 entfällt (keine Freigabeliste: Datei fehlt)" };
-  try {
-    return { listePfad: pfad, pfade: parseFreigabeliste(readFileSync(pfad, "utf8")) };
-  } catch (e) {
-    return { fehler: `Freigabeliste ungültig: ${e.message}` };
-  }
-}
-
 function pruefeEinen(wurzel, login) {
   const konfig = liesGitConfig(wurzel);
   return pruefeBezieher({ istCheckout: konfig !== null, eigentuemer: konfig === null ? null : remoteEigentuemer(konfig), login });
-}
-
-export function ablageFehler(env, d, bezieherWurzeln) {
-  const roh = (umgebungsWert(env, "FACTORY_ANALYSE_ABLAGE") ?? "").trim();
-  if (!roh) return { fehler: "FACTORY_ANALYSE_ABLAGE nicht gesetzt: nichts geschrieben" };
-  const ablage = realMitVorfahr(roh);
-  const p = pruefeAblage({ ablage, repoWurzel: d.repoWurzel, worktrees: d.worktrees, bezieherWurzeln });
-  return p.ok ? { ablage } : { fehler: `${p.grund}: abgebrochen, nichts geschrieben` };
 }
 
 /**

@@ -1,6 +1,6 @@
 /* @harness-waechter – Fitness-Function, im geschützten test/harness/ (factory#572, Kind von factory#518): Analyse-Skripte sind Fabrik-eigen.
  *
- * Geschlossene Liste `FABRIK_EIGEN`: die Fabrik-eigenen Dateien der Token-Analyse (Wirkungsprüfung des Änderungsregisters, Freigabe), die nie an Bezieher verteilt werden und dort nie laufen.
+ * Geschlossene Liste `FABRIK_EIGEN`: die Fabrik-eigenen Dateien der Token-Analyse (Wirkungsprüfung des Änderungsregisters, Freigabe, Ticket-Anlage nach dem Plan-Review), die nie an Bezieher verteilt werden und dort nie laufen.
  * (a) Kein Eintrag in `.factory/besitz.json` trifft einen Pfad der Liste (auch kein Verzeichnis-Präfix).
  * (b) Keine verteilte Datei (jede Endung, auch Hooks ohne Endung) importiert oder nennt eine Datei der Liste (Dateiname mit und ohne Endung).
  * (c) Jedes Einstiegsskript sperrt im Bezieher: `art: "skript"` (Sperre nach dem Arbeitsverzeichnis) läuft in einem Fixture mit `.factory/sync-stand.json` und endet mit Exit ≠ 0 und einer Meldung;
@@ -31,7 +31,10 @@ const FABRIK_EIGEN: Eintrag[] = [
   { pfad: ".github/aenderungsregister.json", art: "daten" },
   { pfad: "scripts/token-analyse-freigabe.mjs", art: "skript-wurzel" },
   { pfad: "scripts/token-analyse-freigabe-lib.mjs", art: "lib" },
-  ...["SKILL", "teil-1", "teil-2", "teil-3", "teil-4", "teil-5", "teil-6"].map((n): Eintrag => ({ pfad: `.agents/skills/token-analyse/${n}.md`, art: "skill", kennung: SKILL_KENNUNG })),
+  { pfad: "scripts/token-analyse-ablage-lib.mjs", art: "lib" },
+  { pfad: "scripts/token-analyse-tickets.mjs", art: "skript" },
+  { pfad: "scripts/token-analyse-tickets-lib.mjs", art: "lib" },
+  ...["SKILL", "teil-1", "teil-2", "teil-3", "teil-4", "teil-5", "teil-6", "plan-review", "folge-ticket"].map((n): Eintrag => ({ pfad: `.agents/skills/token-analyse/${n}.md`, art: "skill", kennung: SKILL_KENNUNG })),
   { pfad: [".claude", "skills", "token-analyse", "SKILL.md"].join("/"), art: "skill", kennung: SKILL_KENNUNG }, // zusammengesetzt: der Zeiger-Scan (skills-sync) verbietet die volle Pfadform in versionierten Dateien
   { pfad: ".claude/agents/analyse-recherche.md", art: "agent", kennung: "analyse-recherche" },
   { pfad: ".claude/agents/analyse-extern.md", art: "agent", kennung: "analyse-extern" },

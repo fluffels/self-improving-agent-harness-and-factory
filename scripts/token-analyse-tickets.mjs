@@ -16,7 +16,7 @@ import { istDirektaufruf } from "./direktaufruf.mjs";
 import { flagsLesen } from "./flag-lib.mjs";
 import { ghJson } from "./gh-cli.mjs";
 import { istBezieher } from "./sync-stand-lib.mjs";
-import { ablageFehler, abhaengigkeiten, ladeListe, realMitVorfahr } from "./token-analyse-freigabe.mjs";
+import { ablageFehler, abhaengigkeiten, ladeListe, realMitVorfahr } from "./token-analyse-ablage-lib.mjs";
 import { letzterSchnappschuss } from "./token-analyse-freigabe-lib.mjs";
 import { abschnittEinsetzen, folgeTicketBody, oeffentlichSauber, pruefeEingabe, reviewAbschnittMarkdown, urteileJeTeil } from "./token-analyse-tickets-lib.mjs";
 

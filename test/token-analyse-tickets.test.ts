@@ -256,7 +256,7 @@ describe("cli: fail-closed", () => {
     const f = fahre(plan, gut, { runner: (argv) => ({ status: argv[1].endsWith("check-internalrefs.mjs") || ++n === 1 ? 0 : 1, stdout: "", stderr: "" }) });
     expect(f.r.code).toBe(1);
     expect(f.r.zeilen.join("\n")).toContain("fehlgeschlagen");
-    expect(JSON.parse(readFileSync(join(f.ablage, "analyse-2026-11-16-tickets.json"), "utf8"))["lauf-1"].teile.z1).toBeDefined();
+    expect((JSON.parse(readFileSync(join(f.ablage, "analyse-2026-11-16-tickets.json"), "utf8")) as Record<string, { teile: Record<string, string> }>)["lauf-1"].teile.z1).toBeDefined();
   });
   test("Abhängigkeiten werden auf die neue Nummer aufgelöst", () => {
     const p = basisPlan([{ id: "a", art: "ticket", tragweite: "standard", ticket: ticket() }, { id: "b", art: "ticket", tragweite: "standard", ticket: ticket({ nach: "teil:a", blocker: ["teil:a", "5"] }) }]);

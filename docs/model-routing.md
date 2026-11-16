@@ -44,6 +44,22 @@ Modell und Effort je Teil des Skills [`token-analyse`](../.agents/skills/token-a
 
 **Grenzen:** Die Analyse läuft nur unter Claude Code; Codex-Läufe zählen über Langfuse und Transkripte mit (`test/harness/codex-setup.test.ts` spiegelt die Agenten nicht). `analyse-extern` hat keinen Lese-Hook: Lesen per absolutem Pfad ist nicht sperrbar, der Bericht listet die Lesepfade. **Erfassungsprobe, kein Messlauf** (Langfuse-Erfassung der zwei neuen Agenten): Probe-Lauf nach dem Rezept der [FAQ](agent-harness-faq.md#wie-fahre-ich-einen-probe-lauf-und-warte-auf-sein-ergebnis) (2026-11-16, Auftrag: beide Agenten spawnen, je „Antworte nur mit OK.“), Session `1cb05d36-c947-45bd-b05c-ae393baf21b7`: beide Spawns liefen (Modell-Nutzung `sonnet` und `opus` im Ergebnis, 0,16 $). Der Agentenlauf hat keinen `LANGFUSE_SECRET_KEY` (Log: „tracing disabled for this turn“), die Observationen „Subagent: analyse-recherche“ und „Subagent: analyse-extern“ liefert der Nachlieferer nach (Auftrag über `node scripts/langfuse-auftrag.mjs` abgelegt); die Nachprüfung per `queryMetrics` steht beim PR-Merge aus (Hinweis im PR). Die Agenten haben weder Hooks noch Registrierungsänderungen, nur Frontmatter.
 
+### Token-Analyse: Plan-Review (factory#577)
+
+Modell und Effort des Reviewers je Planteil nach Tragweite (Teil 7 des Skills [`token-analyse`](../.agents/skills/token-analyse/plan-review.md)); nur Aliase. Die Tragweite steht im Plan, der Wächter `test/harness/token-analyse-skill.test.ts` prüft die Tabelle gegen `REVIEW_ROUTING` in `scripts/token-analyse-tickets-lib.mjs`, und das Skript stuft einen Reviewer mit abweichendem Modell oder Effort als `ungeprüft` ein.
+
+| Tragweite | Alias | Effort | Fälle |
+|---|---|---|---|
+| `standard` | `opus` | `high` | jeder Planteil ohne einen der folgenden Fälle |
+| `rueckbau-lockerung` | `fable` | `high` | Rückbau oder Lockerung von Regeln und Gates |
+| `abschaffung` | `fable` | `high` | Abschaffung von Status-Ticket oder Takt |
+| `rollenwechsel` | `fable` | `high` | Wechsel von Modell oder Effort einer Rolle |
+| `leitplanke` | `fable` | `high` | Berührung einer Leitplanke (`.github/protected-paths.json`) |
+| `sicherheit-gate` | `fable` | `high` | Berührung eines Sicherheits-Gates |
+| `opus-blocker` | `fable` | `high` | jeder Teil mit einem Opus-Blocker, den der Hauptchat nicht ausgewogen entscheiden kann |
+
+**Begründung:** Ein Planteil entscheidet über Tickets und damit über Arbeit; `opus` `high` genügt für den Regelfall. Wo ein Fehlurteil Schutz abbaut oder die Rollen der Fabrik ändert (Rückbau, Abschaffung, Rollenwechsel, Leitplanke, Sicherheit) und wo schon ein Opus-Blocker offenblieb, prüft `fable` als stärkstes Modell. Der Effort bleibt `high`; eine Anhebung wäre ein Fall für das Änderungsregister. Jeder Reviewer bekommt nur Planteil, Belegtabelle und Fundstellen, nie rohe Transkripte; ein Durchgang je Teil, ein zweiter nur nach `bedingt`; die Kosten zählen ins Lauf-Budget (`BUDGET_USD`). Gemessen wird erst im ersten echten Lauf.
+
 ### Rollen je Risikostufe (factory#528)
 
 Welche Rollen eine Risikostufe (Abschnitt „Risikostufe“) startet; Alias und Effort prüft der Wächter gegen das Frontmatter des Ziels, die Rollen je Stufe gegen `ROLLEN_JE_STUFE` in `scripts/risikostufe-lib.mjs`. Stufe 0 hat nie Planer, Lens oder Holdout.

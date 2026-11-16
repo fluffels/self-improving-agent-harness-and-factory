@@ -81,7 +81,7 @@ function ticketFehler(id, k, vorher) {
   return unbekannt.map((v) => `Plan: ${id}: Verweis ${v} nur auf frühere Teile`);
 }
 
-function urteilFehler(u, ids, gesehen) {
+function einzelFehler(u, ids, gesehen) {
   const r = istObjekt(u) && istObjekt(u.reviewer) ? u.reviewer : {};
   if (!istObjekt(u) || !ids.includes(u.teil) || ![1, 2].includes(u.durchgang) || !URTEILE.includes(u.urteil) || !text(u.grund) || !["kennung", "modell", "effort"].every((x) => text(r[x]))) {
     return [`Review: ungültiges Urteil (${istObjekt(u) ? `${u.teil}/${u.durchgang}` : "?"})`];
@@ -99,7 +99,7 @@ function reviewFehler(plan, review) {
   if (!Array.isArray(review.urteile)) return [...f, "Review: urteile fehlt"];
   const ids = plan.teile.map((t) => t.id);
   const gesehen = new Map();
-  for (const u of review.urteile) f.push(...urteilFehler(u, ids, gesehen));
+  for (const u of review.urteile) f.push(...einzelFehler(u, ids, gesehen));
   return f;
 }
 
