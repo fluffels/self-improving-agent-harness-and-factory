@@ -357,10 +357,10 @@ describe("Sammelticket erkennen, board-place ohne Klemmung (#1322 Z19, factory#1
       kopfEnde: (items: B[]) => number;
       imKopf: (items: B[], nr: number) => boolean;
     };
-    expect(M.NOTFALL_ARTEN).toEqual(["rot-main", "security", "dependabot", "forum", "wiedervorlage", "security-tabs", "tag", "update", "ticket-drift"]);
+    expect(M.NOTFALL_ARTEN).toEqual(["rot-main", "security", "token-analyse", "dependabot", "forum", "wiedervorlage", "security-tabs", "tag", "update", "ticket-drift"]);
     expect(M.KOPF_MARKER).toEqual(M.NOTFAELLE.map((n) => n.marker));
-    // Die Art forum prüft der Projekt-Test forum-notfall-projekt.test.ts (der Forum-Workflow ist ein Projekt-Modul).
-    for (const n of M.NOTFAELLE.filter((x) => x.art !== "forum")) {
+    // Die Art forum gehört einem Projekt-Modul (der Forum-Workflow), die Art token-analyse prüft der Projekt-Test test/harness/token-analyse-notfall.test.ts (Fabrik-eigene Quelle, kein Besitz).
+    for (const n of M.NOTFAELLE.filter((x) => x.art !== "forum" && x.art !== "token-analyse")) {
       const text = readFileSync(new URL(`../${n.quelle}`, import.meta.url), "utf8");
       // Workflows setzen den Titel als marker="…", die Doku nennt den Marker wörtlich.
       expect(text, `${n.art}: ${n.marker} in ${n.quelle}`).toContain(n.quelle.endsWith(".yml") ? `marker="${n.marker}` : n.marker);

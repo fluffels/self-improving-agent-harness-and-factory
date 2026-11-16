@@ -5,7 +5,7 @@ description: Fabrik-eigene Token-Analyse (factory#518): Teil 0 per Skript, danac
 
 # Token-Analyse (Fabrik-eigen)
 
-Fabrik-eigen, nicht im Besitz-Manifest, nie an Bezieher verteilt (Wächter `test/harness/fabrik-eigen-analyse.test.ts`). Läuft nur unter Claude Code; Codex-Läufe zählen über Langfuse und Transkripte mit, die Analyse selbst startet dort nie. Der Bau des Skills führt keinen Lauf aus; der erste echte Lauf kommt vom Auslöser (factory#518).
+Fabrik-eigen, nicht im Besitz-Manifest, nie an Bezieher verteilt (Wächter `test/harness/fabrik-eigen-analyse.test.ts`). Läuft nur unter Claude Code; Codex-Läufe zählen über Langfuse und Transkripte mit, die Analyse selbst startet dort nie. Der Bau des Skills führt keinen Lauf aus; der erste echte Lauf kommt vom Auslöser (factory#518): `node scripts/token-analyse-ausloesen.mjs --anlass <monatlich|manuell|kosten>` legt das Kopf-Ticket `💸 Token-Analyse` an (ein offenes genügt, [Auslöser](../../../docs/ticket-reihenfolge.md#token-analyse-auslösen-factory518)).
 
 ## Budget
 
@@ -29,6 +29,7 @@ Vor jedem Teil: Zwischenstand der eigenen Session aus dem Transkript (`node scri
 4. **Zusammenfassung im Hauptchat:** Kennzahlen, Lücken je Teil, Empfehlungen nur aus Teilen ohne Lücke.
 5. **Schnappschuss:** Kennzahlen-JSON im Scratchpad, dann `node scripts/token-analyse-freigabe.mjs ablegen --eingabe <kennzahlen.json>`; die Vorher/Nachher-Tabelle entsteht dabei aus dem letzten Schnappschuss.
 6. **Eigene Kosten** nennen (Langfuse, Summe der Session samt Subagenten).
+7. **Takt fortschreiben:** `node scripts/token-analyse-ausloesen.mjs --fortschreiben` löscht den Monatseintrag in `.github/wiedervorlagen.json` und schreibt den nächsten (Lauf plus ein Monat); Commit über das Analyse-Ticket.
 
 ## Lücken und Grenzen
 
