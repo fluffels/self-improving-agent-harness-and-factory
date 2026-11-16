@@ -57,7 +57,7 @@ ASI-Namen der Spalte nach der Sekundärquelle (siehe Quellen). Die Gate-Angaben 
 
 ## Code-Analyse als agentische Ergänzung
 
-Die Sicherheit des Repos-Codes deckt eine deterministische und eine agentische Schicht ab, beide ohne Modell in der CI (ADR 0034): `codeql.yml` (CodeQL-Alerts) und `sicherheitspruefung.yml` (Konfiguration des Repos) laufen automatisch; die monatliche [Code-Analyse](ticket-reihenfolge.md#code-analyse-monatslauf-factory596) legt nur ein Takt-Ticket an, das ein normaler Agentenlauf unter den Fremdtext- und Schreibgrenzen dieser Seite abarbeitet. Ein Fund wird ein Notfall-Issue `🔒 Security:` im eigenen Repo ohne Exploit-Details (SECURITY.md); offene CodeQL-Alerts werden referenziert, nicht dupliziert.
+Die Sicherheit des Repo-Codes deckt eine deterministische und eine agentische Schicht ab, beide ohne Modell in der CI (ADR 0034): `codeql.yml` (CodeQL-Alerts) und `sicherheitspruefung.yml` (Konfiguration des Repos) laufen automatisch; die monatliche [Code-Analyse](ticket-reihenfolge.md#code-analyse-monatslauf-factory596) legt nur ein Takt-Ticket an, das ein normaler Agentenlauf unter den Fremdtext- und Schreibgrenzen dieser Seite abarbeitet. Ein Fund wird ein Notfall-Issue `🔒 Security:` im eigenen Repo ohne Exploit-Details (SECURITY.md); offene CodeQL-Alerts werden referenziert, nicht dupliziert.
 
 ## Grenzen (ehrlich)
 

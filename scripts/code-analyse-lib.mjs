@@ -28,7 +28,7 @@ const CODE_ABSCHNITT = [
   "## Code (Refactoring)",
   "",
   "Prüfe nacheinander die Kategorien **Refactoring**, **Duplikate**, **Komplexität** und **Testlücken** im eigenen Repo (lesen, kein Messlauf, keine neuen Werkzeuge).",
-  `Melde je Fund eine Zeile: \`node scripts/melden.mjs --ziel refactoring --zeile "<Klasse>: … Beleg: …"\` (Klassen und Beleg: docs/ticket-reihenfolge.md (Fabrik) § Sammelticket-Mechanik). Höchstens ${ZEILEN_DECKEL} Zeilen je Lauf; ohne Beleg keine Zeile.`,
+  `Melde je Fund eine Zeile: \`node scripts/melden.mjs --ziel refactoring --zeile "<Klasse>: … Beleg: …"\` (Klassen und Beleg: docs/ticket-reihenfolge.md (Fabrik) § Sammelticket-Mechanik). Zeilenregeln der Erzeuger laut AGENTS.md (§ Harness-Befunde sind Zeilen): Defekt und Blocker unbegrenzt, Kosmetik und Hypothese zusammen höchstens eine Zeile je Lauf, insgesamt höchstens ${ZEILEN_DECKEL} Zeilen; ohne Beleg keine Zeile.`,
 ];
 
 const SICHERHEIT_ABSCHNITT = [

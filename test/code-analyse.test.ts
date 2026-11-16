@@ -52,6 +52,10 @@ describe("Lib code-analyse-lib", () => {
   test("entscheide: kein Ticket → anlegen", () => {
     expect(L.entscheide({ offene: [], owner, config }).aktion).toBe("anlegen");
   });
+  test("ein offenes Issue, das kein Takt-Ticket ist, verhindert das Anlegen nicht", () => {
+    expect(L.entscheide({ offene: [issue({ title: "Anderes" }), issue({ body: "x" })], owner, config }).aktion).toBe("anlegen");
+    expect(L.entscheide({ offene: [issue({ title: "Anderes" }), issue()], owner, config }).aktion).toBe("nichts");
+  });
   test("AK 3: ein offenes Takt-Ticket → nichts, auch geclaimt", () => {
     expect(L.entscheide({ offene: [issue()], owner, config }).aktion).toBe("nichts");
     expect(L.entscheide({ offene: [issue({ assignees: [{ login: owner }] })], owner, config }).aktion).toBe("nichts");
@@ -61,7 +65,8 @@ describe("Lib code-analyse-lib", () => {
     expect(t.startsWith(L.MARKER)).toBe(true);
     for (const k of ["Refactoring", "Duplikate", "Komplexität", "Testlücken"]) expect(t).toContain(k);
     expect(t).toContain("node scripts/melden.mjs --ziel refactoring --zeile");
-    expect(t).toContain("Höchstens 12 Zeilen");
+    expect(t).toContain("höchstens 12 Zeilen");
+    expect(t).toContain("Kosmetik und Hypothese zusammen höchstens eine Zeile je Lauf");
     expect(t).toContain("🔒 Security:");
     expect(t).toContain("codeql.yml");
     expect(t).toContain("sicherheitspruefung.yml");
@@ -135,9 +140,33 @@ describe("Einstieg code-analyse.mjs", () => {
     expect(r.code).toBe(0);
     expect(r.schreib).toEqual([]);
   });
-  test("Zweitabfrage scheitert → fail-closed, kein Schreibaufruf", async () => {
+  test("Zweitabfrage scheitert → fail-closed, kein Schreibaufruf, Warnung", async () => {
     const r = await lauf({ frischFehler: true });
+    expect(r.code).toBe(0);
     expect(r.schreib).toEqual([]);
+    expect(r.out).toMatch(/::warning::.*Zweitabfrage/);
+  });
+  test("ein fremdes offenes Issue neben leerer Takt-Liste: genau eine Anlage", async () => {
+    const r = await lauf({ issues: [cliIssue({ number: 9, title: "Anderes", body: "x" })] });
+    expect(r.schreib).toHaveLength(1);
+  });
+  test("gleiches GITHUB_REPOSITORY → Exit 0 und genau eine Anlage", async () => {
+    const r = await lauf({ env: { GITHUB_REPOSITORY: REPO, PROJECT_TOKEN: "t" } });
+    expect(r.code).toBe(0);
+    expect(r.schreib).toHaveLength(1);
+  });
+  test("Antworten ohne gültige Issue-Nummer → Exit 1, keine Board-Sortierung", async () => {
+    for (const antwort of [`https://github.com/${REPO}/pull/77`, `https://github.com/${REPO}/issues/0`, `https://github.com/${REPO}/issues/77 x`]) {
+      const r = await lauf({ antwort });
+      expect(r.code, antwort).toBe(1);
+      expect(r.board, antwort).toEqual([]);
+    }
+  });
+  test("das Label kommt nur mit, wenn sein Ziel das eigene Repo ist", async () => {
+    const mit = await lauf();
+    const label = mit.schreib[0].indexOf("--label");
+    expect(label).toBeGreaterThan(-1);
+    expect(mit.schreib[0][label + 1]).toBe((config.labels as Record<string, string>).dependabotInbox);
   });
   test("Liste mit ≥ 1000 Einträgen → Exit 1, kein Schreibaufruf (fail-closed)", async () => {
     const r = await lauf({ issues: Array.from({ length: 1000 }, (_, n) => cliIssue({ number: n + 100, title: "x", body: "" })) });
@@ -223,6 +252,7 @@ describe("Wächter: Skript und Workflow ohne Modell und ohne Modell-Schlüssel (
       expect(q).not.toMatch(/ANTHROPIC|CLAUDE_|OPENAI|API_KEY|anthropic\.com/i);
       expect(q).not.toMatch(/"(close|comment|edit|delete|lock)"/);
     }
-    expect([...lies("scripts/code-analyse.mjs").matchAll(/"--repo", ([^,\]]+)/g)].map((m) => m[1])).toEqual(["repo"]);
+    expect([...lies("scripts/code-analyse.mjs").matchAll(/"--repo"/g)]).toHaveLength(0);
+    expect([...lies("scripts/inbox-start-lib.mjs").matchAll(/"issue", "create", "--repo", ([^,\]]+)/g)].map((m) => m[1])).toEqual(["ziel", "repo"]);
   });
 });

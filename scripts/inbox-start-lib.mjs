@@ -8,7 +8,8 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { fehlerMeldung, fehlerText, ghText } from "./gh-cli.mjs";
 import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
-import { ladeProjektConfig } from "./projekt-config-lib.mjs";
+import { labelAus, ladeProjektConfig, zielRepoFuer } from "./projekt-config-lib.mjs";
+import { gleichesRepo } from "./repo-form.mjs";
 import { istBezieher } from "./sync-stand-lib.mjs";
 import { SICHERHEITS_SAMMELTICKET_TITEL } from "./sammelticket-titel.mjs";
 import { nutzerAus } from "./ticket-drift-lib.mjs";
@@ -141,6 +142,26 @@ export const frischeIssues = (gh, repo) =>
     .flat()
     .filter((i) => !i.pull_request)
     .map((i) => ({ number: i.number, title: i.title, body: i.body, user: { login: i.user?.login, type: i.user?.type }, labels: (i.labels ?? []).map((l) => l.name) }));
+
+/**
+ * Legt ein Takt-Ticket im EIGENEN Repo an (der einzige Schreibaufruf mit Inhalt: `gh issue create --repo <eigenes>`, mit `github.token`) und sortiert es mit `PROJECT_TOKEN` ans Ende der Todo-Spalte
+ * (ohne Secret nur eine Warnung, ein Fehler dort ebenso: das Ticket existiert). `d`: `{ repo, config, schreibe, log, env, libs }`, `was` benennt das Ticket im Log. Gemeinsam für Sicherheitsprüfung und Code-Analyse.
+ */
+export function legeTaktTicket(d, { titel, text, was }) {
+  const { repo, config, schreibe, log, env, libs } = d;
+  const label = labelAus(config, "dependabotInbox");
+  const mitLabel = gleichesRepo(zielRepoFuer([label], config), repo) ? ["--label", label] : [];
+  const url = schreibe(["issue", "create", "--repo", repo, "--title", titel, "--body-file", "-", ...mitLabel], text);
+  const nr = Number(/\/issues\/(\d+)\s*$/.exec(String(url))?.[1]);
+  if (!Number.isInteger(nr) || nr <= 0) throw new Error(`Ticket angelegt, Nummer nicht lesbar: ${String(url).slice(0, 200)}`);
+  log(`${was}: Ticket #${nr} angelegt.`);
+  if (!env.PROJECT_TOKEN) return log("::warning::PROJECT_TOKEN fehlt: das Ticket steht nicht im Board.");
+  try {
+    libs.platziereAmEnde(nr, env.PROJECT_TOKEN);
+  } catch (e) {
+    log(`::warning::Ticket #${nr} angelegt, aber nicht ans Ende der Todo-Spalte sortiert: ${fehlerText(e)}`);
+  }
+}
 
 /**
  * Zweitabfrage vor dem Anlegen (fail-closed, #101 L17): die REST-Liste hinkt bei frischen Tickets nach, ein zweites Ticket entstand so schon. Nur bei
