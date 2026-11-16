@@ -202,6 +202,7 @@ export function liesEingabe({ stdin, fristMs = EINGABE_FRIST_MS }) {
     }, fristMs);
     stdin.setEncoding?.("utf8");
     stdin.on("data", (chunk) => {
+      clearTimeout(timer);
       text += chunk;
     });
     stdin.on("error", (e) => {
