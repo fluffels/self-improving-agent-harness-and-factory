@@ -246,6 +246,8 @@ describe("Erkennung greift wirklich (Red-Green, #1034)", () => {
     assert.ok(holtRegelnPerGrep("`AGENTS.md` liegt **nicht** in deinem Kontext. Regeln per grep aus `AGENTS.md`: punktuell."));
     assert.ok(!holtRegelnPerGrep("AGENTS.md liegt bereits vollständig in deinem Kontext — greppe punktuell."), "alter Text muss rot sein");
     assert.ok(!holtRegelnPerGrep("`AGENTS.md` liegt nicht in deinem Kontext."), "ohne grep-Anweisung nicht grün");
+    assert.ok(!holtRegelnPerGrep("liegt bereits im Kontext. Regeln per grep aus `AGENTS.md`."), "ohne Hinweis auf den fehlenden Kontext nicht grün");
+    assert.ok(!holtRegelnPerGrep("liegt nicht in deinem Kontext, grep punktuell."), "ohne den Wortlaut „Regeln per grep aus AGENTS.md“ nicht grün");
   });
 
   test("hatRundenNummer und istDreiPunkt fallen bei Zwei-Punkt und fehlender Runde", () => {

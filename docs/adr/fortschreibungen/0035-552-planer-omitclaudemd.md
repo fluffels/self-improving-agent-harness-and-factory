@@ -8,6 +8,7 @@ Entscheidung: `.claude/agents/factory-planer.md` trägt `omitClaudeMd: true`, de
 
 - **Evidenz:** nur vorhandene Rohwerte aus [model-routing](../../model-routing.md#ab-kern-je-rolle-ergebnis-factory235-factory236), keine neue Messung. Sockel des Planers A 30.984, D 21.917 Tokens (Δ −9.067); die Ersparnis je Ticket ist daraus abgeleitet, nicht gemessen.
 - **Prüfung:** die Ledger-Zeile vom 2026-11-16 in [ADR 0027](../0027-regeln-lockern.md#gelockert) mit Prüftermin 2026-12-14 (Änderungsregister folgt mit factory#518).
+- **Bezieher:** `factory-planer.md` liegt im verteilten Ring, die Umstellung gilt damit auch dort. Der Planer hat Leitfrage, Schichtregeln und Projekt-Stopps des Projekt-Blocks nicht mehr im Kontext, sondern greppt sie aus `AGENTS.md`. Entscheidung: grep statt Projekt-Block im Agent-Body (Variante D), weil der Body dann projektneutral bleibt und der Kontext-Vertrag (ein Projekt-Block in `AGENTS.md`) unverändert gilt; das Qualitätsrisiko (Leitfrage nur per grep) fängt Trigger (a) der Ledger-Zeile, getrennt nach Fabrik und Bezieher.
 - **Codex unverändert:** der Schlüssel gilt nur in Claude Code, Codex lädt `AGENTS.md` immer (Fall g); der Planer-Probe-Eintrag verweist nur auf die md-Datei.
 
 ## Re-Evaluierung
