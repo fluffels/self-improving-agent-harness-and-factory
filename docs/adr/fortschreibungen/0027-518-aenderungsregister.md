@@ -15,6 +15,11 @@ Ergänzt [ADR 0027](../0027-regeln-lockern.md) (Punkte 4 und 8); die Ledger-Zeil
 - Wiedervorlagen tragen ein Pflichtfeld `art` aus `frist`, `abhaengigkeit`, `sicherheit`, `upstream`, `analyse-takt`; `umstellung` und `regel` sind verboten (Wächter `test/harness/wiedervorlagen-art.test.ts`). Einzige Ausnahme ist der Sammeleintrag `regeln-verfall-2027-03` bis factory#574.
 - Eine Wiedervorlage ohne Katalog-Messgröße oder ohne Ledger-Zeile (Beispiel `sicherheits-lens-kosten-334`: Kosten je Brille und je Risikoklasse fehlen) bleibt mit `art` stehen, bis der Katalog sie trägt.
 
+## Verfall und Fangquote (factory#607)
+
+- Das Register kennt die Zeilenart `art: "verfall"` (Pflichtfelder `id`, `ziel`, `aufgenommen`, `ablauf`, `messgroesse: fangquote`; `durch` nur bei Regeln, Ziel mit Anker `#`, Ids der erzwingenden Wächter). Das Manifest des Regel-Verfalls ist damit das Änderungsregister, keine eigene Datei.
+- Messgröße `fangquote` (Qualitätsmaß, Quelle `gate-fundquote`, Parameter `ziel`): Anteil der Testläufe mit rotem Wächter. Ein Rot durch Zeitlimit, Abbruch oder Infrastruktur zählt nicht als Fang; fehlende Logs und eine Regel ohne `durch` sind eine Lücke mit Grund, nie 0.
+
 ## Re-Evaluierung
 
 Prüftermin 2026-12-14: legt jede neue Ledger-Zeile eine Registerzeile an, bleibt die Regel; entsteht daneben weiter eine Einzel-Wiedervorlage je Umstellung, wird der Wächter um diese Prüfung erweitert.
