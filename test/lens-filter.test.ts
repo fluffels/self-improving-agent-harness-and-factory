@@ -2,6 +2,7 @@
 import { describe, expect, test } from "vitest";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
+import { EventEmitter } from "node:events";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as raw from "../scripts/lens-filter.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
