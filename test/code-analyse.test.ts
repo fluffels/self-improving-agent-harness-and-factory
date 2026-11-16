@@ -150,6 +150,14 @@ describe("Einstieg code-analyse.mjs", () => {
     const r = await lauf({ issues: [cliIssue({ number: 9, title: "Anderes", body: "x" })] });
     expect(r.schreib).toHaveLength(1);
   });
+  test("ein fremdes Issue erst in der Zweitabfrage blockiert das Anlegen nicht", async () => {
+    const r = await lauf({ issues: [], frisch: [frischForm(cliIssue({ number: 9, title: "Anderes", body: "x" }))] });
+    expect(r.code).toBe(0);
+    expect(r.schreib).toHaveLength(1);
+  });
+  test("der Standard-Leseweg nutzt github.token, nie PROJECT_TOKEN", () => {
+    expect(lies("scripts/code-analyse.mjs")).not.toMatch(/token:\s*env\.PROJECT_TOKEN/);
+  });
   test("gleiches GITHUB_REPOSITORY → Exit 0 und genau eine Anlage", async () => {
     const r = await lauf({ env: { GITHUB_REPOSITORY: REPO, PROJECT_TOKEN: "t" } });
     expect(r.code).toBe(0);
