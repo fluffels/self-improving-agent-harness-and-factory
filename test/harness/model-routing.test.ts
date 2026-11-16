@@ -628,6 +628,14 @@ describe("Skill-Pfad: die Umsetzung läuft im Umsetzer-Subagenten, nicht im Haup
     assert.notEqual(fm.omitClaudeMd, "true", "Der Umsetzer braucht AGENTS.md im Kontext");
   });
 
+  test("Planer: omitClaudeMd mit Verweis auf die Ledger-Zeile und grep-Hinweis (factory#552)", () => {
+    const roh = read(".claude/agents/factory-planer.md");
+    const fm = frontmatter(roh);
+    assert.equal(fm.omitClaudeMd, "true", "Der Planer läuft seit factory#552 ohne AGENTS.md im Kontext");
+    assert.match(roh.split(/^---$/m)[1] ?? "", /ADR 0027[\s\S]*factory#552/, "Das Frontmatter verweist auf die Ledger-Zeile");
+    assert.match(roh, /Regeln per grep aus `AGENTS\.md`/, "Der Body sagt, wie der Planer an die Regeln kommt");
+  });
+
   test("Umsetzer kann die Lenses spawnen und hat den Review-Ablauf vorgeladen", () => {
     const fm = frontmatter(read(UMSETZER));
     const tools = (fm.tools ?? "").split(",").map((t) => t.trim());
