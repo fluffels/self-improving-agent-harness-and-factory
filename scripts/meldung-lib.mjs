@@ -88,10 +88,12 @@ const FIX_SAMMELTICKET = "Fix: node scripts/sammelticket-anlegen.mjs harness";
 
 /**
  * Pur: der gemeinsame Text „kein ungeclaimtes Harness-Sammelticket `fuer`“ samt Fix. Agentenvariante (`melden.mjs`, `spezifikation.mjs`): ohne Zugriff an der Meldestelle nennt der Lauf die Zeile unter BEFUNDE im Bericht;
- * CI-Variante (`ci`, Wochenlauf, kein Bericht): der Bezieher lässt an der Meldestelle ein Sammelticket anlegen, der nächste Wochenlauf meldet die Zeilen erneut. `trenner` trennt Befund und Fix (Zeilenumbruch, in einer Logzeile ein Leerzeichen).
+ * CI-Variante (`ci`, Wochenlauf, kein Bericht): der Bezieher lässt an der Meldestelle ein Sammelticket anlegen, der nächste Wochenlauf meldet die Zeilen erneut. `trenner` trennt Befund und Fix (Zeilenumbruch, in einer Logzeile ein Leerzeichen). `art: "refactoring"` (factory#595, `melden.mjs --ziel refactoring`) nennt das Refactoring-Sammelticket des eigenen Repos.
  */
-export const keinSammelticketText = ({ fuer, ci = false, trenner = "\n" }) =>
-  `kein ungeclaimtes Harness-Sammelticket ${fuer}${trenner}${FIX_SAMMELTICKET}; ${
+export const keinSammelticketText = ({ fuer, ci = false, trenner = "\n", art = "harness" }) =>
+  art === "refactoring"
+    ? `kein ungeclaimtes Refactoring-Sammelticket ${fuer}${trenner}Fix: node scripts/sammelticket-anlegen.mjs refactoring; die Zeile unter BEFUNDE im Bericht nennen`
+    : `kein ungeclaimtes Harness-Sammelticket ${fuer}${trenner}${FIX_SAMMELTICKET}; ${
     ci ? "im Bezieher an der Meldestelle ein Harness-Sammelticket anlegen lassen, der nächste Wochenlauf meldet die Zeilen erneut" : "ohne Zugriff auf die Meldestelle die Zeile unter BEFUNDE im Bericht nennen"
   }`;
 

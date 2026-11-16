@@ -96,7 +96,7 @@ Fehlt ein Bericht, fordert ihn der Orchestrator einmal per `SendMessage` an, ohn
 
 **Messbehauptungen** in Diff, PR oder Zusammenfassung: gib der Lens die Rohwerte mit (Session-IDs, Zeitfenster, Zählung je Quelle), sonst meldet sie „nicht belegt“.
 
-Am Ende **ein Gesamt-Verdikt** über alle gelaufenen Lenses (mergefähig ✅ / erst nachbessern ❌). Funde außerhalb des Ticket-Scopes trägt er ein: Harness → Zeile mit Klasse und Beleg (AGENTS.md § Harness-Befunde sind Zeilen; ohne Beleg nur im Bericht), Produkt-/Inhalts-Befund → gebündeltes Issue (AGENTS.md § Befunde sofort festhalten), nicht inline mitfixen.
+Am Ende **ein Gesamt-Verdikt** über alle gelaufenen Lenses (mergefähig ✅ / erst nachbessern ❌). Funde außerhalb des Ticket-Scopes trägt er ein: Harness → Zeile mit Klasse und Beleg (AGENTS.md § Harness-Befunde sind Zeilen), Code-Befund → Zeile per `node scripts/melden.mjs --ziel refactoring` (Regeln wie Harness-Zeilen), Produkt-Befund → Issue, nicht inline mitfixen.
 
 ## Als beschränkte Konvergenzschleife im Ticket-Ablauf (#1012)
 
