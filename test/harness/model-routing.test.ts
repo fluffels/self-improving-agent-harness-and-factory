@@ -628,6 +628,24 @@ describe("Skill-Pfad: die Umsetzung läuft im Umsetzer-Subagenten, nicht im Haup
     assert.notEqual(fm.omitClaudeMd, "true", "Der Umsetzer braucht AGENTS.md im Kontext");
   });
 
+  test("Holdout-Rollen laufen ohne Kontextdateien und tragen die nötigen Regeln selbst (factory#551)", () => {
+    for (const datei of [".claude/agents/holdout-szenario.md", ".claude/agents/holdout-abnahme.md"]) {
+      const md = read(datei);
+      const fm = frontmatter(md);
+      assert.equal(fm.omitClaudeMd, "true", `${datei}: omitClaudeMd: true (Ersparnis belegt in model-routing)`);
+      assert.match(md, /Holdout ohne Kontextdateien|holdout-ohne-kontextdateien/, `${datei}: Verweis auf den Absatz in model-routing`);
+    }
+    const abnahme = read(".claude/agents/holdout-abnahme.md");
+    assert.doesNotMatch(abnahme, /liegt in deinem Kontext/, "ohne Kontextdatei darf der Body sie nicht als geladen ausgeben");
+    assert.match(abnahme, /node scripts\/fremdtext\.mjs/, "Fremdtext-Regel muss im Body stehen");
+    for (const skript of ["langfuse-nachliefern", "token-baseline --langfuse", "langfuse-wochenbericht"]) {
+      assert.ok(abnahme.includes(skript), `Secret-Key-Verbot im Body: ${skript}`);
+    }
+    assert.match(abnahme, /Anonymit/, "Anonymitätsregel im Body");
+    assert.match(abnahme, /keine internen Bezüge/, "Regel „keine internen Bezüge“ im Body (die Belege werden öffentlicher PR-Kommentar)");
+    assert.match(read(ROUTING_SSOT), /### Holdout ohne Kontextdateien \(factory#551\)/);
+  });
+
   test("Planer: omitClaudeMd mit Verweis auf die Ledger-Zeile und grep-Hinweis (factory#552)", () => {
     const roh = read(".claude/agents/factory-planer.md");
     const fm = frontmatter(roh);
