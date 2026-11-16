@@ -534,10 +534,10 @@ export function renderMarkdown(ergebnis, tickets = []) {
 // ---------------------------------------------------------------------------------------------------------------------
 
 /**
- * Pur: Fangquote einer Verfall-Zeile aus Messpunkten (`leseMesspunkte`-Form) im Fenster aufgenommen bis ablauf: `{ wert, laeufe, faenge }` oder `{ luecke: grund }`.
+ * Pur: Fangquote einer Verfall-Zeile aus Messpunkten (`leseMesspunkte`-Form) im Fenster (Standard aufgenommen bis ablauf, Regel-Verfall: die letzten 30 Tage über `fenster`): `{ wert, laeufe, faenge }` oder `{ luecke: grund }`.
  * Eine Regel wird über ihre erzwingenden Wächter (`durch`) gemessen (Fang = mindestens einer rot); ohne `durch` ist sie eine Lücke, nie 0. Ohne Messpunkte ebenfalls Lücke.
  */
-export const fangquote = (zeile, zeilen, punkte) => {
+export const fangquote = (zeile, zeilen, punkte, fenster = { von: zeile.aufgenommen, bis: zeile.ablauf }) => {
   let ziele = [zeile.ziel];
   if (istRegelZiel(zeile.ziel)) {
     if (!Array.isArray(zeile.durch) || zeile.durch.length === 0) return { luecke: "kein erzwingender Wächter (durch)" };
@@ -546,7 +546,7 @@ export const fangquote = (zeile, zeilen, punkte) => {
   }
   const laeufe = new Map();
   for (const p of punkte) {
-    if (p.messgroesse !== "fangquote" || !ziele.includes(p.parameter) || tagVon(p.zeitpunkt) < zeile.aufgenommen || tagVon(p.zeitpunkt) > zeile.ablauf) continue;
+    if (p.messgroesse !== "fangquote" || !ziele.includes(p.parameter) || tagVon(p.zeitpunkt) < fenster.von || tagVon(p.zeitpunkt) > fenster.bis) continue;
     laeufe.set(p.einheitId, laeufe.get(p.einheitId) === true || p.wert > 0);
   }
   if (laeufe.size === 0) return { luecke: "keine Messpunkte im Fenster (Logs fehlen)" };
