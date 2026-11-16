@@ -722,7 +722,7 @@ Ursache ist die **Zählweise**, kein Doppelzählen: Die Summe-Zeile liegt um den
 
 ### Kostenabgleich Langfuse gegen Transkript (factory#520)
 
-Zweck: erklären, woher eine Kostenabweichung Langfuse gegen Transkript kommt, bevor Langfuse-Kosten als Messgröße gelten. Nur vorhandene Transkripte und Langfuse-Daten, keine eigenen Läufe. Zahlen: Befund-Kommentar auf factory#520, nicht hier.
+Zweck: erklären, woher eine Kostenabweichung Langfuse gegen Transkript kommt, bevor Langfuse-Kosten als Messgröße gelten. Nur vorhandene Transkripte und Langfuse-Daten, keine eigenen Läufe. Zahlen: Messkommentar auf factory#520, nicht hier.
 
 **Verfahren (je Session, 3 bis 4 Sessions):**
 
