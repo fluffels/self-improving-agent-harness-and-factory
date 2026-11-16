@@ -566,7 +566,7 @@ describe("Funde Runde 1", () => {
     const rez = L.rezept({ von: VON, bis: BIS, repoTags: ["repoA"] });
     const nimm = (art: string, key?: string, wert?: string) => rez.find((r) => r.art === art && (key === undefined || (r.abfrage.filters?.[1]?.key === key && r.abfrage.filters[1].value === wert)));
     const wahl = [nimm("gesamt"), nimm("tage"), nimm("latenz"), nimm("leer"), nimm("metadaten", "agent_type", "hauptchat"), nimm("metadaten", "effort", "high"), nimm("repo")];
-    const b = L.bericht(wahl.map((r) => lese({ art: r?.art, name: r?.name, abfrage: r?.abfrage, data: r ? zeilen(r.abfrage) : [] })));
+    const b = L.bericht(wahl.map((r) => lese({ art: r?.art, abfrage: r?.abfrage, data: r ? zeilen(r.abfrage) : [] })));
     expect(nimm("tage")?.abfrage.dimensions).toEqual([]);
     expect(b.luecken).toEqual([]);
     expect(b.unzugeordnet).toEqual({ count: 0, cost: 0 });
@@ -592,16 +592,18 @@ describe("Repo-Tag (factory#523)", () => {
     const pf = { column: "tags", operator: "any of", type: "arrayOptions", value: ["factory", "repoA", "project:repoA"] };
     const r = L.rezept({ von: VON, bis: BIS, projektFilter: pf, repoTags: ["repoA"] }).find((x) => x.art === "repo");
     expect(r?.abfrage.filters?.filter((x) => x.column === "tags")).toHaveLength(2);
-    expect(() => lese({ art: "repo", name: r?.name, abfrage: r?.abfrage, data: [] })).not.toThrow();
+    expect(() => lese({ art: "repo", abfrage: r?.abfrage, data: [] })).not.toThrow();
   });
-  test("Leser: Export repo ohne name oder ohne passenden tags-Filter ist ein Formfehler", () => {
-    expect(() => lese({ ...repoA, name: undefined })).toThrow(/name `repo <Repo-Tag>`/);
-    expect(() => lese({ ...repoA, name: "repo " })).toThrow(/name/);
-    expect(() => lese(repoEx("repoA", [], [FILTER]) && { ...repoA, name: "repo repoB" })).toThrow(/tags any of \[repoB, project:repoB\]/);
-    const ohneFilter = { ...repoA, abfrage: { ...repoA.abfrage, filters: [FILTER, LEER_FILTER] } };
-    expect(() => lese(ohneFilter)).toThrow(/tags any of/);
-    const nurEins = { ...repoA, abfrage: { ...repoA.abfrage, filters: [FILTER, LEER_FILTER, { column: "tags", operator: "any of", type: "arrayOptions", value: ["repoA"] }] } };
-    expect(() => lese(nurEins)).toThrow(/tags any of/);
+  test("Leser: der Repo-Tag kommt aus dem tags-Filter, nicht aus name; ohne passenden oder mit mehreren Filtern ist es ein Formfehler", () => {
+    expect(() => lese({ ...repoA, name: undefined })).not.toThrow();
+    expect(rep(...basis.filter((e) => e !== repoA), { ...repoA, name: "egal" }).repo.zeilen.map((z) => z.name)).toContain("repoA");
+    const mit = (filters: unknown[]) => ({ ...repoA, abfrage: { ...repoA.abfrage, filters } });
+    const tags = (value: string[]) => ({ column: "tags", operator: "any of", type: "arrayOptions", value });
+    expect(() => lese(mit([FILTER, LEER_FILTER]))).toThrow(/genau einen Filter tags any of/);
+    expect(() => lese(mit([FILTER, LEER_FILTER, tags(["repoA"])]))).toThrow(/genau einen Filter tags any of/);
+    expect(() => lese(mit([FILTER, LEER_FILTER, tags(["repoA", "project:anderes"])]))).toThrow(/genau einen Filter/);
+    expect(() => lese(mit([FILTER, LEER_FILTER, tags(["repoA", "project:repoA"]), tags(["repoB", "project:repoB"])]))).toThrow(/genau einen Filter/);
+    expect(() => lese(mit([FILTER, LEER_FILTER, tags(["factory", "repoA", "project:repoA"]), tags(["repoA", "project:repoA"])]))).not.toThrow();
   });
   test("zwei Exporte desselben Repo-Tags sind mehrfach, verschiedene Tags nicht", () => {
     expect(() => rep(...basis, repoA)).toThrow(/Export repo repo=repoA mehrfach/);
@@ -615,7 +617,7 @@ describe("Repo-Tag (factory#523)", () => {
     expect(l).toContain("3 Calls, 1.50 $");
     expect(l).toContain("Session außerhalb eines Repos");
     expect(l).toContain("CC_LANGFUSE_TRACE_TAGS");
-    expect(l).not.toContain("Stichtag"); // Fenster nach dem Stichtag
+    expect(l).toContain("Daten vor dem Stichtag"); // das Test-Fenster (VON) liegt vor dem Stichtag
     expect(L.renderMarkdown(b)).toContain("| ohne Repo-Tag | 3 |");
   });
   test("Stichtag: beginnt das Fenster davor, nennt der Grund ihn; danach nicht", () => {
@@ -707,6 +709,16 @@ describe("CLI", () => {
     expect(r.exitCode).toBe(0);
     const werte = (JSON.parse(r.text) as { abfrage: Ex["abfrage"] }[]).map((x) => x.abfrage.filters?.[1]?.value);
     expect(werte).toEqual(expect.arrayContaining(["mein-agent", "extra"]));
+  });
+  test("--rezept enthält einen Export repo für das eigene Repo und je --repo-tag einen weiteren (factory#523)", () => {
+    const namen = (argv: string[], deps: Record<string, unknown> = { repoName: "eigen" }) => (JSON.parse(C.auswerten(C.parseArgs(["--rezept", "--von", VON, "--bis", BIS, ...argv]), deps).text) as { art: string; name: string }[]).filter((x) => x.art === "repo").map((x) => x.name);
+    expect(namen([])).toEqual(["repo eigen"]);
+    expect(namen(["--repo-tag", "fremd", "--repo-tag", "eigen"])).toEqual(["repo eigen", "repo fremd"]);
+  });
+  test("--rezept ohne Injektion nimmt den Repo-Namen aus der Projekt-Config", () => {
+    const r = JSON.parse(C.auswerten(C.parseArgs(["--rezept", "--von", VON, "--bis", BIS])).text) as { art: string; name: string }[];
+    expect(r.filter((x) => x.art === "repo")).toHaveLength(1);
+    expect(r.find((x) => x.art === "repo")?.name).toMatch(/^repo \S+$/);
   });
   test("rezept: bis allein, ungültige Zeiten, von gleich bis und ein fehlender Agentenordner sind Fehler", () => {
     erwarte(["--rezept", "--bis", BIS], 2, "--rezept braucht");

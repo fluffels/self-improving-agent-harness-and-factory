@@ -130,15 +130,12 @@ const istLeerFilter = (f) => f?.column === "providedModelName" && f.operator ===
 const hatFilter = (abfrage, pred) => Array.isArray(abfrage?.filters) && abfrage.filters.some(pred);
 const hatModellDimension = (abfrage) => Array.isArray(abfrage?.dimensions) && abfrage.dimensions.some((d) => d?.field === "providedModelName");
 
-/** Der Repo-Tag eines Exports `repo` aus seinem `name` (`repo <tag>`); verlangt den passenden `tags`-Filter (ein Projektfilter mit `tags` darf daneben stehen). */
+/** Der Repo-Tag eines Exports `repo`: genau ein `tags`-Filter `any of [<tag>, project:<tag>]` (ein Projektfilter mit `tags` hat andere Werte und darf daneben stehen); der `name` des Rezepts geht nicht in den Export. */
 function repoTagVon(json, pfad) {
-  const tag = typeof json.name === "string" && json.name.startsWith("repo ") ? json.name.slice(5).trim() : "";
-  if (tag === "") throw fehler(pfad, "Export repo braucht den name `repo <Repo-Tag>`");
-  const soll = repoTagFilter(tag);
-  if (!hatFilter(json.abfrage, (f) => f?.column === soll.column && f.operator === soll.operator && JSON.stringify(f.value) === JSON.stringify(soll.value))) {
-    throw fehler(pfad, `Export repo ${tag} braucht den Filter tags any of [${soll.value.join(", ")}]`);
-  }
-  return tag;
+  const paare = (json.abfrage.filters ?? []).filter((f) => f?.column === "tags" && f.operator === "any of" && Array.isArray(f.value) && f.value.length === 2 && typeof f.value[0] === "string" && f.value[0] !== "" && f.value[1] === codexProjektTag(f.value[0]));
+  const tags = [...new Set(paare.map((f) => f.value[0]))];
+  if (tags.length !== 1) throw fehler(pfad, "Export repo braucht genau einen Filter tags any of [<Repo-Tag>, project:<Repo-Tag>]");
+  return tags[0];
 }
 
 const fensterLesbar = (a) => !Number.isNaN(Date.parse(a.fromTimestamp)) && !Number.isNaN(Date.parse(a.toTimestamp));
