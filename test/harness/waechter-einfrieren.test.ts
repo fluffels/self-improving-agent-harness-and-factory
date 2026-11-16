@@ -40,7 +40,10 @@ type Eingabe = {
   standardExclude: string[];
 };
 
-const globRegex = (muster: string): RegExp => new RegExp(`^${muster.replace(/[.+^${}()|[\]\\]/g, "\\$&").replace(/\*\*/g, "\u0000").replace(/\*/g, "[^/]*").replace(/\u0000/g, ".*")}$`);
+const globRegex = (muster: string): RegExp => {
+  const teile = muster.split("**").map((s) => s.replace(/[.+^${}()|[\]\\]/g, "\\$&").replace(/\*/g, "[^/]*"));
+  return new RegExp(`^${teile.join(".*")}$`);
+};
 
 /** Pur: Befunde (leer = grün) zu den eingefrorenen Wächtern des Registers und zur exclude-Liste der Config. */
 export function pruefeEinfrieren(e: Eingabe): string[] {
