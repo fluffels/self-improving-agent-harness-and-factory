@@ -612,6 +612,18 @@ describe("wirksamerAbschluss (Abschluss-Skill optional, factory#139)", () => {
   });
 });
 
+describe("wirksamerAbschluss: Leerraum (L9)", () => {
+  const mitSkill = (abschluss: string | null) => ({ skills: { abschluss } });
+  test("nur Leerraum ist keine Variable", () => {
+    assert.equal(pc.wirksamerAbschluss(mitSkill(null), { FACTORY_ABSCHLUSS_SKILL: "  " }), null);
+    assert.equal(pc.wirksamerAbschluss(mitSkill("x"), { FACTORY_ABSCHLUSS_SKILL: "  " }), "x");
+  });
+  test("Leerraum um den Namen wird entfernt, auch um den Abschalt-Wert", () => {
+    assert.equal(pc.wirksamerAbschluss(mitSkill(null), { FACTORY_ABSCHLUSS_SKILL: "  name  " }), "name");
+    assert.equal(pc.wirksamerAbschluss(mitSkill("x"), { FACTORY_ABSCHLUSS_SKILL: " aus " }), null);
+  });
+});
+
 describe("cli", () => {
   test("abschluss gibt den wirksamen Namen oder keiner aus", () => {
     const d = tmp();

@@ -365,6 +365,13 @@ describe("spracheMaengel: eine Prüfung für Gate und Projekt-Config (#1843)", (
   test("die echte Sprach-Config hat keine Mängel", () => {
     expect(P.spracheMaengel(SPRACHE)).toEqual([]);
   });
+  test("pfade ist optional, aber gesetzt muss es ein nicht-leerer String sein (L5)", () => {
+    expect(P.spracheMaengel(SPRACHE)).toEqual([]);
+    expect(P.spracheMaengel({ ...SPRACHE, pfade: "Paths" })).toEqual([]);
+    for (const falsch of ["", "  ", 3, null, ["Pfade"]]) {
+      expect(P.spracheMaengel({ ...SPRACHE, pfade: falsch })).toEqual(["sprache.spezifikation.pfade muss ein nicht-leerer String sein"]);
+    }
+  });
   test("Meldungen stehen auf den Schlüsselpfaden sprache.spezifikation.<k>", () => {
     expect(P.spracheMaengel({ ...SPRACHE, ziel: " ", nachMerge: 3 })).toEqual([
       "sprache.spezifikation.ziel muss ein nicht-leerer String sein",

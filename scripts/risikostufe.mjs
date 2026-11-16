@@ -46,6 +46,7 @@ function aufrufFehlerText({ commit, ticket, pfade, liste }, pos) {
 function ticketEingang(nr, { ghJson: gh, ladeConfig }) {
   let repo;
   let issue;
+  let name;
   try {
     repo = gh(["api", "repos/{owner}/{repo}"]);
     issue = gh(["api", `repos/{owner}/{repo}/issues/${nr}`]);
@@ -56,12 +57,14 @@ function ticketEingang(nr, { ghJson: gh, ladeConfig }) {
   const owner = repo?.owner?.login;
   if (typeof owner !== "string" || owner === "") return { grund: "Repo-Besitzer nicht lesbar" };
   try {
-    const f = istFremdeingang(issue, owner, { config: ladeConfig() });
+    const config = ladeConfig();
+    const f = istFremdeingang(issue, owner, { config });
+    name = config?.sprache?.spezifikation?.pfade;
     if (f.fremdeingang) return { grund: `#${nr} ist ein Fremdeingang (${f.grund}): nicht ausgewertet` };
   } catch (e) {
     return { grund: `Fremdeingang-Prüfung nicht möglich: ${meldung(e)}` };
   }
-  const p = pfadeAusTicket(issue.body);
+  const p = pfadeAusTicket(issue.body, name);
   return p.fehler === null ? { pfade: p.pfade } : { grund: `Ticket #${nr}: ${p.fehler}` };
 }
 
