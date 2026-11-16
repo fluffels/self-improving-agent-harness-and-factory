@@ -642,6 +642,7 @@ describe("Skill-Pfad: die Umsetzung läuft im Umsetzer-Subagenten, nicht im Haup
       assert.ok(abnahme.includes(skript), `Secret-Key-Verbot im Body: ${skript}`);
     }
     assert.match(abnahme, /Anonymit/, "Anonymitätsregel im Body");
+    assert.match(abnahme, /keine internen Bezüge/, "Regel „keine internen Bezüge“ im Body (die Belege werden öffentlicher PR-Kommentar)");
     assert.match(read(ROUTING_SSOT), /### Holdout ohne Kontextdateien \(factory#551\)/);
   });
 
