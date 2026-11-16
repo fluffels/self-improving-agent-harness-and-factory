@@ -5,13 +5,12 @@
 // `description`-Zeilen der Skills und Agenten, die verteilt werden. Das ist die Größenordnung des festen Kontexts, keine Messung.
 import { CHARS_PER_TOKEN, commandsOf } from "./brain-metrics.mjs";
 import { istGanzeDatei, wirdVerteilt } from "./besitz-lib.mjs";
+import { relativeImporte } from "./besitz-extraktion.mjs";
 import { MODUL_STANDARD, modulGewaehlt } from "./modul-wahl-lib.mjs";
 import { profilGewaehlt } from "./profil-lib.mjs";
 import { istVorlage } from "./sync-abgleich-lib.mjs";
 
 const SKRIPT = /(?:^|\/)scripts\/([\w./-]+\.mjs)$/;
-/** Lokale Importe eines Quelltexts: statische `import`/`export … from` und `import("…")` mit relativem Literal. */
-const relativeImporte = (text) => [...String(text ?? "").matchAll(/(?:\bfrom\s+|\bimport\s*\(?\s*)["'](\.{1,2}\/[^"']+)["']/g)].map((m) => m[1]);
 
 const zaehle = (karte, name) => {
   if (typeof name === "string" && name !== "") karte[name] = (karte[name] ?? 0) + 1;
@@ -50,7 +49,7 @@ function aufgeloest(spec, von, besitz) {
     else if (t !== ".") teile.push(t);
   }
   const roh = teile.join("/");
-  return [roh, `${roh}.mjs`, `${roh}/index.mjs`].find((p) => besitz.has(p)) ?? null;
+  return [roh, `${roh}.mjs`, `${roh}.cjs`, `${roh}.js`, `${roh}/index.mjs`].find((p) => besitz.has(p)) ?? null;
 }
 
 /** Genutzte Skripte: direkt Aufgerufene und Einstiege plus alles, was davon (transitiv) importiert wird. `lies(pfad)` liefert den Text oder `null`. */
@@ -62,7 +61,7 @@ export function genutzteSkripte({ direkt, einstiege, besitzPfade, lies }) {
     const pfad = offen.pop();
     if (gesehen.has(pfad)) continue;
     gesehen.add(pfad);
-    for (const spec of relativeImporte(lies(pfad))) {
+    for (const spec of relativeImporte(lies(pfad) ?? "")) {
       const ziel = aufgeloest(spec, pfad, besitz);
       if (ziel !== null && !gesehen.has(ziel)) offen.push(ziel);
     }
@@ -106,7 +105,7 @@ export function formatiere({ aufrufe, ungenutzt, sessions }) {
   return out.join("\n");
 }
 
-/** Ungenutzte verteilte Einheiten: Skripte (nicht genutzt), Skills und Agenten (nicht per `Skill`/`Agent` aufgerufen und nicht von einem Genutzten genannt). */
+/** Ungenutzte verteilte Einheiten: Skripte (nicht genutzt), Skills und Agenten (kein `Skill`-/`Agent`-Aufruf im Transkript; ein Skill, den ein Agent nur liest, zählt als ungenutzt: Grenze der Zählung). */
 export function ungenutzteEinheiten({ eintraege, genutzt, aufrufe }) {
   const skripte = eintraege.filter((e) => istGanzeDatei(e) && /^scripts\/[\w./-]+\.mjs$/.test(e.pfad) && !genutzt.has(e.pfad)).map((e) => e.pfad);
   const skills = eintraege.filter((e) => /^\.agents\/skills\/[^/]+\/SKILL\.md$/.test(e.pfad)).map((e) => e.pfad.split("/")[2]).filter((n) => !(n in aufrufe.skills));

@@ -340,7 +340,7 @@ export function profilImportVerstoesse(eintraege: Eintrag[], lies: (pfad: string
 }
 
 /** Sicherheits-Regel des Profils (factory#519, AK4): jede Einheit der statischen Import-Hülle der `SICHERHEITS_EINSTIEGE` (profil-lib.mjs), die `profil` trägt, ist ein Verstoß
- *  (der Einstieg selbst eingeschlossen). Grenze: dynamische Importe und zur Laufzeit gebaute Pfade sieht die Hülle nicht. Abhilfe: `profil` entfernen. */
+ *  (der Einstieg selbst eingeschlossen). Aus Nicht-Code-Einstiegen (Workflows, Agenten, Skills, Hook-Dateien) folgt sie jedem genannten `scripts/<x>.mjs`, aus Code den statischen Importen. Grenze: dynamische Importe, `spawn` mit Skriptname und zur Laufzeit gebaute Pfade sieht die Hülle nicht. Abhilfe: `profil` entfernen. */
 export function profilSicherheitsVerstoesse(eintraege: Eintrag[], lies: (pfad: string) => string | null): string[] {
   const ganze = new Map(eintraege.filter((e) => istGanzeDatei(e)).map((e) => [e.pfad, e]));
   const offen = [...ganze.keys()].filter((p) => profilLib.istSicherheitsEinstieg(p));
@@ -349,12 +349,13 @@ export function profilSicherheitsVerstoesse(eintraege: Eintrag[], lies: (pfad: s
     const von = offen.pop() as string;
     if (huelle.has(von)) continue;
     huelle.add(von);
-    const text = CODE_ENDUNG.test(von) ? lies(von) : null;
+    const text = lies(von);
     if (text === null) continue;
-    for (const spec of relativeImporte(text)) {
-      const nach = kandidatenPfade(posix.normalize(posix.join(posix.dirname(von), spec))).find((q) => ganze.has(q));
-      if (nach !== undefined) offen.push(nach);
-    }
+    // Code: statische Importe. Alles andere (Workflow, Hook-Datei, Agent, Skill, settings.json): jedes genannte `scripts/<x>.mjs` (Aufruf aus Text).
+    const nachPfade = CODE_ENDUNG.test(von)
+      ? relativeImporte(text).map((spec) => kandidatenPfade(posix.normalize(posix.join(posix.dirname(von), spec))).find((q) => ganze.has(q)))
+      : [...text.matchAll(/scripts\/[\w./-]*[\w-]\.mjs/g)].map((m) => (ganze.has(m[0]) ? m[0] : undefined));
+    for (const nach of nachPfade) if (nach !== undefined) offen.push(nach);
   }
   return [...huelle].filter((p) => ganze.get(p)?.profil !== undefined).sort();
 }
@@ -908,6 +909,15 @@ describe("profilImportVerstoesse und profilSicherheitsVerstoesse (Profil, factor
     const e = [ein("scripts/check-x.mjs"), ein("scripts/mitte.mjs"), ein("scripts/tief.mjs", V)];
     const lies = mit({ "scripts/check-x.mjs": 'import { m } from "./mitte.mjs";', "scripts/mitte.mjs": 'import { t } from "./tief";' });
     assert.deepEqual(profilSicherheitsVerstoesse(e, lies), ["scripts/tief.mjs"]);
+  });
+  test("Negativfall: ein Workflow ruft ein Skript auf, das profil trägt, ist ein Verstoß (Aufruf aus Text)", () => {
+    const e = [ein(".github/workflows/x.yml"), ein("scripts/gate.mjs", V), ein("scripts/anderes.mjs", V)];
+    assert.deepEqual(profilSicherheitsVerstoesse(e, mit({ ".github/workflows/x.yml": "run: node scripts/gate.mjs --x" })), ["scripts/gate.mjs"]);
+  });
+  test("Negativfall: eine Agentendatei und ein Review-Skill rufen Skripte auf, die profil tragen", () => {
+    const e = [ein(".claude/agents/a.md"), ein("x/review-lenses/SKILL.md"), ein("scripts/g1.mjs", V), ein("scripts/g2.mjs", V)];
+    const lies = mit({ ".claude/agents/a.md": "node scripts/g1.mjs", "x/review-lenses/SKILL.md": "node scripts/g2.mjs" });
+    assert.deepEqual(profilSicherheitsVerstoesse(e, lies), ["scripts/g1.mjs", "scripts/g2.mjs"]);
   });
   test("profil an einer Einheit außerhalb der Hülle ist kein Verstoß", () => {
     assert.deepEqual(profilSicherheitsVerstoesse(E, mit({ "scripts/check-x.mjs": 'import { x } from "./lib.mjs";' })), []);

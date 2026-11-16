@@ -26,6 +26,7 @@ interface PlanArgs {
 }
 const sync = rawSync as unknown as { planeSync(a: PlanArgs): Plan };
 const pc = rawPc as unknown as { ladeProjektConfig(o: { rootDir: string }): unknown; ROLLEN_PFADE: Record<string, string>; PROJEKT_ROLLEN: string[] };
+const configLib = rawPc as unknown as { pruefeProjektConfig(w: unknown): string[] };
 const drift = rawDrift as unknown as { pruefeDrift(lies: (p: string) => string | null): { fehler: string[]; einheiten: number } };
 
 const WURZEL = fileURLToPath(new URL("../", import.meta.url));
@@ -122,6 +123,29 @@ describe("planeSync und Besitz-Profil", () => {
     expect(drift.pruefeDrift(lies(ohneSchluessel)).fehler.join("\n")).toContain(`${VOLL}: im Manifest, aber nicht im Sync-Stand`);
     const { [HOOK]: _weg, ...ohneHook } = dateien;
     expect(drift.pruefeDrift(lies(ohneHook)).fehler.join("\n")).toContain(`${HOOK}: Besitz fehlt`);
+  });
+  test("minimal meldet die Wahl, voll meldet nichts", () => {
+    const p = plane((c) => void (c.profil = "minimal"));
+    expect(p.meldungen.join("\n")).toContain("Profil: minimal (Wahl: profil in .factory/projekt.json)");
+  });
+  test("pruefeProjektConfig meldet einen ungültigen Profilnamen mit Fix", () => {
+    const c = JSON.parse(configText((x) => void (x.profil = "klein"))) as unknown;
+    expect(configLib.pruefeProjektConfig(c).join("\n")).toMatch(/profil.*Fix:/s);
+    expect(configLib.pruefeProjektConfig(JSON.parse(configText(() => undefined)) as unknown).join("\n")).not.toContain("profil muss");
+  });
+  test("Drift: ein ungültiger Profilname ist ein Fehler mit Fix und gilt wie voll (fail-closed)", () => {
+    const voll = plane(() => undefined);
+    const dateien: Record<string, string> = { ...anwenden(voll, {}), ".factory/projekt.json": configText((c) => void (c.profil = "klein")) };
+    const f = drift.pruefeDrift((pfad) => dateien[pfad] ?? null).fehler.join("\n");
+    expect(f).toMatch(/Profil-Wahl:.*Fix:/s);
+    const { [VOLL]: _weg, ...ohneVoll } = dateien;
+    expect(drift.pruefeDrift((pfad) => ohneVoll[pfad] ?? null).fehler.join("\n")).toContain(`${VOLL}: Besitz fehlt`);
+  });
+  test("Drift: eine unlesbare Config gilt wie voll, die fehlende voll-Datei ist rot", () => {
+    const voll = plane(() => undefined);
+    const { [VOLL]: _weg, ...ohneVoll } = anwenden(voll, {});
+    const dateien: Record<string, string> = { ...ohneVoll, ".factory/projekt.json": "{kaputt" };
+    expect(drift.pruefeDrift((pfad) => dateien[pfad] ?? null).fehler.join("\n")).toContain(`${VOLL}: Besitz fehlt`);
   });
   test("Drift: eine voll-Einheit im Sync-Stand bei Profil minimal ist rot mit Weg (neu syncen)", () => {
     const voll = plane(() => undefined);

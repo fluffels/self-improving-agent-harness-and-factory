@@ -3,7 +3,7 @@
 // Wählt ein Bezieher `"profil": "minimal"`, entfallen die Einheiten mit `profil: "voll"`; Einheiten ohne das Feld gehören immer zum Minimalprofil. Gelöscht wird im Ziel nie etwas.
 // Sicherheit: kein Sicherheits-Gate und kein Sicherheits-Hook darf `profil` tragen, auch nicht über etwas, das er importiert. Die geschlossene Liste `SICHERHEITS_EINSTIEGE`
 // nennt die Einstiege (Muster mit `*` für ein Pfadsegment, `**` für beliebig tief); der Wächter in `test/harness/kern-reinheit.test.ts` bildet ihre statische Import-Hülle
-// und meldet jede Einheit darin, die `profil` trägt. Grenze: dynamische Importe und zur Laufzeit gebaute Pfade sieht die Hülle nicht; neue Sicherheits-Skripte müssen ins Muster passen oder hier ergänzt werden.
+// und meldet jede Einheit darin, die `profil` trägt. Aus Nicht-Code-Einstiegen (Workflows, Agenten, Skills, Hook-Dateien) folgt sie jedem genannten `scripts/<x>.mjs`, aus Code den statischen Importen. Grenze: dynamische Importe, `spawn` mit Skriptname und zur Laufzeit gebaute Pfade sieht die Hülle nicht; neue Sicherheits-Skripte müssen ins Muster passen oder hier ergänzt werden.
 
 /** Wählbare Profile; `voll` ist der Stand vor factory#519. */
 export const PROFILE = ["voll", "minimal"];
@@ -18,6 +18,7 @@ export const SICHERHEITS_EINSTIEGE = [
   ".claude/agents/*",
   "**/review-lenses/**", // die Review-Skills (der Skill-Ordner steht als Literal nur in skill-pfade.mjs)
   ".github/workflows/*",
+  ".githooks/*",
   "scripts/pretooluse-hook.mjs",
   "scripts/stop-verify-hook.mjs",
   "scripts/haupt-sync.mjs",

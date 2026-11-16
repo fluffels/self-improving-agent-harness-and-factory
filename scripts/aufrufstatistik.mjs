@@ -9,7 +9,7 @@ import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
 import { toolEventsFromTranscript } from "./brain-metrics.mjs";
 import { ladeSessions } from "./transkript.mjs";
 import { manifestAusText, MANIFEST_PFAD } from "./besitz-lib.mjs";
-import { aufrufeAusEvents, footprint, formatiere, genutzteSkripte, skripteImText, summiere, ungenutzteEinheiten } from "./aufrufstatistik-lib.mjs";
+import { aufrufeAusEvents, footprint, formatiere, genutzteSkripte, skripteImText, summiere, ungenutzteEinheiten, verteilteEinheiten } from "./aufrufstatistik-lib.mjs";
 
 const ISO_TAG = /^\d{4}-\d{2}-\d{2}$/;
 const EINSTIEG_QUELLEN = [".claude/settings.json", "package.json"];
@@ -57,7 +57,7 @@ function statistik({ transkripte, seit }, wurzel, eintraege, lies) {
   const { aufrufe, sessions } = zaehleOrdner(transkripte, seit);
   const einstiege = [...EINSTIEG_QUELLEN, ...dateienIn(wurzel, ".github/workflows"), ...dateienIn(wurzel, ".githooks"), ...dateienIn(wurzel, ".claude/agents")].flatMap((p) => skripteImText(lies(p)));
   const genutzt = genutzteSkripte({ direkt: Object.keys(aufrufe.skripte), einstiege, besitzPfade: eintraege.map((e) => e.pfad), lies });
-  return { sessions, aufrufe, ungenutzt: ungenutzteEinheiten({ eintraege, genutzt, aufrufe }) };
+  return { sessions, aufrufe, ungenutzt: ungenutzteEinheiten({ eintraege: verteilteEinheiten(eintraege, "voll"), genutzt, aufrufe }) };
 }
 
 /** Kommandozeile; Rückgabe = Exit-Code. */

@@ -89,6 +89,12 @@ describe("Sicherheits-Einstiege", () => {
   test.each(["scripts/pretooluse-hook.mjs", "scripts/check-arch.mjs", "scripts/risikostufe-lib.mjs", ".github/workflows/ci.yml", "x/review-lenses/SKILL.md", ".claude/agents/rolle.md"])("%s ist Einstieg", (p) => {
     expect(lib.istSicherheitsEinstieg(p)).toBe(true);
   });
+  test.each([".agents/skills/review-lenses/brille-x.md", ".githooks/post-commit"])("%s ist Einstieg (tiefer Pfad)", (p) => {
+    expect(lib.istSicherheitsEinstieg(p)).toBe(true);
+  });
+  test.each(["scripts/sub/check-x.mjs", "x/scripts/check-a.mjs", "scripts/check-a.mjs.bak", "scripts/check-aXmjs"])("%s ist kein Einstieg (Muster verankert, * nur ein Segment)", (p) => {
+    expect(lib.istSicherheitsEinstieg(p)).toBe(false);
+  });
   test.each(["scripts/cockpit.mjs", "scripts/codex-lib.mjs", "docs/x.md"])("%s ist kein Einstieg", (p) => {
     expect(lib.istSicherheitsEinstieg(p)).toBe(false);
   });

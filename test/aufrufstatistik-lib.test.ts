@@ -81,6 +81,8 @@ describe("footprint und ungenutzteEinheiten", () => {
   test("ungenutzt: Skripte ohne Aufruf, Skills und Agenten ohne Aufruf", () => {
     const u = lib.ungenutzteEinheiten({ eintraege: E, genutzt: new Set(["scripts/k.mjs"]), aufrufe: { skripte: {}, skills: {}, agenten: { "ag": 1 } } });
     expect(u).toEqual(["scripts/v.mjs", "skill:s"]);
+    const mitSkill = lib.ungenutzteEinheiten({ eintraege: E, genutzt: new Set(["scripts/k.mjs"]), aufrufe: { skripte: {}, skills: { s: 1 }, agenten: { ag: 1 } } });
+    expect(mitSkill).toEqual(["scripts/v.mjs"]);
   });
 });
 
@@ -126,6 +128,19 @@ describe("CLI", () => {
     expect(neu.out).toContain("Sessions: 1");
     expect(neu.out).toMatch(/UNGENUTZT:\n\s+scripts\/b\.mjs/);
     expect(neu.out).not.toMatch(/ungenutzt:[\s\S]*scripts\/hook\.mjs/i);
+  });
+  test("--footprint allein misst ohne Transkripte; Subagenten-Events zählen mit, ein aufgerufener Skill ist nicht ungenutzt", () => {
+    const { wurzel, t } = fixture();
+    const nur = lauf(["--footprint"], wurzel);
+    expect(nur.code).toBe(0);
+    expect(nur.out).toMatch(/Footprint voll: 3 Dateien/);
+    expect(nur.out).not.toContain("UNGENUTZT");
+    const sub = join(t, "sess");
+    mkdirSync(join(sub, "subagents"), { recursive: true });
+    writeFileSync(join(t, "sess.jsonl"), zeile("Bash", { command: "echo" }, "t9") + "\n");
+    writeFileSync(join(sub, "subagents", "a.jsonl"), zeile("Bash", { command: "node scripts/hook.mjs" }, "t8") + "\n");
+    const j = JSON.parse(lauf(["--transkripte", t, "--json"], wurzel).out) as { aufrufe: Zaehlung };
+    expect(j.aufrufe.skripte["scripts/hook.mjs"]).toBe(1);
   });
   test("--json und --footprint", () => {
     const { wurzel, t } = fixture();
