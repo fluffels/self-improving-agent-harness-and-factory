@@ -1192,6 +1192,11 @@
       "grund": "Gegenstand ist Besitz"
     },
     {
+      "muster": "test/code-analyse*.test.ts",
+      "art": "kern-test",
+      "grund": "Gegenstand ist Besitz"
+    },
+    {
       "muster": "test/sicherheitspruefung*.test.ts",
       "art": "kern-test",
       "grund": "Gegenstand ist Besitz (Familie)"
