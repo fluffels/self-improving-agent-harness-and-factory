@@ -30,7 +30,7 @@ const W = libRaw as unknown as {
   wochenFenster: (m: string) => { von: string; bis: string; vorVon: string; vorBis: string };
   letzteVolleWoche: (d: Date) => string;
   projektFilterAus: (o: { tags?: string[]; repoName: string; environment?: string }) => { filter: unknown; vermerk: string | null };
-  wochenRezept: (o: { montag: string; jetzt: string; rollen?: string[]; projektFilter: unknown }) => Rez[];
+  wochenRezept: (o: { montag: string; jetzt: string; rollen?: string[]; projektFilter: unknown; repoTags?: string[] }) => Rez[];
   erfassungsprobe: (o: { sessionsW: unknown[]; sessionsV: unknown[]; scores: unknown[] }) => Record<string, number | null>;
   urteil: (s: Record<string, number> | undefined, i: Ist) => Urteil;
 };
@@ -164,6 +164,12 @@ describe("Projektfilter und Rezept", () => {
     expect(t.filter).toEqual({ column: "tags", operator: "any of", value: ["factory", "repo", "project:repo"], type: "arrayOptions" });
     expect(t.vermerk).toBe("nachgelieferte Calls ohne Tag fehlen");
     expect(W.projektFilterAus({ repoName: "repo", environment: "proj" })).toEqual({ filter: { column: "environment", operator: "=", value: "proj", type: "string" }, vermerk: null });
+  });
+  test("wochenRezept mit repoTags enthält den Export repo je Tag (sonst stünde jede Generation als „ohne Repo-Tag“ im Bericht, factory#523)", () => {
+    const ohne = W.wochenRezept({ montag: MONTAG, jetzt: JETZT.toISOString(), projektFilter: PF });
+    expect(ohne.some((r: { art: string }) => r.art === "repo")).toBe(false);
+    const mit = W.wochenRezept({ montag: MONTAG, jetzt: JETZT.toISOString(), projektFilter: PF, repoTags: ["repo"] });
+    expect(mit.filter((r: { art: string }) => r.art === "repo")).toHaveLength(1);
   });
   test("wochenRezept: Projektfilter in jeder observations-Abfrage, Fenster für Vorwoche und Scores", () => {
     const rez = W.wochenRezept({ montag: MONTAG, jetzt: JETZT.toISOString(), projektFilter: PF });
@@ -508,6 +514,7 @@ describe("Verdrahtung und Guards (Runde 1)", () => {
     for (const x of rez.filter((y) => y.abfrage.view === "observations")) expect(x.abfrage.filters).toContainEqual(PF);
     const rollen = rez.filter((x) => x.art === "metadaten").flatMap((x) => x.abfrage.filters.map((y) => (y as { value?: string }).value));
     expect(rollen).toContain("sonderrolle");
+    expect(rez.filter((x) => x.art === "repo").map((x) => x.name)).toEqual([`repo ${PROJEKT.repo}`]); // die CLI übergibt das Repo des Projekts, nicht den Owner (factory#523)
   });
   test("Exit 4 ohne --ablegen schreibt nichts und gibt ohne --json keinen stdout aus", async () => {
     const home = tmp();

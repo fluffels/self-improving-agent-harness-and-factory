@@ -63,9 +63,9 @@ export function projektFilterAus({ tags = [], repoName, environment }) {
 // ── Rezept ───────────────────────────────────────────────────────────────────
 
 /** Alle Abfragen der Woche (`{ art, name, abfrage }`); `jetzt` begrenzt das Fenster der Scores. */
-export function wochenRezept({ montag, jetzt, rollen = [], projektFilter }) {
+export function wochenRezept({ montag, jetzt, rollen = [], projektFilter, repoTags = [] }) {
   const f = wochenFenster(montag);
-  const basis = rezept({ von: f.von, bis: f.bis, rollen, projektFilter });
+  const basis = rezept({ von: f.von, bis: f.bis, rollen, projektFilter, repoTags });
   const vor = rezept({ von: f.vorVon, bis: f.vorBis, rollen, projektFilter }).find((r) => r.art === "gesamt");
   const sessions = (von, bis, name) => ({
     art: "sessions",

@@ -128,7 +128,7 @@ function keinBericht(args, deps, p, montag, status, grund) {
 /** Abfragerezepte der Woche: Agentenrollen aus dem Repo plus `--rolle`, Projektfilter eingesetzt. */
 function rezepteVon(args, deps, p, montag, jetzt, filter) {
   const rollen = [...agentenNamen(deps.agenten ?? join(p.wurzel, ".claude", "agents")), ...args.rollen];
-  return wochenRezept({ montag, jetzt: jetzt.toISOString(), rollen, projektFilter: filter });
+  return wochenRezept({ montag, jetzt: jetzt.toISOString(), rollen, projektFilter: filter, repoTags: [p.repo] }); // Repo-Export (factory#523): sonst stünde jede Generation als „ohne Repo-Tag“ im Bericht
 }
 
 function rezeptAusgeben(args, deps, p, montag, jetzt) {

@@ -1245,6 +1245,11 @@
       "muster": "test/fixtures/aenderungsregister/*.json",
       "art": "fixture",
       "grund": "Fixtures der Wirkungsprüfung (factory#572), nur von projekt-test genutzt"
+    },
+    {
+      "muster": "test/harness/repo-tag-fabrik.test.ts",
+      "art": "projekt-test",
+      "grund": "Prüft das Repo-Tag in den Settings der Fabrik (env der .claude/settings.json steht nicht im Besitz; Bezieher prüft der Harness-Doctor)"
     }
   ]
 }
