@@ -5,7 +5,7 @@
 // Geschrieben wird nur mit dem Standard-`GH_TOKEN` (`github.token`): `gh issue create --repo <eigenes>` und danach `platziereAmEnde` (ohne PROJECT_TOKEN nur eine Warnung). Weicht `GITHUB_REPOSITORY`
 // vom Repo der Projekt-Config ab, endet der Lauf mit Exit 1 vor jedem Schreibaufruf. Ist schon ein Takt-Ticket offen, kommt nur eine Log-Zeile. Ist das Refactoring-Ticket abgeschaltet
 // (`labels.refactoring: false`, oder Fabrik/ohne Schlüssel im Nicht-Bezieher), trägt das Ticket nur die Sicherheitsanalyse und weist den Code-Teil als abgeschaltet aus.
-// Exit: 0 normal, 1 Lauf- oder Schreibfehler (auch ≥ 1000 offene Issues: fail-closed), 2 Aufruf- oder Config-Fehler. Mechanik: docs/ticket-reihenfolge.md § Code-Analyse.
+// Exit: 0 normal, 1 Lauf- oder Schreibfehler (auch ≥ 1000 offene Issues: fail-closed), 2 Aufruf- oder Config-Fehler. Mechanik: docs/ticket-reihenfolge.md (Fabrik) § Code-Analyse (Monatslauf, factory#596).
 import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { entscheide, istTicket, ticketText, titel } from "./code-analyse-lib.mjs";

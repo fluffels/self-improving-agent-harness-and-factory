@@ -28,7 +28,7 @@ const CODE_ABSCHNITT = [
   "## Code (Refactoring)",
   "",
   "Prüfe nacheinander die Kategorien **Refactoring**, **Duplikate**, **Komplexität** und **Testlücken** im eigenen Repo (lesen, kein Messlauf, keine neuen Werkzeuge).",
-  `Melde je Fund eine Zeile: \`node scripts/melden.mjs --ziel refactoring --zeile "<Klasse>: … Beleg: …"\` (Klassen und Beleg: docs/ticket-reihenfolge.md § Sammelticket-Mechanik). Höchstens ${ZEILEN_DECKEL} Zeilen je Lauf; ohne Beleg keine Zeile.`,
+  `Melde je Fund eine Zeile: \`node scripts/melden.mjs --ziel refactoring --zeile "<Klasse>: … Beleg: …"\` (Klassen und Beleg: docs/ticket-reihenfolge.md (Fabrik) § Sammelticket-Mechanik). Höchstens ${ZEILEN_DECKEL} Zeilen je Lauf; ohne Beleg keine Zeile.`,
 ];
 
 const SICHERHEIT_ABSCHNITT = [
@@ -41,5 +41,5 @@ const SICHERHEIT_ABSCHNITT = [
 /** Markdown-Body des Takt-Tickets (der Abarbeitungs-Ablauf). Mit `refactoring.an === false` entfällt der Code-Abschnitt (Zeile `Code-Teil: abgeschaltet`), die Sicherheitsanalyse bleibt. Pur und deterministisch. */
 export function ticketText({ datum, refactoring }) {
   const code = refactoring?.an === false ? ["## Code (Refactoring)", "", `Code-Teil: abgeschaltet (${refactoring.quelle === "aus" ? "labels.refactoring: false" : "kein Schlüssel labels.refactoring und kein Bezieher"})`] : CODE_ABSCHNITT;
-  return [MARKER, `Monatliche Code- und Sicherheitsanalyse (${String(datum).slice(0, 10)}). Arbeite das Ticket in einem normalen Agentenlauf ab und schließe es danach; ein offenes Ticket unterdrückt neue Läufe. Mechanik: docs/ticket-reihenfolge.md § Code-Analyse.`, "", ...code, "", ...SICHERHEIT_ABSCHNITT].join("\n");
+  return [MARKER, `Monatliche Code- und Sicherheitsanalyse (${String(datum).slice(0, 10)}). Arbeite das Ticket in einem normalen Agentenlauf ab und schließe es danach; ein offenes Ticket unterdrückt neue Läufe. Mechanik: docs/ticket-reihenfolge.md (Fabrik) § Code-Analyse.`, "", ...code, "", ...SICHERHEIT_ABSCHNITT].join("\n");
 }
