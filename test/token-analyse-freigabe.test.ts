@@ -94,7 +94,7 @@ describe("Allowlist lesender Befehle", () => {
     expect(pr(["wc", "-l", "a.txt"]).ok).toBe(true);
     expect(pr(["wc", "-l", join(wurzel, "a.txt")]).ok).toBe(true);
   });
-  const gitRest = [["fetch"], ["status"], ["remote", "-v"], ["config", "--list"], ["worktree", "list"], ["log", "--output=x"], ["log", "-o"], ["log", "-c", "x"], ["log", "--exec=x"], ["log", "--upload-pack=x"], ["log", "--config-env=a=b"], ["log", "--open-files-in-pager"], ["log", "--git-dir=/x"], ["log", "--work-tree=/x"], ["show", "--ext-diff"], ["show", "--textconv"], ["log", "-p", "-O/etc/passwd"]];
+  const gitRest = [["fetch"], ["status"], ["remote", "-v"], ["config", "--list"], ["worktree", "list"], ["log", "--output=x"], ["log", "-o"], ["log", "-c", "x"], ["log", "--exec=x"], ["log", "--upload-pack=x"], ["log", "--config-env=a=b"], ["log", "--open-files-in-pager"], ["log", "--git-dir=/x"], ["log", "--work-tree=/x"], ["log", "--namespace=x"], ["show", "--ext-diff"], ["show", "--textconv"], ["log", "-p", "-O/etc/passwd"]];
   const faelle = (wurzel: string, beta: string): [string, unknown][] => [
     ...gitRest.map((r): [string, unknown] => [r.join(" "), ["git", "-C", wurzel, ...r]]),
     ["-c vor -C", ["git", "-c", "core.pager=x", "-C", wurzel, "log"]],
@@ -257,9 +257,9 @@ describe("Ablage", () => {
     expect(md).toContain("| Bezieher 1: Dateien | 3 | 5 | +2 |");
     expect(readFileSync(join(s.root, "privat", "ablage", "analyse-2026-11-16.md"), "utf8")).toContain("erster Schnappschuss");
   });
-  test("ein Verzeichnisname aus der Liste in den Kennzahlen: Abbruch, nichts geschrieben", () => {
-    const s = welt((w) => `${w.alpha}\n`);
-    const r = cli.cli(["ablegen", "--eingabe", eingabe(s.root, { "geheim-alpha: Dateien": 3 })], s.env, s.deps);
+  test("ein Verzeichnisname aus der Liste in den Kennzahlen (Großschreibung, Schrägstrich am Listenende): Abbruch, nichts geschrieben", () => {
+    const s = welt((w) => `${w.alpha}/\n`);
+    const r = cli.cli(["ablegen", "--eingabe", eingabe(s.root, { "GEHEIM-ALPHA: Dateien": 3 })], s.env, s.deps);
     expect(r.code).toBe(1);
     expect(r.zeilen.join()).not.toMatch(/geheim/);
     expect(existsSync(join(s.root, "privat", "ablage", "analyse-2026-11-16.json"))).toBe(false);
@@ -346,10 +346,10 @@ describe("Analyse-Schnappschuss (Format)", () => {
     expect(md({ A: 1 }, null)).toContain("| A | erster Schnappschuss | 1 | – |");
   });
   test("letzterSchnappschuss und schnappschussName: Datum, Laufnummer, fremde Dateien ignoriert", () => {
-    const n = ["analyse-2026-11-16-10.json", "analyse-2026-11-16.json", "analyse-2026-11-15.json", "analyse-2026-11-16-2.json", "analyse-2026-11-16.md", "notiz.json"];
-    expect(lib.letzterSchnappschuss(n)).toBe("analyse-2026-11-16-10.json");
+    const n = ["analyse-2026-11-16-10.json", "analyse-2026-11-16.json", "analyse-2026-11-15.json", "analyse-2026-11-16-2.json", "analyse-2026-11-17.json", "notiz.json"];
+    expect(lib.letzterSchnappschuss(n)).toBe("analyse-2026-11-17.json");
     expect(lib.letzterSchnappschuss(["x.json"])).toBeNull();
-    expect(lib.schnappschussName("2026-11-17", n)).toBe("analyse-2026-11-17");
+    expect(lib.schnappschussName("2026-11-17", n)).toBe("analyse-2026-11-17-2");
     expect(lib.schnappschussName("2026-11-16", n)).toBe("analyse-2026-11-16-11");
     expect(lib.schnappschussName("2026-11-15", n)).toBe("analyse-2026-11-15-2");
     expect(() => lib.schnappschussName("heute", n)).toThrow();
