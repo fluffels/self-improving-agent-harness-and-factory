@@ -295,6 +295,17 @@ describe("Bericht", () => {
     const b = rep(exp("gesamt", [...gesamtRows, g("Claude Code Turn", "Subagent LLM Call", "claude", "repoA", 7, 0)]), tageVoll);
     expect(b.modell.zeilen.find((z) => z.name === "claude")).toMatchObject({ count: 7, cost: 0 });
   });
+  test("Modell <synthetic> zählt nicht (wie in Dashboards und Transkript, factory#583), claude-* bleibt gezählt", () => {
+    const synth = g("Claude Code Turn", "Subagent LLM Call", "<synthetic>", "repoA", 1, 0);
+    const echt = g("Claude Code Turn", "Subagent LLM Call", "claude-neu-9", "repoA", 3, 2);
+    const b = rep(exp("gesamt", [...gesamtRows, synth, echt]), tageVoll);
+    expect(b.modell.zeilen.map((z) => z.name)).not.toContain("<synthetic>");
+    expect(b.modell.zeilen.find((z) => z.name === "claude-neu-9")).toMatchObject({ count: 3 });
+    expect(rep(exp("gesamt", gesamtRows), tageVoll).bereinigt.count + 3).toBe(b.bereinigt.count);
+    // der Kontroll-Export `leer` führt die Zeile ebenfalls, ohne dass die Kontrolle anschlägt
+    const mitKontrolle = rep(exp("gesamt", [...gesamtRows, synth]), tageVoll, leerVon([...gesamtRows, synth], { count: 42, tokens: 0 }));
+    expect(mitKontrolle.luecken.join("\n")).not.toMatch(/Kontrolle leere Hook-Generations/);
+  });
   test("Determinismus: vertauschte Export- und Zeilenreihenfolge ergibt dieselbe Ausgabe", () => {
     const a = rep(...basis, ...alleRollen, ...alleEfforts);
     const rev = (e: { data: unknown[] }) => ({ ...e, data: [...e.data].reverse() });

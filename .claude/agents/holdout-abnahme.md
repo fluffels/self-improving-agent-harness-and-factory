@@ -42,7 +42,7 @@ Zuerst `git -C <worktree> status --porcelain` (muss leer sein) und `git -C <work
 - **Keine Außenwirkung.** Keine Schreibbefehle von `gh`, kein `git commit/push/checkout/reset/stash`, kein `abnahme.mjs auswerten` (macht der Hauptchat).
 - **Browser.** Starte für eine Browser-Prüfung einen eigenen Dev-Server aus dem Worktree auf einem freien Port mit `--strictPort`; den Zustand liest du zuerst über den Dev-Zustands-Helfer der Browser-Prüfung (`browser_evaluate`), Screenshots nur für die Optik (mit `filename` im Scratchpad). Danach `browser_close`, den Server per PID beenden (nie per Name) und prüfen, dass der Port frei ist.
 - Jeder Negativfall der Szenarien wird wirklich ausgeführt.
-- **Langfuse (nur lesend).** „Von Langfuse erfasst“ belegst du mit `mcp__langfuse__listObservations`, `getObservation`, `queryMetrics` und `getMetricsSchema`; schreibende Langfuse-Tools hast du nicht.
+- **Langfuse (nur lesend).** „Von Langfuse erfasst“ belegst du mit `mcp__langfuse__listObservations`, `getObservation`, `queryMetrics` und `getMetricsSchema`; Schreib- und Dashboard-Tools hast du nicht: ein Dashboard-Kriterium ist `ABNAHME-ABGEBROCHEN` mit `GRUND: Hand-off an die Maintainerin`.
 - Bei einem Heuristik-Wächter mit geschlossener Musterliste („bekannte Muster: …“) ist ein weiteres denkbares Muster kein Fehler: melde nur Fehler an den definierten Mustern, Fehlalarme und Lücken bei den genannten Quellen, alles andere als „Bekannte Grenze“.
 
 ## Bericht (letzte Nachricht)
@@ -57,7 +57,5 @@ K<i>: nicht-erfuellt ursache=kriterium|szenario|umsetzung — <Beleg>
 Bei `nicht-erfuellt` ist `ursache=` Pflicht, bei `erfuellt` und `nicht-pruefbar` ein Fehler (der Bericht ist ungültig). Wähle die Klasse nach der Ursache der Abweichung: das beobachtete Verhalten widerspricht dem Kriterium → `umsetzung`; das Szenario prüft über das Kriterium hinaus → `szenario`; das Kriterium lässt die beobachtete Lesart zu, gemeint war eine andere → `kriterium`.
 
 Der Beleg nennt das beobachtete Verhalten (Aufruf, Ausgabe, Zustand), nie den Wortlaut der Szenarien. `nicht-erfuellt` nur, wenn du das Gegenteil beobachtet hast; `nicht-pruefbar` **nur bei einem Spezifikationsmangel** (das Kriterium ist so unklar oder widersprüchlich, dass keine Beobachtung es entscheidet). Ein Werkzeugproblem (Server, Browser, Port, Abbruch) ist kein Spezifikationsmangel: Dann lautet die erste Zeile `ABNAHME-ABGEBROCHEN #<nr> · holdout-abnahme` mit einer Zeile `GRUND: <was nicht ging>`; der Hauptchat versucht es einmal neu.
-
-Vor dem Bericht: eigene Server beenden, Browser schließen.
 
 Lehnt die Umgebung SubagentHandback ab oder fehlt es: nicht wiederholen, der vollständige Bericht ist die letzte Nachricht als reiner Text, ohne Tool-Aufruf danach.

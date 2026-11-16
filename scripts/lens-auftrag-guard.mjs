@@ -16,7 +16,7 @@
  *  R4  ein Pfadsegment `<worktree-präfix><nr>-lens-<x>` (Lauf ohne Ticket: `<worktree-präfix><slug>-lens-<x>`) mit Ziffer oder Platzhalter hinter dem Buchstaben trägt eine unbekannte Endung `<x>`
  *      (erlaubt sind die Endungen aus `lensNameKern` in `ticket-namen.mjs`: r, m, a, c; ein Delta-Auftrag mit `-lens-b<n>` scheiterte erst am Lens-Edit-Guard).
  *  R5  der Prompt beginnt nicht mit `Brille: <Schlüssel>` mit einem Schlüssel aus `BEKANNTE_LENSES`, exakt wie dort geschrieben (die Lens baut daraus den Dateinamen `brille-<Schlüssel>.md`, ein Git-Pfad kennt keine Groß-/Kleinschreibung-Toleranz); sonst wüsste die Lens nicht, welche Brillen-Datei sie lesen soll.
- *  R6  ein Pfadsegment `<worktree-präfix><nr>-lens-r<k>` mit k über MAX_REVIEW_PAESSE (nachweis-lib.mjs) ohne das Kopf-Feld `Zusatzpass: <Brille>:<Prüfpunkt> · Entscheidung: <X>, weil <Y>` (factory#534; ein Pass über dem Cap braucht die dokumentierte Entscheidung; Format und Abhilfe: `review-lenses/ablauf-zusatzpass.md`).
+ *  R6  ein Pfadsegment `<worktree-präfix><nr>-lens-r<k>` mit k über dem Cap (MAX_REVIEW_PAESSE, bei Stufe 1 MAX_REVIEW_PAESSE_STUFE1; nachweis-lib.mjs) ohne das Kopf-Feld `Zusatzpass: <Brille>:<Prüfpunkt> · Entscheidung: <X>, weil <Y>` (factory#534; ein Pass über dem Cap braucht die dokumentierte Entscheidung; Format und Abhilfe: `review-lenses/ablauf-zusatzpass.md`).
  * Fehlende andere Felder bleiben Sache der Lens-Definition (unter `.claude/agents/`).
  * Ist die Projekt-Config nicht nutzbar, lehnt der Guard jeden Spawn ab (fail-closed, Meldung mit Fix-Zeile), auch einen Nicht-Lens-Spawn: ob es eine Lens ist, weiß er dann nicht.
  *
@@ -24,12 +24,14 @@
  *  - Die Feldnamen stehen hier einmal und in der Spawn-Vorlage des Skills `review-lenses` (benennt jemand sie um, öffnet der Guard still, fail-open).
  *  - Ausgewertet wird je Feld der letzte Treffer im Prompt; die Brille zählt nur am Prompt-Anfang (erster Treffer).
  *  - R4 sieht nur Segmente, deren Buchstabe direkt von Ziffer oder `<…>` gefolgt wird und das Worktree-Präfix der Config am Wortanfang trägt (Lookbehind, hält die Suche linear); ein Pfad mit Leerzeichen oder anderer Schreibweise (`-lens-b` ohne Zähler) bleibt unerkannt.
- *  - R6 sperrt nur den Review-Worktree `-lens-r<k>-` (wie das Ticket es verlangt); die Delta-Worktrees `-lens-m/a/c<n>` (Merge-, Abnahme-, CI-Fix-Delta) und ein Platzhalter `r<runde>` bleiben offen. Der Guard kennt die Risikostufe nicht (bei Stufe 1 ist schon `-lens-r3-` ein Pass über dem Cap, R6 sperrt erst ab r4). Den Rest fängt die CI: `check-review-nachweis` gleicht `runden` mit den Commit-Zeilen `Runde <n>:` und `Zusatzpass:` ab. Die Sperre prüft nur, dass eine Entscheidung dasteht, nicht ihren Inhalt; unter Codex läuft sie über denselben Adapter unbeobachtet (docs/codex/einstieg.md).
+ *  - R6 sperrt nur den Review-Worktree `-lens-r<k>-` (wie das Ticket es verlangt); die Delta-Worktrees `-lens-m/a/c<n>` (Merge-, Abnahme-, CI-Fix-Delta) und ein Platzhalter `r<runde>` bleiben offen. Bei k über MAX_REVIEW_PAESSE_STUFE1 bestimmt der Guard die Risikostufe selbst (Kindprozess `risikostufe.mjs --json` im Feature-Worktree (der Lens-Worktree existiert beim Spawn noch nicht) aus `Arbeitsverzeichnis:`, nur unter `.claude/worktrees/` und ohne `..`, nicht gegen die Projektwurzel gebunden und ohne `realpath`; Stufe ≤ 1: Cap MAX_REVIEW_PAESSE_STUFE1, schon `-lens-r3-` braucht das Feld, factory#583); ist die Stufe nicht bestimmbar, gilt MAX_REVIEW_PAESSE wie bisher. Den Rest fängt die CI: `check-review-nachweis` gleicht `runden` mit den Commit-Zeilen `Runde <n>:` und `Zusatzpass:` ab. Die Sperre prüft nur, dass eine Entscheidung dasteht, nicht ihren Inhalt; unter Codex läuft sie über denselben Adapter unbeobachtet (docs/codex/einstieg.md).
  *
- * Reines Node-Skript (nur Builtins), pure Funktionen.
+ * Node-Skript (nur Builtins); die Prüfungen sind pur, außer R6: sie startet bei k über dem Stufe-1-Cap einen Kindprozess (`risikostufe.mjs`, Timeout 20 s).
  */
+import { execFileSync } from "node:child_process";
 import { basename } from "node:path";
-import { BEKANNTE_LENSES, HEX_HEAD, MAX_REVIEW_PAESSE, zusatzpassKopfAus } from "./nachweis-lib.mjs";
+import { fileURLToPath } from "node:url";
+import { BEKANNTE_LENSES, HEX_HEAD, MAX_REVIEW_PAESSE, MAX_REVIEW_PAESSE_STUFE1, zusatzpassKopfAus } from "./nachweis-lib.mjs";
 import { escapeRegex } from "./regex-lib.mjs";
 import { ROLLEN_PFADE } from "./projekt-config-lib.mjs";
 import { namenOderGrund } from "./ticket-namen.mjs";
@@ -113,15 +115,44 @@ function platzhalterGrund(felder) {
   return null;
 }
 
-/** R6: Grund, wenn ein Review-Worktree `-lens-r<k>` mit k > MAX_REVIEW_PAESSE im Prompt steht und das Kopf-Feld `Zusatzpass:` fehlt oder unvollständig ist; sonst `null`. Das höchste k zählt, ein Platzhalter nicht. Pur. */
-function zusatzpassGrund(text, namen) {
-  const ks = [...lensSegmente(text, namen)].map(([segment]) => /-lens-r(\d+)(?!\d)/.exec(segment)?.[1]).filter((k) => k !== undefined).map(Number);
-  const k = Math.max(0, ...ks);
-  if (k <= MAX_REVIEW_PAESSE || zusatzpassKopfAus(text)) return null;
-  return `Lens-Auftrag ohne Zusatzpass-Entscheidung: der Lens-Worktree trägt Runde ${k}, das Cap liegt bei ${MAX_REVIEW_PAESSE} Pässen. Ein Pass darüber braucht im Kopf das Feld „Zusatzpass: <Brille>:<Prüfpunkt> · Entscheidung: <X>, weil <Y>“ (alle Teile ausgefüllt, Brille als Schlüssel oder Anzeigename aus ${BEKANNTE_LENSES.join(", ")}) und einen Vorpass-Fund der Schwere blockierend (Skill review-lenses, Datei ablauf-zusatzpass.md). ${HINWEIS}`;
+const RISIKOSTUFE_SKRIPT = fileURLToPath(new URL("./risikostufe.mjs", import.meta.url));
+
+/** Risikostufe des Worktrees `pfad` per Kindprozess (kein Import, keine Shell, Timeout; Seiteneffekt: startet einen Prozess); wirft bei jedem Fehler. */
+function stufeImWorktree(pfad) {
+  const aus = execFileSync(process.execPath, [RISIKOSTUFE_SKRIPT, "--json"], { cwd: pfad, encoding: "utf8", timeout: 20000, stdio: ["ignore", "pipe", "ignore"], windowsHide: true });
+  return JSON.parse(aus).stufe;
 }
 
-/** Grund für ein Deny oder `null` (durchlassen). Pure. */
+/** Wert von `Arbeitsverzeichnis:` als Pfad, nur absolut und `<…>/.claude/worktrees/<name>` oder im Arbeitsplatz `…/worktrees/<repo>/<name>` (kein `..`); sonst `null`. Der Feature-Worktree existiert beim Spawn und steht auf demselben HEAD wie der spätere Lens-Worktree. Pur. */
+function arbeitsPfad(felder) {
+  const pfad = (felder.Arbeitsverzeichnis ?? "").replace(/^`+|`+$/g, "");
+  const gueltig = /^(?:[A-Za-z]:)?[\\/](?:[^\s"'<>]*[\\/])?\.claude[\\/]worktrees[\\/][^\s\\/"'<>]+(?:[\\/][^\s\\/"'<>]+)?[\\/]?$/.test(pfad);
+  return gueltig && !pfad.includes("..") ? pfad : null;
+}
+
+/** Cap der Pässe: bei Stufe 1 (im Arbeitsverzeichnis bestimmt) MAX_REVIEW_PAESSE_STUFE1, sonst und bei jedem Fehler MAX_REVIEW_PAESSE (die CI fängt den Rest: check-review-nachweis). Nur für k zwischen Stufe-1-Cap und MAX_REVIEW_PAESSE wird gefragt (sonst startet kein Prozess). */
+function capFuer(k, felder, deps) {
+  if (k > MAX_REVIEW_PAESSE) return MAX_REVIEW_PAESSE;
+  const pfad = arbeitsPfad(felder);
+  if (pfad === null) return MAX_REVIEW_PAESSE;
+  try {
+    return (deps.risikostufeFuer ?? stufeImWorktree)(pfad) <= 1 ? MAX_REVIEW_PAESSE_STUFE1 : MAX_REVIEW_PAESSE;
+  } catch {
+    return MAX_REVIEW_PAESSE;
+  }
+}
+
+/** R6: Grund, wenn ein Review-Worktree `-lens-r<k>` mit k über dem Cap (Stufe 1: MAX_REVIEW_PAESSE_STUFE1) im Prompt steht und das Kopf-Feld `Zusatzpass:` fehlt oder unvollständig ist; sonst `null`. Das höchste k zählt, ein Platzhalter nicht. Kann einen Kindprozess starten (`capFuer`). */
+function zusatzpassGrund(text, namen, deps = {}) {
+  const ks = [...lensSegmente(text, namen)].map(([segment]) => /-lens-r(\d+)(?!\d)/.exec(segment)?.[1]).filter((k) => k !== undefined).map(Number);
+  const k = Math.max(0, ...ks);
+  if (k <= MAX_REVIEW_PAESSE_STUFE1 || zusatzpassKopfAus(text)) return null;
+  const cap = capFuer(k, parseLensAuftrag(text), deps);
+  if (k <= cap) return null;
+  return `Lens-Auftrag ohne Zusatzpass-Entscheidung: der Lens-Worktree trägt Runde ${k}, das Cap liegt bei ${cap} Pässen. Ein Pass darüber braucht im Kopf das Feld „Zusatzpass: <Brille>:<Prüfpunkt> · Entscheidung: <X>, weil <Y>“ (alle Teile ausgefüllt, Brille als Schlüssel oder Anzeigename aus ${BEKANNTE_LENSES.join(", ")}) und einen Vorpass-Fund der Schwere blockierend (Skill review-lenses, Datei ablauf-zusatzpass.md). ${HINWEIS}`;
+}
+
+/** Grund für ein Deny oder `null` (durchlassen). Bis auf R6 (Kindprozess für die Risikostufe) pur. */
 export function lensAuftragBlockade({ subagentType, prompt } = {}, deps = {}) {
   const { namen, grund } = namenOderGrund("Lens-Auftrag-Guard", deps);
   if (grund) return grund;
@@ -135,7 +166,7 @@ export function lensAuftragBlockade({ subagentType, prompt } = {}, deps = {}) {
   if (offen) return offen;
   const endung = unbekannteLensEndung(text, namen);
   if (endung) return endung;
-  const zusatz = zusatzpassGrund(text, namen);
+  const zusatz = zusatzpassGrund(text, namen, deps);
   if (zusatz) return zusatz;
   const kopf = headGrund(felder["erwarteter HEAD"]);
   if (kopf) return kopf;
