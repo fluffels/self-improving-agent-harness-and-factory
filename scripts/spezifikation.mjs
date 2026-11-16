@@ -19,6 +19,8 @@
  *
  * `--epic <nr>` (nur `anlegen`) hängt das neue Ticket als native Unteraufgabe an das Epic <nr> im Ziel-Repo (`blocker-lib.mjs`, `addSubIssue`); scheitert die Kante, bleibt es bei einer Warnung und Exit 0.
  *
+ * `anlegen` liest den Abschnitt `sprache.spezifikation.pfade` wie `risikostufe --ticket` (`pfadeAusTicket`): fehlt er oder ist er unlesbar, wertet `risikostufe --ticket` das Ticket auf Stufe 2 (fail-closed). Mit `--epic` ist das ein Abbruch (Exit 2, nichts angelegt), sonst nur ein Hinweis auf stderr (Sammel- und Notfalltickets entstehen legitim ohne Pfade).
+ *
  * Exit 0 = angelegt/repariert/nichts zu tun/vollständig, 1 = Spezifikation unvollständig oder Inhaltsverlust (nichts geschrieben),
  * 2 = Aufruf- oder gh-Fehler (scheitert nach dem Anlegen nur das Einsortieren: Nummer und Nachhol-Befehl), 3 = Fremdeingang (nur `reparieren`).
  * Grenze: Exit 3 heißt hier immer Fremdeingang; ein knappes API-Kontingent meldet `mitKontingent` mit Exit 5.
@@ -39,6 +41,7 @@ import { fehlendeLabels, fehlerText, ghJson, schreibrechtText, tokenFuerZiel } f
 import { echteEpicVerknuepfung, echteVerknuepfung, verknuepfeBlocker, verknuepfeEpic } from "./blocker-lib.mjs";
 import { pruefeBefundZeile } from "./sammelticket-titel.mjs";
 import { mitKontingent } from "./kontingent-lib.mjs";
+import { pfadeAusTicket } from "./risikostufe-lib.mjs";
 import { blockerVerweise, blockerZeile, pruefeEingang, spezifikationsMaengel, verloreneZeilen } from "./spezifikation-lib.mjs";
 
 const AUFRUF = [
@@ -201,31 +204,48 @@ function positionLesen(werte) {
   return { nach };
 }
 
+function bereichsLabelPruefen(labels, praefix) {
+  if (labels.some((l) => l.startsWith(praefix) && l.length > praefix.length && !/\s/.test(l.slice(praefix.length)))) return null;
+  return aufrufFehler(praefix ? `ein Label \`${praefix}<x>\` ist Pflicht (--label ${praefix}<x>)` : "ein Label ist Pflicht (--label <x>)");
+}
+
+// Anker vor dem Anlegen prüfen: ein Anker vom falschen Board ließe sonst ein angelegtes, aber nicht einsortiertes Issue zurück.
+function ankerPruefen(nach, werte, repo, io) {
+  let ankerText;
+  try {
+    ankerText = io.pruefeAnker({ nach, labels: werte.label, repo });
+  } catch (e) {
+    return aufrufFehler(`Anker #${nach} nicht prüfbar, nichts angelegt (${fehlerText(e)})`);
+  }
+  return ankerText ? aufrufFehler(`nichts angelegt: ${ankerText}`) : null;
+}
+
+// Dieselbe Lesart wie risikostufe --ticket (Fehler dort = Stufe 2, fail-closed); mit --epic ist ein Fehler ein Abbruch.
+function pfadePruefen(body, werte, sprache) {
+  const fehler = pfadeAusTicket(body, sprache.pfade).fehler;
+  if (!fehler || werte.epic === undefined) return { fehler };
+  return { fehler, abbruch: aufrufFehler(`nichts angelegt: ein Epic-Kind braucht einen lesbaren Abschnitt „${sprache.pfade}“ (${fehler}); sonst wertet risikostufe --ticket Stufe 2`) };
+}
+
 function anlegen(werte, io, sprache) {
   if (!werte.titel || werte.titel.trim() === "") return aufrufFehler("--titel fehlt");
   const praefix = bereichsPraefix(io.config);
   const repo = zielRepoFuer(werte.label, io.config); // Ziel-Repo (#76): das Repo, dessen Issues das Board der Rolle des Labels führt (ohne boards[].repo das eigene)
-  if (!werte.label.some((l) => l.startsWith(praefix) && l.length > praefix.length && !/\s/.test(l.slice(praefix.length)))) {
-    return aufrufFehler(praefix ? `ein Label \`${praefix}<x>\` ist Pflicht (--label ${praefix}<x>)` : "ein Label ist Pflicht (--label <x>)");
-  }
+  const labelFehler = bereichsLabelPruefen(werte.label, praefix);
+  if (labelFehler) return labelFehler;
   const pos = positionLesen(werte);
   if (pos.fehler) return aufrufFehler(pos.fehler);
   const { nach } = pos;
   const b = leseBody(werte, io);
   if (b.fehler) return aufrufFehler(b.fehler);
   const body = mitBlockerZeile(b.body, werte.blocker, sprache);
+  const pfad = pfadePruefen(body, werte, sprache);
+  if (pfad.abbruch) return pfad.abbruch;
+  const pfadFehler = pfad.fehler;
   const gate = pruefeEingang({ nummer: 0, titel: werte.titel, body }, { sprache }); // neu angelegt: nie Bestand, nie ausgenommen
   if (gate.art !== "ok") return ergebnis(1, "", `✖ Spezifikation unvollständig, nichts angelegt:\n${liste(gate.fehlt)}\n`);
-  if (nach !== null) {
-    // Anker vor dem Anlegen prüfen: ein Anker vom falschen Board ließe sonst ein angelegtes, aber nicht einsortiertes Issue zurück.
-    let ankerText;
-    try {
-      ankerText = io.pruefeAnker({ nach, labels: werte.label, repo });
-    } catch (e) {
-      return aufrufFehler(`Anker #${nach} nicht prüfbar, nichts angelegt (${fehlerText(e)})`);
-    }
-    if (ankerText) return aufrufFehler(`nichts angelegt: ${ankerText}`);
-  }
+  const ankerFehler = nach === null ? null : ankerPruefen(nach, werte, repo, io);
+  if (ankerFehler) return ankerFehler;
   const { neu, fehler } = erzeugeImZiel(werte, body, repo, io);
   if (fehler) return fehler;
   try {
@@ -234,7 +254,8 @@ function anlegen(werte, io, sprache) {
     return aufrufFehler(`#${neu.number} angelegt, aber nicht einsortiert (${fehlerText(e)}). Nachholen: ${nachholBefehl(werte, nach, neu.number, repo)}`);
   }
   const warnung = verknuepfeBlocker(neu, werte.blocker, repo, io) + verknuepfeEpic(neu, werte.epic === undefined ? null : positiveZahl(werte.epic), repo, io);
-  return ergebnis(0, `angelegt #${neu.number}${neu.html_url ? ` ${neu.html_url}` : ""}\nPosition: ${positionText(nach, werte)}\n`, warnung);
+  const hinweis = pfadFehler ? `⚠ ${pfadFehler}: ohne Abschnitt „${sprache.pfade}“ wertet risikostufe --ticket Stufe 2 (fail-closed)\n` : "";
+  return ergebnis(0, `angelegt #${neu.number}${neu.html_url ? ` ${neu.html_url}` : ""}\nPosition: ${positionText(nach, werte)}\n`, hinweis + warnung);
 }
 
 function reparieren(werte, nrText, io, sprache) {

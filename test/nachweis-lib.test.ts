@@ -320,6 +320,17 @@ describe("Szenario-Prädikat (factory#402 L50): eine Definition für Urteile und
   });
 });
 
+describe("kombiStufe (factory#622 L4): einziger Rechenpfad risikostufe.kombi, fail-closed", () => {
+  const kombiStufe = (raw as unknown as { kombiStufe: (r: unknown) => string }).kombiStufe;
+  it("S nur bei kombi.zulaessig === true, sonst voll (auch ohne risikostufe oder kombi)", () => {
+    expect(kombiStufe({ kombi: { zulaessig: true } })).toBe("S");
+    expect(kombiStufe({ kombi: { zulaessig: false } })).toBe("voll");
+    expect(kombiStufe({ stufe: 1 })).toBe("voll");
+    expect(kombiStufe(null)).toBe("voll");
+    expect(kombiStufe(undefined)).toBe("voll");
+  });
+});
+
 describe("stufeZeile (factory#402 L26)", () => {
   const stufeZeile = (raw as unknown as { stufeZeile: (s: string | null) => string }).stufeZeile;
   it("nennt die Stufe, bei null ausdrücklich nicht berechenbar", () => {

@@ -39,7 +39,7 @@
  * Nachweis entsteht erst danach (Vorbild: check-festgefahren.mjs). Lokal:
  *   node scripts/check-review-nachweis.mjs
  *
- * Kombi-Lens-Grenze (factory#271, factory#529): der Wächter berechnet sie aus dem Diff (`groessenstufe-lib.mjs`, nie vom Umsetzer behauptet). Nur unter der Grenze (Ausgabe `KOMBI: ja` von `node scripts/risikostufe.mjs`)
+ * Kombi-Lens-Grenze (factory#271, factory#529): der Wächter berechnet sie aus dem Diff (ein Rechenpfad: `kombi.zulaessig` aus `risikostufe-lib.mjs`, nie vom Umsetzer behauptet; fehlt `kombi`, gilt nein). Nur unter der Grenze (Ausgabe `KOMBI: ja` von `node scripts/risikostufe.mjs`)
  * genügt bei Code-Diff `lenses=kombiniert` statt der drei Code-Brillen; darüber ist es rot. Die Skizzen- und die Klein-Form der Plan-Zeile sind entfernt (factory#529): sie sind bei jeder Stufe rot, mit Hinweis auf
  * `<praefixe.commitZeile>Plan: ohne — stufe <0|1>` bzw. den Planer-Plan. Die Risikoklasse hoch (Pfadmuster der Projekt-Config `risiko.hoch`, sonst Standardliste,
  * factory#333) liegt nie unter der Grenze; die Doku-Regel (nur `*.md`) steht nur in `groessenstufe-lib.mjs` (`istDokuDiff`). Der Nachweis bleibt Pflicht, nur die Besetzung ist kleiner.
@@ -62,10 +62,10 @@ import { trenneConfigArg } from "./projekt-config-lib.mjs";
 import { factorySeiteIn } from "./factory-seite.mjs";
 import { fileURLToPath } from "node:url";
 import { aktiverOverride, commitImSlice, ladeCommitZeilen, ladeCommitZeilenOderBeende, meldeUngueltigeOverrides, parseOverrideTrailers } from "./slice-override.mjs";
-import { ARME, BEDROHUNGS_TEILE, BEKANNTE_LENSES, CODE_LENSES, KOMBI_LENS, MAX_FIX_RUNDEN, MAX_REVIEW_PAESSE, MAX_REVIEW_PAESSE_STUFE1, MAX_ZUSATZPAESSE, SCHWERE_PFLICHTFELDER, SICHERHEITS_LENS, ZUSATZPASS_URSACHEN, armAusTicket, istLeererWert, hoechsteRunde, kleinGrund, parseNachweis, risikoPfad, risikostufeZeile, stufeGrund, stufeZeile, stufenAusnahmeFehler, zusatzpassZeilenAus } from "./nachweis-lib.mjs";
+import { ARME, BEDROHUNGS_TEILE, BEKANNTE_LENSES, CODE_LENSES, KOMBI_LENS, MAX_FIX_RUNDEN, MAX_REVIEW_PAESSE, MAX_REVIEW_PAESSE_STUFE1, MAX_ZUSATZPAESSE, SCHWERE_PFLICHTFELDER, SICHERHEITS_LENS, ZUSATZPASS_URSACHEN, armAusTicket, istLeererWert, hoechsteRunde, kleinGrund, kombiStufe, parseNachweis, risikoPfad, risikostufeZeile, stufeGrund, stufeZeile, stufenAusnahmeFehler, zusatzpassZeilenAus } from "./nachweis-lib.mjs";
 import { ticketAusRef } from "./ticket-refs.mjs";
 import { ladeTicketNamen } from "./ticket-namen.mjs";
-import { groessenstufeAusGit, istDokuDiff, ladeRisikoMuster } from "./groessenstufe-lib.mjs";
+import { istDokuDiff, ladeRisikoMuster } from "./groessenstufe-lib.mjs";
 import { risikostufeAusGit, zwei } from "./risikostufe-lib.mjs";
 
 // parseNachweis lebt im neutralen Modul nachweis-lib.mjs (auch das Messskript token-baseline.mjs liest die Zeilen);
@@ -314,14 +314,15 @@ function bewerteGroessenForm(plan, zeilen) {
 }
 
 /** Lens-Satz der Runde 1 gegen die Diff-Art und die Kombi-Lens-Grenze: die Pflicht-Brillen oder der volle Code-Satz; unter der Grenze und bei Code-Diff genügt `kombiniert` (factory#271, factory#529). Pure. */
-function bewerteLensSatz(review, dateien, stufe, zeilen, risikostufe) {
+function bewerteLensSatz(review, dateien, zeilen, risikostufe) {
   const R = zeilen.review;
   const pflicht = pflichtLenses(dateien);
   const fehlend = pflicht.filter((l) => !review.lenses.includes(l));
   const codeVoll = CODE_LENSES.every((l) => review.lenses.includes(l));
   const kombi = review.lenses.includes(KOMBI_LENS);
-  if (fehlend.length === 0 || codeVoll || (kombi && stufe === "S" && pflicht.length > 1 && risikostufe.stufe <= 1)) return [];
-  const kombiHinweis = kombi ? ` ${KOMBI_LENS} genügt nur unter der Kombi-Lens-Grenze (KOMBI: ja) mit Code-Diff und Risikostufe ≤ 1 (berechnet aus dem Diff: ${stufe === "S" ? "KOMBI: ja" : "KOMBI: nein"}, Risikostufe ${risikostufe.stufe}).` : "";
+  const kombiOk = risikostufe.kombi?.zulaessig === true; // einziger Rechenpfad (risikostufe-lib, factory#529); fehlt kombi, gilt nein (fail-closed)
+  if (fehlend.length === 0 || codeVoll || (kombi && kombiOk && pflicht.length > 1)) return [];
+  const kombiHinweis = kombi ? ` ${KOMBI_LENS} genügt nur unter der Kombi-Lens-Grenze (KOMBI: ja) mit Code-Diff und Risikostufe ≤ 1 (berechnet aus dem Diff: ${kombiOk ? "KOMBI: ja" : "KOMBI: nein"}, Risikostufe ${risikostufe.stufe}).` : "";
   return [
     `${R}: lenses fehlt ${fehlend.join(", ")} (Pflicht für diese Diff-Art: ${pflicht.join(", ")}).${kombiHinweis} ` +
       `Erwartet: lenses=${pflicht.join(",")} (kleingeschrieben, ASCII, ae/oe/ue statt Umlaute).`,
@@ -365,7 +366,7 @@ function bewerteReviewOhne(review, zeilen, risikostufe) {
 
 /** Bewertet einen geparsten Nachweis. `headBekannt`: der SHA lässt sich als Commit auflösen;
  *  `headImSlice`: er liegt in `<basis>..HEAD`. Liefert alle Fehler (leer = ok). Pure. */
-export function bewerteNachweis({ nachweis, dateien, headBekannt, headImSlice, konfliktMerges = [], aenderungsCommits = [], zeilen, stufe = "voll", risiko, ticket, risikostufe = zwei("Risikostufe nicht übergeben (fail-closed)"), hoechsteRunde: hoechste = 0, zusatzpassZeilen = null }) {
+export function bewerteNachweis({ nachweis, dateien, headBekannt, headImSlice, konfliktMerges = [], aenderungsCommits = [], zeilen, risiko, ticket, risikostufe = zwei("Risikostufe nicht übergeben (fail-closed)"), hoechsteRunde: hoechste = 0, zusatzpassZeilen = null }) {
   if (!zeilen) throw new Error("bewerteNachweis braucht die Commit-Zeilen (commitZeilen), keinen Standardwert");
   const R = zeilen.review;
   const fehler = bewerteNachReview(nachweis, konfliktMerges, aenderungsCommits);
@@ -376,7 +377,7 @@ export function bewerteNachweis({ nachweis, dateien, headBekannt, headImSlice, k
     return fehler;
   }
   if (review.ohne !== null) return [...fehler, ...bewerteReviewOhne(review, zeilen, risikostufe)];
-  return [...fehler, ...bewerteReviewZeile({ review, dateien, headBekannt, headImSlice, stufe, zeilen, risikostufe, ticket, hoechste, zusatzpassZeilen })];
+  return [...fehler, ...bewerteReviewZeile({ review, dateien, headBekannt, headImSlice, zeilen, risikostufe, ticket, hoechste, zusatzpassZeilen })];
 }
 
 /** Änderungs-Commits und Konflikt-Merges nach dem Review (je ein Fehler mit Fix-Weg). Pure. */
@@ -401,7 +402,7 @@ function bewerteNachReview(nachweis, konfliktMerges, aenderungsCommits) {
 }
 
 /** Die Felder einer Review-Zeile mit Brillen (head, runden, lenses, optionale und Pflichtfelder, verdikt). Pure. */
-function bewerteReviewZeile({ review, dateien, headBekannt, headImSlice, stufe, zeilen, risikostufe, ticket, hoechste, zusatzpassZeilen }) {
+function bewerteReviewZeile({ review, dateien, headBekannt, headImSlice, zeilen, risikostufe, ticket, hoechste, zusatzpassZeilen }) {
   const R = zeilen.review;
   const fehler = [];
   if (review.head === null) fehler.push(`${R}: head fehlt oder ist kein SHA.`);
@@ -414,7 +415,7 @@ function bewerteReviewZeile({ review, dateien, headBekannt, headImSlice, stufe, 
   } else {
     fehler.push(...bewerteRunden(review, zeilen, risikostufe), ...bewerteRundenAbgleich({ review, hoechste, zusatzpassZeilen, zeilen, risikostufe }));
   }
-  fehler.push(...bewerteLensSatz(review, dateien, stufe, zeilen, risikostufe));
+  fehler.push(...bewerteLensSatz(review, dateien, zeilen, risikostufe));
   const unbekannt = review.lenses.filter((l) => !BEKANNTE_LENSES.includes(l));
   if (unbekannt.length > 0) {
     fehler.push(`${R}: lenses enthält unbekannte Brille(n) ${unbekannt.join(", ")} (bekannt: ${BEKANNTE_LENSES.join(", ")}).`);
@@ -437,10 +438,10 @@ function ticketDesBranches(git, env, ladeNamen = ladeTicketNamen) {
   return ticketAusRef(ref, ladeNamen());
 }
 
-/** Größenstufe (`groesse`, mit Risikoklasse) und Risikostufe des Diffs `<basis>...HEAD`; beide sind fail-closed (Ladefehler und git-Fehler ergeben die strenge Stufe). */
+/** Risikostufe des Diffs `<basis>...HEAD` samt Kombi-Lens-Grenze (`kombi`) und Risikoklasse (`risiko`), alles aus `risikostufe-lib.mjs` (vereinigt die Risiko-Muster von Basis und HEAD, factory#339); fail-closed (Ladefehler und git-Fehler ergeben Stufe 2, kombi nein, Klasse hoch). `stufe` ist die Anzeige `S`/`voll` aus `kombi.zulaessig`. */
 function stufen(git, base, { ladeRisiko, ladeBasis, ladeText }) {
-  const groesse = groessenstufeAusGit(git, base, "HEAD", { ladeRisiko });
-  return { groesse, stufe: groesse.stufe, risikostufe: risikostufeAusGit(git, base, "HEAD", { ladeRisiko, ladeBasis, ladeText }) };
+  const risikostufe = risikostufeAusGit(git, base, "HEAD", { ladeRisiko, ladeBasis, ladeText });
+  return { stufe: kombiStufe(risikostufe), risikostufe };
 }
 
 /** Die Angaben zu optionalen Feldern der Review-Zeile für die CLI-Hinweise: `blockerFehlt`, `teilbrillenFehlt`, `zusatzpass` (nur ein gültiger). */
@@ -487,7 +488,7 @@ export function checkReviewNachweis({ runGit, env = process.env, ladeZeilen = la
       .split(/\r?\n/)
       .filter((l) => l.trim() !== "");
     const { hd, commitsNachReview } = headDaten(git, base, nachweis);
-    const { groesse, risikostufe } = stufen(git, base, { ladeRisiko, ladeBasis, ladeText });
+    const { stufe, risikostufe } = stufen(git, base, { ladeRisiko, ladeBasis, ladeText });
     const ticket = ticketDesBranches(git, env, ladeNamen);
     const fehler = bewerteNachweis({
       nachweis,
@@ -497,8 +498,7 @@ export function checkReviewNachweis({ runGit, env = process.env, ladeZeilen = la
       konfliktMerges: hd.konfliktMerges,
       aenderungsCommits: hd.aenderungsCommits,
       zeilen,
-      stufe: groesse.stufe,
-      risiko: groesse.risiko,
+      risiko: risikostufe.risiko,
       risikostufe,
       ticket,
       hoechsteRunde: hoechsteRunde(messages),
@@ -509,7 +509,7 @@ export function checkReviewNachweis({ runGit, env = process.env, ladeZeilen = la
       fehler,
       invalid: ov.invalid,
       commitsNachReview,
-      stufe: groesse.stufe,
+      stufe,
       risikostufe,
       ...feldStatus(nachweis.review),
     };

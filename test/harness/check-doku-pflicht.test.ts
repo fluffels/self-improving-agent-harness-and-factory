@@ -224,6 +224,11 @@ describe("laufe: Exit-Code und Meldungen", () => {
     expect(stale.code).toBe(1);
     expect(stale.text).toContain("stale");
   });
+  it("ungültige Override-Zeile (ohne Begründung): Exit 0 mit Hinweis, den laufe an log übergibt", () => {
+    const r = lauf(["scripts/a.mjs", "docs/x.md"], `${Z.dokuOverride}: #5`);
+    expect(r.code).toBe(0);
+    expect(r.text).toContain("ungültige Override-Zeile ignoriert");
+  });
   it("README-Befund macht den Lauf rot, auch ohne Slice-Problem", () => {
     const r = lauf(["docs/x.md"], "", { ...FREMD, dokuPflicht: { readmeAbschnitte: ["Gibtsnicht"] } });
     expect(r.code).toBe(1);

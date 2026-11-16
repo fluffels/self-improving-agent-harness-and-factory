@@ -213,7 +213,18 @@
       "*storage*",
       "*database*",
       "db/",
-      "/scripts/token-analyse-tickets.mjs"
+      "/scripts/token-analyse-tickets.mjs",
+      "/scripts/melden.mjs",
+      "/scripts/spezifikation.mjs",
+      "/scripts/sammelticket-anlegen.mjs",
+      "/scripts/fremdtext.mjs",
+      "/scripts/fremdtext-lib.mjs",
+      "/scripts/meldung-lib.mjs",
+      "/scripts/spezifikation-lib.mjs",
+      "/scripts/sammelticket-titel.mjs",
+      "/scripts/cockpit/lauf.mjs",
+      "/scripts/token-analyse-freigabe.mjs",
+      "/scripts/token-analyse-freigabe-lib.mjs"
     ]
   }
 }

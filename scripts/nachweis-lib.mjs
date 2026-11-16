@@ -305,8 +305,11 @@ function abnahmeFehler(wert, head, durch, u) {
 export const URSACHEN = Object.freeze(["kriterium", "szenario", "umsetzung"]);
 
 /** CLI-Zeile zur Kombi-Lens-Grenze (factory#402 L26, factory#529): beide Nachweis-Checks nennen sie auch bei Erfolg, damit die Nachmessung der Läufe mit `lenses=kombiniert` sie aus der CI-Ausgabe liest.
- *  `stufe` ist das Rechenergebnis von `groessenstufe-lib.mjs` (`"S"` = unter der Grenze); `null` (nicht berechenbar, z.B. im Override-Zweig ohne lesbaren Diff) wird ausdrücklich so genannt, nie verschwiegen. Pur. */
+ *  `stufe` ist `kombiStufe` aus `risikostufe.kombi.zulaessig` (`"S"` = unter der Grenze); `null` (nicht berechenbar, z.B. im Override-Zweig ohne lesbaren Diff) wird ausdrücklich so genannt, nie verschwiegen. Pur. */
 export const stufeZeile = (stufe) => `• Kombi-Lens-Grenze: ${stufe === null || stufe === undefined ? "(nicht berechenbar)" : stufe === "S" ? "eingehalten" : "überschritten"}`;
+
+/** Die Anzeige-Stufe der Kombi-Lens-Grenze aus der berechneten Risikostufe (`S` = `kombi.zulaessig`, sonst `voll`): der eine Rechenpfad der Wächter (L4, `risikostufe-lib.mjs`); fehlt `kombi`, gilt `voll` (fail-closed). Pur. */
+export const kombiStufe = (risikostufe) => (risikostufe?.kombi?.zulaessig === true ? "S" : "voll");
 
 /** CLI-Zeile zur berechneten Risikostufe (factory#526); `null` (nicht berechnet) wird ausdrücklich genannt. Pur. */
 export const risikostufeZeile = (r) => `• Risikostufe: ${r?.stufe ?? "(nicht berechenbar)"}`;
