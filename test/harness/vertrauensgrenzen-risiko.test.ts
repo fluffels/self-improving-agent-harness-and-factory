@@ -41,6 +41,6 @@ describe("Vertrauensgrenzen sind Risikoklasse hoch (factory#622 L8)", () => {
     expect(bestimmeRisikoklasse([pfad], risiko).klasse).toBe("hoch");
   });
   test("ein unbeteiligtes Skript bleibt normal (Negativfall)", () => {
-    expect(bestimmeRisikoklasse(["scripts/befehle-liste.mjs"], risiko).klasse).toBe("normal");
+    expect(bestimmeRisikoklasse(["scripts/groessenstufe-lib.mjs"], risiko).klasse).toBe("normal");
   });
 });
