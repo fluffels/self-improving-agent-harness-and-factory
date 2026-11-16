@@ -4,7 +4,7 @@
  * `<datei>` ist die Review-Datei (Format: Kopf von `token-analyse-tickets-lib.mjs`), sie nennt den Plan über `plan`. Fail-closed in drei Phasen:
  * erst alles prüfen (Review vollständig und abgeschlossen, Formen, Urteile, Sperrprüfung jedes öffentlichen Textes, Dublette des Folge-Tickets, Schnappschuss
  * in `FACTORY_ANALYSE_ABLAGE`), dann anlegen (Zeilen über `melden.mjs`, Tickets über `spezifikation.mjs anlegen`, genau ein Folge-Ticket je Lauf), dann der
- * Abschnitt „Plan-Review“ im jüngsten Schnappschuss. Ein Lauf-Protokoll `analyse-<Datum>-tickets.json` in der Ablage verhindert doppeltes Anlegen beim erneuten Aufruf.
+ * Abschnitt „Plan-Review“ im jüngsten Schnappschuss zum Datum des Plans. Ein Lauf-Protokoll `analyse-<Datum>-tickets.json` in der Ablage verhindert doppeltes Anlegen beim erneuten Aufruf.
  * Exit: 0 gut, 1 Abbruch oder Teil nicht angelegt (ungeprüft, abgewiesen), 2 Aufruf, 4 Bezieher. Der Body eines Tickets wird nie ausgegeben.
  */
 import { spawnSync } from "node:child_process";

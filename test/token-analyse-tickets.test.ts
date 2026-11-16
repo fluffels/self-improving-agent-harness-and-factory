@@ -125,8 +125,8 @@ describe("Lib: Folge-Ticket, Sperre, Abschnitt", () => {
     expect(f.titel).toBe("Analyse-Optimierung 2026-11-16");
     expect(f.body).toContain("was haben wir vergessen?");
     for (const p of lib.FOLGE_PRUEFPUNKTE) expect(f.body).toContain(p);
-    expect(f.body).toContain("- u1");
-    expect(f.body).toContain("- r1");
+    expect(f.body).toContain("- `u1`");
+    expect(f.body).toContain("- `r1`");
     expect(pruefeEingang({ nummer: 0, titel: f.titel, body: f.body }, { sprache: echteSpezifikation() })).toEqual({ art: "ok" });
   });
   test("Sperre: absolute Pfade und Freigabe-Namen werden abgewiesen, verallgemeinerte Kennzahlen nicht", () => {
@@ -363,6 +363,8 @@ describe("Runde 1: Lücken der Test-Adäquanz und Sicherheit", () => {
   test("@-Erwähnungen werden gesperrt, eine E-Mail-Form nicht als Erwähnung gewertet", () => {
     expect(lib.oeffentlichSauber("Danke @someone").ok).toBe(false);
     expect(lib.oeffentlichSauber("(@someone)").ok).toBe(false);
+    expect(lib.oeffentlichSauber("@x am Anfang").ok).toBe(false);
+    expect(lib.oeffentlichSauber("mail a@b.de ist keine Erwähnung").ok).toBe(true);
   });
 
   test("Abschnitt einsetzen: Folgeabschnitte bleiben, Zeilenumbrüche in Zellen brechen die Tabelle nicht", () => {
@@ -381,6 +383,26 @@ describe("Runde 1: Lücken der Test-Adäquanz und Sicherheit", () => {
     expect(f.body).toContain("keine Anweisung");
     expect(f.body).toContain("- keine Einträge");
     expect(f.body).toContain("jemand 'rm' zweite Zeile");
+    expect(f.body).toContain("- `siehe");
+  });
+
+  test("Folge-Ticket: Quell-Fixtures je Form (http, Großschreibung, Rest-URL, Repo-Verweis, Autolink, HTML, Umbruch-Leerraum)", () => {
+    const quellen = ["http://example.org/a?b=c", "HTTPS://EXAMPLE.ORG/x", "org/repo#12 und #5", "www.boese.example/x", "[k](//boese.example/a)", "<a href=\"//boese.example\">a</a>", "&#64;opfer", "  davor  \r\n  danach  "];
+    const body = lib.folgeTicketBody({ datum: "2026-11-16", unsicherheiten: quellen, recherche: [] }).body;
+    expect(body).not.toMatch(/example\.org|EXAMPLE\.ORG|#\d/i);
+    expect(body).toContain("Nr. 12 und Nr. 5");
+    expect(body).toContain("- `davor danach`");
+    for (const l of body.split("\n").filter((z) => z.startsWith("- `") && /boese|opfer|href/.test(z))) expect(l.endsWith("`"), l).toBe(true);
+  });
+
+  test("teil6: Formfehler bei Nicht-Boolean, Positivfall mit lesbarer Freigabeliste legt an", () => {
+    expect(lib.pruefeEingabe({ ...basisPlan([zeilenTeil]), teil6: "true" }, basisReview([urteil("z1")]))).not.toEqual([]);
+    expect(lib.pruefeEingabe({ ...basisPlan([zeilenTeil]), teil6: false }, basisReview([urteil("z1")]))).toEqual([]);
+    const freigabe = fixture({ "liste.txt": "/pfad/zu/Geheimprojekt\n" });
+    const ordner = fixture({ "plan.json": JSON.stringify({ ...basisPlan([zeilenTeil]), teil6: true }), "review.json": JSON.stringify(basisReview([urteil("z1")])) });
+    const ablage = fixture({ "analyse-2026-11-16.json": "{}", "analyse-2026-11-16.md": "#\n" });
+    const r = cli(["--review", join(ordner, "review.json")], { FACTORY_ANALYSE_ABLAGE: ablage, FACTORY_ANALYSE_FREIGABE: join(freigabe, "liste.txt") }, { bezieher: false, worktrees: [], runner: () => ({ status: 0, stdout: "", stderr: "" }), suche: () => null });
+    expect(r.code).toBe(0);
   });
 
   test("Folge-Ticket: eine Injektion in der Recherche wird nicht zu einer Erwähnung im gesendeten Body", () => {

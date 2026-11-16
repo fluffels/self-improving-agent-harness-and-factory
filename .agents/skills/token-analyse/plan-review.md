@@ -30,7 +30,7 @@ Ergebnis je Planteil: `bestätigt`, `bedingt` (der Plan wird nachgezogen, der Te
 
 ## Zuordnung zum Skript
 
-Die Pflichtteile der Vorlage sind Markdown für den Reviewer; das Skript liest den Plan als JSON. Zuordnung: ein Rückbau-Kandidat wird ein Teil `art: "zeile"` mit `tragweite: "rueckbau-lockerung"` (öffentliche Zeile mit Klasse und Beleg, nicht als Ticket), eine Umstellung ein Teil mit der Tragweite ihres Falls laut Tabelle, ein Ticketentwurf ein Teil `art: "ticket"` oder `"probe-ticket"` (mit `vorabBewertung`). Hat Teil 6 gelaufen, trägt der Plan `teil6: true`: ohne lesbare Freigabeliste legt das Skript dann nichts an. Das Folge-Ticket hat kein Urteil; seine Quellen werden entschärft (keine Links, keine Erwähnungen) und als Daten gekennzeichnet.
+Die Pflichtteile der Vorlage sind Markdown für den Reviewer; das Skript liest den Plan als JSON. Zuordnung: ein Rückbau-Kandidat wird ein Teil `art: "zeile"` mit `tragweite: "rueckbau-lockerung"` (öffentliche Zeile mit Klasse und Beleg, nicht als Ticket), eine Umstellung ein Teil mit der Tragweite ihres Falls laut Tabelle, ein Ticketentwurf ein Teil `art: "ticket"` oder `"probe-ticket"` (mit `vorabBewertung`). Ist Teil 6 gelaufen, trägt der Plan `teil6: true`: ohne lesbare Freigabeliste legt das Skript dann nichts an. Das Folge-Ticket hat kein Urteil; seine Quellen werden entschärft (als Code-Span, ohne Links, Erwähnungen und Ticket-Verweise) und als Daten gekennzeichnet.
 
 ## Review-Datei
 
