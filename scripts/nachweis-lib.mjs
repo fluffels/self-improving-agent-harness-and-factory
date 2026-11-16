@@ -171,8 +171,8 @@ function abnahmefixAus(reviewWert) {
  *  `{art:"klein", begruendung}` mit nicht leerer Begründung, sonst `{art:"klein-ohne-begruendung"}`. Nur der Erkenner für die Abweisung. Pur. */
 export function kleinGrund(grund) {
   const g = String(grund ?? "").trim();
-  if (!/^klein\b/.test(g)) return null;
-  const m = /^klein\s*:\s*(\S.*)$/.exec(g);
+  if (!/^klein\b/i.test(g)) return null;
+  const m = /^klein\s*:\s*(\S.*)$/i.exec(g);
   return m ? { art: "klein", begruendung: m[1].trim() } : { art: "klein-ohne-begruendung" };
 }
 
@@ -200,7 +200,7 @@ const ohneGrund = (wert) => /^ohne\s*[—–-]+\s*(\S.*)$/.exec(wert)?.[1].trim(
 function planAus(planWert, planer) {
   if (planWert === null) return null;
   if (planWert === planer) return { art: "planer" };
-  if (new RegExp(`^${escapeRegex(planer)}\\s*[—–-]+\\s*skizze$`).test(planWert)) return { art: "skizze" };
+  if (new RegExp(`^${escapeRegex(planer)}\\s*[—–-]+\\s*skizze$`, "i").test(planWert)) return { art: "skizze" };
   const ohne = ohneGrund(planWert);
   return ohne === null ? { art: "ungueltig", zeile: planWert } : { art: "ohne", grund: ohne };
 }

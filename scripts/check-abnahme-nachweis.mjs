@@ -114,10 +114,15 @@ function bewerteSpur(a, marker) {
   return fehler;
 }
 
-/** `entfaellt` bei einem Ticket mit Kriterien: nie ohne Stufen-Form; die entfernte Klein-Form (factory#529) wird erkannt und mit Hinweis auf `entfaellt — stufe <n>` abgewiesen. Pure. */
+/** Die entfernte Klein-Form (factory#529) ist bei jeder Stufe und mit oder ohne Kriterien rot, mit Hinweis auf `entfaellt — stufe <n>`; Groß-/Kleinschreibung und Strichart zählen nicht (Erkenner `kleinGrund`, Parser `abnahmeAus`). Pure. */
+function kleinFormFehler(ticket, zeilen) {
+  const ort = ticket ? ` bei Ticket #${ticket.nr}` : "";
+  return [`${zeilen.abnahme}: entfaellt ist${ort} nicht erlaubt: die Klein-Form ist entfernt (factory#529); erlaubt: "entfaellt — stufe <0|1>" bei berechneter Risikostufe 0 oder 1, sonst die Abnahme.`];
+}
+
+/** `entfaellt` bei einem Ticket mit Kriterien: nie ohne Stufen-Form. Pure. */
 function bewerteEntfaellt(a, ticket, zeilen) {
-  const ausnahme = kleinGrund(a.grund) !== null ? " (die Klein-Form ist entfernt, factory#529; erlaubt: \"entfaellt — stufe <0|1>\" bei berechneter Risikostufe 0 oder 1)" : "";
-  return [`${zeilen.abnahme}: entfaellt ist bei Ticket #${ticket.nr} mit ${ticket.kriterien.length} Akzeptanzkriterien nicht erlaubt${ausnahme}.`];
+  return [`${zeilen.abnahme}: entfaellt ist bei Ticket #${ticket.nr} mit ${ticket.kriterien.length} Akzeptanzkriterien nicht erlaubt.`];
 }
 
 /**
@@ -134,6 +139,7 @@ export function bewerteAbnahme({ nachweis, ticket, marker, abnahmeHead, zeilen, 
   if (a.art === "entfaellt") {
     const sg = stufeGrund(a.grund);
     if (sg) return stufenAusnahmeFehler(zeilen.abnahme, `entfaellt — ${a.grund}`, sg.stufe, risikostufe);
+    if (kleinGrund(a.grund) !== null) return kleinFormFehler(ticket, zeilen);
     return ticket && ticket.kriterien.length > 0 ? bewerteEntfaellt(a, ticket, zeilen) : [];
   }
   if (!ticket) return [`${zeilen.abnahme}: ein Urteil braucht ein verknüpftes Ticket (Schließ-Referenz im PR-Body).`];

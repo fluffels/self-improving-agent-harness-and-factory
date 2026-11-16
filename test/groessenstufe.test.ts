@@ -241,8 +241,8 @@ describe("check-review-nachweis rechnet die Stufe selbst (K3, K4, K5)", () => {
     expect(klein).toMatch(/Klein-Form ist entfernt/);
     expect(klein).toMatch(/ohne — stufe <0\|1>/);
   });
-  test("die Altformen sind auch mit anderem Strich und ohne Begründung rot (Hinweis bleibt)", () => {
-    for (const plan of [`${PL} - skizze`, `${PL} – skizze`, `${PL} —— skizze`, "ohne — klein", "ohne — klein:  x"]) {
+  test("die Altformen sind auch mit anderem Strich, Groß-/Kleinschreibung und ohne Begründung rot (Hinweis bleibt)", () => {
+    for (const plan of [`${PL} - skizze`, `${PL} – skizze`, `${PL} —— skizze`, `${PL} — Skizze`, "ohne — klein", "ohne — klein:  x", "ohne — Klein: x", "ohne - KLEIN: x"]) {
       expect(pruefe(KLEIN, nach(plan, "kombiniert")).fehler.join("\n"), plan).toMatch(/ist entfernt.*ohne — stufe <0\|1>/);
     }
   });
@@ -316,6 +316,21 @@ describe("check-abnahme-nachweis: die entfernte Klein-Form ist bei jeder Stufe r
     expect(f).not.toMatch(/Klein-Form/);
     expect(pruefe(KLEIN, "entfaellt — klein").fehler.join()).toMatch(/Klein-Form ist entfernt/);
     expect(pruefe(KLEIN, "entfaellt — klein").ok).toBe(false);
+  });
+  // Abnahme-Fund Durchgang 1: der echte Einstiegspfad (Commit-Nachrichten → checkAbnahmeNachweis) weist die Klein-Form in jeder Schreibweise und bei jeder Stufe ab, auch ohne Kriterien.
+  const SCHREIBWEISEN = ["entfaellt — klein: kein Verhalten", "entfaellt — Klein: x", "entfaellt - klein: x", "entfaellt – KLEIN: x", "entfaellt —— klein: x", "entfaellt — klein"];
+  const KEINE_KRITERIEN = "kein Kriterium hier";
+  test.each(SCHREIBWEISEN)("Einstiegspfad: %s ist ohne Kriterien rot mit Hinweis auf die Stufen-Form", (zeile) => {
+    for (const aenderung of [KLEIN, { "src/a.ts": "x\n" }, { "scripts/check-x.mjs": "x\n" }, { "package.json": "{}\n" }]) {
+      const r = pruefe(aenderung, zeile, KEINE_KRITERIEN);
+      expect(r.ok, JSON.stringify(aenderung)).toBe(false);
+      expect(r.fehler.join(), JSON.stringify(aenderung)).toMatch(/Klein-Form ist entfernt.*entfaellt — stufe <0\|1>/);
+    }
+  });
+  test.each(SCHREIBWEISEN)("Einstiegspfad: %s ist mit Kriterien rot mit Hinweis auf die Stufen-Form", (zeile) => {
+    const r = pruefe(KLEIN, zeile);
+    expect(r.ok).toBe(false);
+    expect(r.fehler.join()).toMatch(/Klein-Form ist entfernt.*entfaellt — stufe <0\|1>/);
   });
   test("ohne Kriterien bleibt entfaellt bei jeder Stufe grün", () => {
     expect(pruefe({ "scripts/check-x.mjs": "x\n" }, "entfaellt — kein Kriterium", "kein Kriterium hier").fehler).toEqual([]);
