@@ -1,10 +1,11 @@
 // Besitz-Manifest-Leser und Bearbeitungs-Primitive (ADR 0022 F9): Einheiten des Besitz-Manifests `.factory/besitz.json`
 // (ganze Datei, Markdown-Block zwischen Markern, JSON-Schlüssel der obersten Ebene) lesen, prüfen, hashen und setzen.
-// Hash und Wächter rechnen auf dem Text mit geleerten Projektwerten (`leereProjektwerte` aus `projektwert-lib.mjs`, ADR 0022 F3f). Importe: `node:crypto`, `projekt-config-lib`, `projektwert-lib`, `modul-wahl-lib`, `sync-abgleich-lib` und `ticket-namen`; Extraktionsliste und Import-Auslegung stehen in `besitz-extraktion.mjs`. Sync-Werkzeug, Drift-Gate und Kern-Wächter teilen diese eine Auslegung.
+// Hash und Wächter rechnen auf dem Text mit geleerten Projektwerten (`leereProjektwerte` aus `projektwert-lib.mjs`, ADR 0022 F3f). Importe: `node:crypto`, `projekt-config-lib`, `projektwert-lib`, `modul-wahl-lib`, `profil-lib`, `sync-abgleich-lib` und `ticket-namen`; Extraktionsliste und Import-Auslegung stehen in `besitz-extraktion.mjs`. Sync-Werkzeug, Drift-Gate und Kern-Wächter teilen diese eine Auslegung.
 import { createHash } from "node:crypto";
 import { altEnvPraefix } from "./projekt-config-lib.mjs";
 import { leereProjektwerte } from "./projektwert-lib.mjs";
 import { modulFehler } from "./modul-wahl-lib.mjs";
+import { profilFehler } from "./profil-lib.mjs";
 import { artFehler } from "./sync-abgleich-lib.mjs";
 import { escapeRegex } from "./regex-lib.mjs";
 
@@ -161,7 +162,7 @@ export function pruefeManifest(m, lies) {
     if (!RINGE.includes(e.ring)) out.push(`${id}: unbekannter Ring '${e.ring}'`);
     if (e.quelle.trim() === "") out.push(`${id}: quelle fehlt`);
     if (e.block !== undefined && e.schluessel !== undefined) out.push(`${id}: block und schluessel zugleich`);
-    out.push(...[...pflichtChecksFehler(e), ...artFehler(e), ...modulFehler(e)].map((f) => `${id}: ${f}`));
+    out.push(...[...pflichtChecksFehler(e), ...artFehler(e), ...modulFehler(e), ...profilFehler(e)].map((f) => `${id}: ${f}`));
     if (istGanzeDatei(e)) ganze.add(e.pfad);
     else teile.add(e.pfad);
     const text = lies(e.pfad);

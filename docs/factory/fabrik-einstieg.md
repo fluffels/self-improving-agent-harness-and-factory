@@ -58,6 +58,10 @@ Eine neue Variable steht erst in der Fachseite und dann hier; ohne Zeile in dies
 
 Ein Bezieher holt Updates der Factory selbst: der Wochenlauf `.github/workflows/factory-update.yml` legt das Issue „Factory-Update“ an, wenn ein neuerer Release-Tag da ist (der Workflow kommt mit dem Sync, nicht von Hand). Den Stand prüft `node scripts/factory-update-check.mjs`, übertragen wird mit `node scripts/factory-sync.mjs` (nur Besitz laut Besitz-Manifest, idempotent). Schrittfolge, Abgleich und Fehlerfälle: [Erstbezug](../erstbezug.md).
 
+## Minimalprofil wählen
+
+Ein Bezieher kann den Besitz verkleinern: `"profil": "minimal"` in `.factory/projekt.json` (ohne Schlüssel gilt `voll`). Der nächste Sync verteilt dann keine Einheit mit dem Manifest-Feld `profil` (Mess- und Analysewerkzeuge, die der Bezieher nicht braucht); Gates, Hooks, Workflows und die Rollen der Risikostufen bleiben immer dabei, das erzwingt ein Wächter-Test. Der Sync löscht nichts: bereits verteilte Dateien meldet er als „kein Besitz mehr“, der Bezieher löscht sie selbst, danach ist das Drift-Gate wieder grün. Was ein Bezieher real nutzt und wie groß der Besitz je Profil ist, zeigt `node scripts/aufrufstatistik.mjs --transkripte <projekt-ordner> --footprint` (nur lokal, nur Namen und Zahlen). Hintergrund: Fortschreibung factory#519 (ADR 0022).
+
 ## Einrichtung je Rechner und Laufzeit
 
 | Was | Wo beschrieben |

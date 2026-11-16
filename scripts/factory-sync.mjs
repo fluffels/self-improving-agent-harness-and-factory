@@ -23,6 +23,7 @@ import { einheitAusId, einheitHash, einheitId, eolVon, istErgaenzbar, istGanzeDa
 import { mitWorkflowAusschluss } from "./harness-doctor-factory-update.mjs";
 import { rendereProjektwerte } from "./projektwert-lib.mjs";
 import { istModulEinheit, manifestKenntModule, MODUL_STANDARD, modulGewaehlt, modulWahl } from "./modul-wahl-lib.mjs";
+import { gewaehltesProfil, profilFormFehler, profilGewaehlt, PROFIL_VOLL } from "./profil-lib.mjs";
 import { erstUebernahme, istVorlage } from "./sync-abgleich-lib.mjs";
 import { testHilfeKopienAbweichend } from "./besitz-extraktion.mjs";
 import { WERKZEUG_HINWEIS } from "./release-tag-lib.mjs";
@@ -98,7 +99,7 @@ function projektkopienAbgewaehlt(manifest, gewaehlt, zielLies, begruendet) {
 }
 
 /** Meldungen zu Einheiten des alten Stands, die jetzt nicht mehr verteilt werden (Vorlage, kein Besitz mehr, anderer Ring); im Ziel wird nie gelöscht. */
-function altStandMeldungen(alt, sortiert, alle, manifest, gewaehlteModule) {
+function altStandMeldungen(alt, sortiert, alle, manifest, gewaehlteModule, profil = "voll") {
   const meldungen = [];
   for (const id of Object.keys(alt?.einheiten ?? {})) {
     if (id in sortiert) continue;
@@ -107,6 +108,10 @@ function altStandMeldungen(alt, sortiert, alle, manifest, gewaehlteModule) {
       continue;
     }
     const nurFactory = manifest.eintraege.find((e) => einheitId(e) === id);
+    if (nurFactory !== undefined && !profilGewaehlt(nurFactory, profil)) {
+      meldungen.push(`Profil minimal: ${nurFactory.pfad} ist kein Besitz mehr (Einheit '${id}'), im Ziel nicht gelöscht (bei Bedarf von Hand entfernen)`);
+      continue;
+    }
     meldungen.push(
       nurFactory !== undefined && istModulEinheit(nurFactory) && !modulGewaehlt(nurFactory, gewaehlteModule)
         ? `Modul '${nurFactory.modul}' nicht gewählt (Einheit '${id}'), im Ziel nicht gelöscht (bei Bedarf von Hand entfernen)`
@@ -136,6 +141,25 @@ function waehleModule(manifest, zielConfig) {
   return { gewaehlt: w.gewaehlt, fehler: w.fehler, begruendet, meldungen: [`Module: gewählt ${liste(w.gewaehlt)}; nicht gewählt ${liste(w.nichtGewaehlt)} (Wahl: module in ${PROJEKT_CONFIG})`] };
 }
 
+/** Vermerk des gewählten Profils im Sync-Stand: nur `minimal` steht dort, bei `voll` bleibt der Stand ohne Schlüssel (byte-gleich zu vorher). */
+const profilVermerk = (profil) => (profil === "minimal" ? { profil } : {});
+
+/**
+ * Profilwahl des Ziels (factory#519): `{ profil, fehler, meldungen }`. Nur wenn das Quell-Manifest Einheiten mit `profil` hat, wird die Ziel-Config gelesen;
+ * ohne den Schlüssel `profil` gilt `voll` (alles wird verteilt), ein ungültiger Wert ist ein Fehler mit Fix.
+ */
+function waehleProfil(manifest, zielConfig) {
+  if (!manifest.eintraege.some((e) => e.profil === PROFIL_VOLL)) return { profil: "voll", fehler: [], meldungen: [] };
+  let config;
+  try {
+    config = zielConfig();
+  } catch (err) {
+    return { profil: "voll", fehler: [`Ziel-Config: ${err.message}`], meldungen: [] };
+  }
+  const profil = gewaehltesProfil(config);
+  return { profil, fehler: profilFormFehler(config).map((f) => `${PROJEKT_CONFIG}: ${f}`), meldungen: profil === "voll" ? [] : [`Profil: ${profil} (Wahl: profil in ${PROJEKT_CONFIG})`] };
+}
+
 /**
  * Plan eines Syncs, ohne zu schreiben. `quelleLies`/`zielLies` liefern den Dateitext (relativer Pfad, Schrägstrich-Form) oder `null`.
  * Ergebnis: `fehler` (nicht leer: nichts schreiben), `meldungen`, `dateien` (Pfad → { text, neu, ausfuehrbar }, nur Geändertes),
@@ -162,12 +186,14 @@ export function planeSync({
   res.fehler.push(...manifestFehler(manifest, quelleLies));
   if (res.fehler.length > 0) return res;
   const wahl = waehleModule(manifest, zielConfig);
-  res.fehler.push(...wahl.fehler);
+  const pw = waehleProfil(manifest, zielConfig);
+  res.fehler.push(...wahl.fehler, ...pw.fehler);
   if (res.fehler.length > 0) return res;
-  res.meldungen.push(...wahl.meldungen, ...fehlendeRollen(zielLies));
+  res.meldungen.push(...wahl.meldungen, ...pw.meldungen, ...fehlendeRollen(zielLies));
 
   const nachPfad = new Map();
-  const alle = manifest.eintraege.filter((e) => wirdVerteilt(e) && modulGewaehlt(e, wahl.gewaehlt));
+  const gewaehlt = (e) => modulGewaehlt(e, wahl.gewaehlt) && profilGewaehlt(e, pw.profil);
+  const alle = manifest.eintraege.filter((e) => wirdVerteilt(e) && gewaehlt(e));
   const verteilt = alle.filter((e) => !istVorlage(e));
   res.meldungen.push(...projektkopienAbgewaehlt(manifest, wahl.gewaehlt, zielLies, wahl.begruendet));
   const alt = leseAltStand(zielLies);
@@ -223,10 +249,11 @@ export function planeSync({
   // Das Factory-Repo, aus dem der Besitz kommt: Bezieher lesen daraus Tags und Seiten-Links (nie aus ihrem eigenen Board-Routing).
   const quelleRepo = quelleRepoAusText(quelleLies(PROJEKT_PFAD));
   if (quelleRepo !== undefined) herkunft.repo = quelleRepo;
-  res.stand = { version: 2, quelle: herkunft, manifest: textHash(manifestText), einheiten: sortiert };
+  // Das gewählte Profil steht nur bei `minimal` im Stand (rein vermerkend, kein neuer Pflichtschlüssel: Version 2 und Stand ohne Schlüssel bleiben gültig).
+  res.stand = { version: 2, quelle: herkunft, manifest: textHash(manifestText), einheiten: sortiert, ...profilVermerk(pw.profil) };
   ziehe(STAND_PFAD, `${JSON.stringify(res.stand, null, 2)}\n`, zielLies(STAND_PFAD), false);
 
-  res.meldungen.push(...altStandMeldungen(alt, sortiert, alle, manifest, wahl.gewaehlt));
+  res.meldungen.push(...altStandMeldungen(alt, sortiert, alle, manifest, wahl.gewaehlt, pw.profil));
   return res;
 }
 
