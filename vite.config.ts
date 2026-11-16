@@ -12,8 +12,8 @@ async function ausschluss(): Promise<string[]> {
   const lib = "./scripts/waechter-einfrieren-lib.mjs";
   const noetig = [".github/aenderungsregister.json", ".factory/extraktion.json", lib];
   if (!noetig.every((p) => existsSync(new URL(p, import.meta.url)))) return [...configDefaults.exclude];
-  // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
-  const modul = (await import("./scripts/waechter-einfrieren-lib.mjs")) as { excludeListe: ExcludeListe };
+  // Per URL statt Literal: der Config-Bündler löst ein Literal schon beim Laden auf und scheitert beim Bezieher, dem die Datei fehlt.
+  const modul = (await import(/* @vite-ignore */ new URL(lib, import.meta.url).href)) as { excludeListe: ExcludeListe };
   return modul.excludeListe(
     configDefaults.exclude,
     (einlesen(".github/aenderungsregister.json") as { zeilen: Record<string, unknown>[] }).zeilen,
