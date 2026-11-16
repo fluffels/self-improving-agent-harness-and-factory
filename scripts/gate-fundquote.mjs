@@ -26,6 +26,9 @@
  *     `##[error]Process completed with exit code N.`, `##[error]The operation was canceled.` heißt abgebrochen. Die Dauer ist der
  *     Abstand der Zeitstempel zur nächsten Kopfzeile. Abgebrochene und übersprungene Läufe laden kein Log.
  *  6. Median-Dauer nur aus Summenzeilen und CI-Zeitstempeln; Kopfzeilen im Transkript tragen keine Zeit.
+ *  7. Wächter-Fänge (`faengeAusText`, `waechterPunkte`): je gezähltem Lauf mit Vitest-Summe (`Test Files …`) zählt jede Testdatei mit einer Zeile
+ *     `FAIL <datei>` als gefangen; ein Rot durch Zeitlimit, Signal-Abbruch oder Infrastruktur (Block bis zur nächsten FAIL-Zeile) zählt nie als Fang
+ *     und nimmt die Datei aus diesem Lauf heraus (ADR 0027). Ohne Logs im Fenster gibt es keine Punkte, nie eine 0 (`waechterLuecke` nennt den Grund).
  *
  * Grenzen: nur Claude-Transkripte (Codex-Sitzungen werden nicht gelesen; die CI-Quelle gilt für beide Laufzeiten); Hintergrund- und
  * pre-push-Läufe fehlen; ein fremdes npm-Skript, das selbst Gate-Skripte ruft, kann Rot vortäuschen; das PowerShell-Tool zählt nur
@@ -282,7 +285,7 @@ function bewerteAufruf(a, { sessionId, liesDatei, ctx }) {
   if (persistiert?.fehler) return nicht("unvollständig");
   const ergebnis = bewerteText(a, persistiert?.text ?? original, ctx);
   if (!ergebnis) return null;
-  return ergebnis.grund ? nicht(ergebnis.grund) : { ...lauf, gezaehlt: true, gates: ergebnis.gates };
+  return ergebnis.grund ? nicht(ergebnis.grund) : { ...lauf, gezaehlt: true, gates: ergebnis.gates, ...waechterTeil(zeilenVon(persistiert?.text ?? original).map((z) => z.text)) };
 }
 
 /**
@@ -325,9 +328,76 @@ export function laeufeAusCiLog(text, { id, ctx }) {
     }
     const exit = Number(s.zeilen.map((z) => /^##\[error\]Process completed with exit code (\d+)\./.exec(z.text)?.[1]).find(Boolean) ?? 0);
     const kopf = bewerteKopfLauf({ zeilen: s.zeilen, exit, ...ctx });
-    laeufe.push(kopf?.grund ? { ...lauf, gezaehlt: false, grund: kopf.grund, gates: [] } : { ...lauf, gezaehlt: true, gates: kopf?.gates ?? [] });
+    laeufe.push(kopf?.grund ? { ...lauf, gezaehlt: false, grund: kopf.grund, gates: [] } : { ...lauf, gezaehlt: true, gates: kopf?.gates ?? [], ...waechterTeil(s.zeilen.map((z) => z.text)) });
   }
   return laeufe;
+}
+
+// ── Wächter-Fänge (Regel 7) ──────────────────────────────────────────────────
+
+/** Vitest-Zeile eines roten Tests: `FAIL <datei> > …`, bei Workspace-Projekten mit `|name|` davor. */
+const FAIL_ZEILE = /^\s*FAIL\s+(?:\|[^|]*\|\s*)?(\S+?\.(?:test|spec)\.[cm]?[jt]sx?)(?:\s|$)/;
+const VITEST_SUMME = /^\s*Test Files\s+\d/;
+/** Rot ohne Aussagekraft (ADR 0027): Zeitlimit, Abbruch durch Signal, Infrastruktur. Geprüft wird der Block bis zur nächsten FAIL-Zeile. */
+const KEIN_FANG = [
+  ["Zeitlimit", /(?:Test|Hook) timed out in \d+\s*ms|Timeout of \d+\s*ms exceeded/i],
+  ["Abbruch", /\b(?:SIGTERM|SIGKILL|SIGINT)\b|^\s*Terminated\s*$/m],
+  ["Infrastruktur", /\b(?:ENOTFOUND|ECONNRESET|ECONNREFUSED|ETIMEDOUT|EAI_AGAIN|ENOSPC)\b|socket hang up/],
+];
+const BLOCK_ZEILEN = 25;
+
+/**
+ * Regel 7: Fänge je Testdatei aus den Zeilen eines gezählten Laufs. `{ vitest, faenge, ausgeschlossen }`: `vitest` heißt, die Ausgabe trägt die
+ * Vitest-Summe (der Lauf zählt für die Quote); `faenge` sind Dateien mit mindestens einem roten Test ohne Ausschlussgrund; `ausgeschlossen` sind
+ * `{ datei, grund }` für Dateien, deren Rot ganz auf Zeitlimit, Abbruch oder Infrastruktur beruht (kein Fang, aber auch kein „nicht gefangen“). Pur.
+ */
+export function faengeAusText(zeilen) {
+  const vitest = zeilen.some((z) => VITEST_SUMME.test(z));
+  const faenge = new Set();
+  const grund = new Map();
+  zeilen.forEach((z, i) => {
+    const datei = FAIL_ZEILE.exec(z)?.[1]?.replace(/\\/g, "/");
+    if (!datei) return;
+    const block = [z];
+    for (let j = i + 1; j < zeilen.length && block.length < BLOCK_ZEILEN && !FAIL_ZEILE.test(zeilen[j]); j++) block.push(zeilen[j]);
+    const treffer = KEIN_FANG.find(([, re]) => re.test(block.join("\n")));
+    if (treffer) grund.set(datei, treffer[0]);
+    else faenge.add(datei);
+  });
+  const ausgeschlossen = [...grund].filter(([datei]) => !faenge.has(datei)).map(([datei, g]) => ({ datei, grund: g }));
+  return { vitest, faenge: [...faenge], ausgeschlossen };
+}
+
+/** Der Teil `waechter` eines Laufs, nur wenn die Ausgabe eine Vitest-Summe trägt (sonst ist der Lauf für die Quote unsichtbar). */
+const waechterTeil = (zeilen) => {
+  const f = faengeAusText(zeilen);
+  return f.vitest ? { waechter: { faenge: f.faenge, ausgeschlossen: f.ausgeschlossen } } : {};
+};
+
+/**
+ * Regel 7: ein Punkt je gezähltem Vitest-Lauf und Datei aus `dateien` (`{ datei, einheitId, ts, wert }`, wert 1 = gefangen, 0 = Lauf ohne Fang).
+ * Eine Datei, deren Rot in diesem Lauf ausgeschlossen ist (Zeitlimit, Abbruch, Infrastruktur), bekommt keinen Punkt. Ohne gezählte Vitest-Läufe
+ * gibt es keine Punkte; `waechterLuecke` nennt dann den Grund. Pur.
+ */
+export function waechterPunkte(laeufe, dateien) {
+  const punkte = [];
+  for (const l of laeufe) {
+    if (!l.gezaehlt || !l.waechter) continue;
+    const aus = new Set(l.waechter.ausgeschlossen.map((a) => a.datei));
+    for (const datei of dateien) {
+      const gefangen = l.waechter.faenge.includes(datei);
+      if (!gefangen && aus.has(datei)) continue;
+      punkte.push({ datei, einheitId: `${l.quelle}:${l.id}:${l.ts}`, ts: l.ts, wert: gefangen ? 1 : 0 });
+    }
+  }
+  return punkte;
+}
+
+/** Grund der Lücke, wenn `waechterPunkte` nichts liefert: keine Logs im Fenster, oder Läufe ohne Vitest-Summe. */
+export function waechterLuecke(laeufe) {
+  if (laeufe.length === 0) return "keine Logs im Fenster (weder Transkript noch CI-Läufe)";
+  const nicht = laeufe.filter((l) => !l.gezaehlt).length;
+  return `keine gezählten Läufe mit Vitest-Ausgabe im Fenster (${laeufe.length} Läufe, davon ${nicht} nicht gezählt)`;
 }
 
 // ── Zählen und Bericht ───────────────────────────────────────────────────────
@@ -434,27 +504,29 @@ function fensterAus(werte, jetzt) {
   return Number.isNaN(von) || Number.isNaN(bis) ? null : { von, bis };
 }
 
+/** Standard-Zugriffe von `sammle` und `main` (Tests und Aufrufer überschreiben einzelne). */
+export const standardZugriffe = () => ({
+  pkg: () => JSON.parse(readFileSync("package.json", "utf8")), findeSessions: echteSessions, ladeSession: ladeSessionDatei,
+  gh: (args) => ghText(args), liesDatei: (p) => readFileSync(p, "utf8"), log: console.log, err: console.error, jetzt: () => Date.now(),
+});
+
 /**
- * Der Lauf als Funktion: liefert den Exit-Code (0 Bericht, 1 `gh` scheitert, 2 Aufruf-Fehler oder kein `verify`), die Zugriffe sind
- * injizierbar (`deps.pkg`, `findeSessions`, `ladeSession`, `gh`, `liesDatei`, `log`, `err`, `jetzt`).
+ * Sammelt die Läufe: `{ exit }` bei Aufruf-Fehler (2) oder `gh`-Fehler (1), sonst `{ werte, fenster, satz, transkript, ci }` mit den Läufen je Quelle.
+ * Die Zugriffe `d` kommen aus `standardZugriffe()`, der Aufrufer meldet Fehler über `d.err`.
  */
-export function main(argv = process.argv.slice(2), deps = {}) {
-  const d = {
-    pkg: () => JSON.parse(readFileSync("package.json", "utf8")), findeSessions: echteSessions, ladeSession: ladeSessionDatei,
-    gh: (args) => ghText(args), liesDatei: (p) => readFileSync(p, "utf8"), log: console.log, err: console.error, jetzt: () => Date.now(), ...deps,
-  };
+export function sammle(argv, d) {
   const { werte, fehler } = flagsLesen(argv, OPTIONEN);
   const fenster = fehler ? null : fensterAus(werte, d.jetzt());
   if (fehler || !fenster) {
     d.err(`${fehler?.text ?? "--von/--bis ist kein ISO-Zeitpunkt (JJJJ-MM-TT[THH:MM[:SS]][Z|±HH:MM])"}\n${AUFRUF}`);
-    return AUFRUF_EXIT;
+    return { exit: AUFRUF_EXIT };
   }
   let satz;
   try {
     satz = gateSatz(typeof d.pkg === "function" ? d.pkg() : d.pkg);
   } catch (e) {
     d.err(`${e.message}\nDas Skript liest die npm-Kette "verify" aus package.json; ohne sie gibt es keinen Gate-Satz.`);
-    return AUFRUF_EXIT;
+    return { exit: AUFRUF_EXIT };
   }
   const ctx = { paket: satz.paket, gates: satz.gates, verify: satz.verify };
   let ci;
@@ -462,9 +534,20 @@ export function main(argv = process.argv.slice(2), deps = {}) {
     ci = ciLaeufe(werte, fenster, ctx, d);
   } catch (e) {
     d.err(`gh: ${String(e.message).split("\n")[0]}`);
-    return 1;
+    return { exit: 1 };
   }
-  const transkript = transkriptLaeufe(werte, fenster, ctx, d);
+  return { werte, fenster, satz, transkript: transkriptLaeufe(werte, fenster, ctx, d), ci };
+}
+
+/**
+ * Der Lauf als Funktion: liefert den Exit-Code (0 Bericht, 1 `gh` scheitert, 2 Aufruf-Fehler oder kein `verify`), die Zugriffe sind
+ * injizierbar (`deps.pkg`, `findeSessions`, `ladeSession`, `gh`, `liesDatei`, `log`, `err`, `jetzt`).
+ */
+export function main(argv = process.argv.slice(2), deps = {}) {
+  const d = { ...standardZugriffe(), ...deps };
+  const s = sammle(argv, d);
+  if (s.exit !== undefined) return s.exit;
+  const { werte, fenster, satz, transkript, ci } = s;
   const quellen = { transkript: zaehle(transkript, satz.gates), ci: zaehle(ci.laeufe, satz.gates) };
   const gesamt = zaehle([...transkript, ...ci.laeufe], satz.gates);
   const kopf = `Fenster ${new Date(fenster.von).toISOString()} bis ${new Date(fenster.bis).toISOString()}`;

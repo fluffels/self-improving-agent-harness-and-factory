@@ -26,6 +26,7 @@ const FABRIK_EIGEN: { pfad: string; art: Art }[] = [
   { pfad: "scripts/aenderungsregister.mjs", art: "skript" },
   { pfad: "scripts/aenderungsregister-lib.mjs", art: "lib" },
   { pfad: ".github/aenderungsregister.json", art: "daten" },
+  { pfad: "scripts/fangquote-export.mjs", art: "skript" },
   { pfad: "scripts/token-analyse-freigabe.mjs", art: "skript-wurzel" },
   { pfad: "scripts/token-analyse-freigabe-lib.mjs", art: "lib" },
 ];

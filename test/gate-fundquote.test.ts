@@ -590,3 +590,86 @@ describe("main", () => {
     expect(json(b.log.mock.calls[0][0]).quellen.transkript.gezaehlt).toBe(1);
   });
 });
+
+// ── Wächter-Fänge (factory#607, Regel 7) ────────────────────────────────────
+
+type Waechter = { faenge: string[]; ausgeschlossen: { datei: string; grund: string }[] };
+const wf = gfModule as {
+  faengeAusText: (z: string[]) => { vitest: boolean; faenge: string[]; ausgeschlossen: { datei: string; grund: string }[] };
+  waechterPunkte: (l: (Lauf & { ts: number; waechter?: Waechter })[], d: string[]) => { datei: string; einheitId: string; ts: number; wert: number }[];
+  waechterLuecke: (l: Lauf[]) => string;
+};
+const A = "test/harness/a.test.ts";
+const B = "test/harness/b.test.ts";
+const summe = ["", " Test Files  1 failed | 3 passed (4)", "      Tests  1 failed (9)"];
+
+describe("faengeAusText", () => {
+  test("FAIL-Zeile mit Assertion ist ein Fang; mehrere Tests derselben Datei zählen einmal", () => {
+    const z = [` FAIL  ${A} > Suite > eins`, "AssertionError: expected 1 to be 2", ` FAIL  ${A} > Suite > zwei`, "AssertionError: x", ...summe];
+    expect(wf.faengeAusText(z)).toEqual({ vitest: true, faenge: [A], ausgeschlossen: [] });
+  });
+  test("Workspace-Projekt |name| vor dem Pfad und Backslash-Pfade werden erkannt", () => {
+    const z = [` FAIL  |unit| ${A} > x`, " FAIL  test\\harness\\b.test.ts > y", ...summe];
+    expect(wf.faengeAusText(z).faenge).toEqual([A, B]);
+  });
+  test("Negativfall: Zeitlimit, Signal-Abbruch und Infrastruktur sind kein Fang", () => {
+    const z = [
+      ` FAIL  ${A} > t`, "Error: Test timed out in 5000ms.",
+      ` FAIL  ${B} > t`, "Error: getaddrinfo ENOTFOUND registry.example",
+      " FAIL  test/harness/c.test.ts > t", "Killed by SIGTERM",
+      ...summe,
+    ];
+    expect(wf.faengeAusText(z)).toEqual({
+      vitest: true,
+      faenge: [],
+      ausgeschlossen: [{ datei: A, grund: "Zeitlimit" }, { datei: B, grund: "Infrastruktur" }, { datei: "test/harness/c.test.ts", grund: "Abbruch" }],
+    });
+  });
+  test("ein Zeitlimit in einem Test schließt einen echten Fang derselben Datei nicht aus", () => {
+    const z = [` FAIL  ${A} > t1`, "Error: Test timed out in 5000ms.", ` FAIL  ${A} > t2`, "AssertionError: x", ...summe];
+    expect(wf.faengeAusText(z)).toEqual({ vitest: true, faenge: [A], ausgeschlossen: [] });
+  });
+  test("der Ausschlussgrund eines Blocks greift nicht auf den nächsten Test über", () => {
+    const z = [` FAIL  ${A} > t1`, "AssertionError: x", ` FAIL  ${B} > t2`, "Error: Test timed out in 5000ms."];
+    expect(wf.faengeAusText(z)).toMatchObject({ faenge: [A], ausgeschlossen: [{ datei: B, grund: "Zeitlimit" }] });
+  });
+  test("ohne Vitest-Summe ist vitest falsch; grüne Ausgabe hat keine Fänge", () => {
+    expect(wf.faengeAusText([" ✓ test/harness/a.test.ts (3 tests)"])).toEqual({ vitest: false, faenge: [], ausgeschlossen: [] });
+    expect(wf.faengeAusText([" Test Files  4 passed (4)"])).toMatchObject({ vitest: true, faenge: [] });
+  });
+});
+
+describe("Wächter-Fänge in den Läufen", () => {
+  const rot = [` FAIL  ${A} > t`, "AssertionError: x", ...summe];
+  test("CI-Log: der rote Schritt trägt waechter, ein Schritt ohne Vitest-Summe nicht", () => {
+    const z = (sek: number, text: string) => `Tests\tVerify\t2026-11-01T10:00:${String(sek).padStart(2, "0")}.1Z ${text}`;
+    const text = [z(0, "##[group]Run npm test"), z(1, "> beispiel@1.0.0 test"), ...rot.map((t, i) => z(2 + i, t)), z(9, "##[error]Process completed with exit code 1.")].join("\n");
+    const l = gf.laeufeAusCiLog(text, { id: "90", ctx }) as unknown as { waechter?: Waechter }[];
+    expect(l[0].waechter).toEqual({ faenge: [A], ausgeschlossen: [] });
+    const ohne = [z(0, "##[group]Run npm run lint"), z(1, "> beispiel@1.0.0 lint"), z(2, "fertig")].join("\n");
+    expect((gf.laeufeAusCiLog(ohne, { id: "91", ctx }) as unknown as { waechter?: Waechter }[])[0].waechter).toBeUndefined();
+  });
+  test("Transkript: Exit 1 mit FAIL-Zeile trägt waechter", () => {
+    const l = laeufe([{ command: "npm test", text: `Exit code 1\n${kopf("test")}${rot.join("\n")}`, fehler: true }]) as unknown as { waechter?: Waechter }[];
+    expect(l[0].waechter).toEqual({ faenge: [A], ausgeschlossen: [] });
+  });
+});
+
+describe("waechterPunkte und waechterLuecke", () => {
+  const lauf = (id: string, waechter: Waechter | undefined, extra: Record<string, unknown> = {}) => ({ quelle: "ci", id, ts: T0, gezaehlt: true, gates: [], waechter, ...extra });
+  test("1 für einen Fang, 0 für einen Lauf ohne Fang, kein Punkt bei ausgeschlossenem Rot", () => {
+    const l = [lauf("1", { faenge: [A], ausgeschlossen: [] }), lauf("2", { faenge: [], ausgeschlossen: [{ datei: B, grund: "Zeitlimit" }] })];
+    const p = wf.waechterPunkte(l, [A, B]);
+    expect(p.map((x) => [x.einheitId.split(":")[1], x.datei, x.wert])).toEqual([["1", A, 1], ["1", B, 0], ["2", A, 0]]);
+  });
+  test("nicht gezählte Läufe und Läufe ohne Vitest-Ausgabe liefern keine Punkte (nie eine 0)", () => {
+    const l = [lauf("1", undefined), lauf("2", { faenge: [A], ausgeschlossen: [] }, { gezaehlt: false, grund: "abgebrochen" })];
+    expect(wf.waechterPunkte(l, [A])).toEqual([]);
+    expect(wf.waechterLuecke([])).toMatch(/keine Logs im Fenster/);
+    expect(wf.waechterLuecke(l)).toMatch(/2 Läufe, davon 1 nicht gezählt/);
+  });
+  test("die Einheit-Id ist je Lauf eindeutig, auch bei gleicher Session", () => {
+    const l = [lauf("s", { faenge: [], ausgeschlossen: [] }, { ts: T0 }), lauf("s", { faenge: [], ausgeschlossen: [] }, { ts: T0 + 1 })];
+    expect(new Set(wf.waechterPunkte(l, [A]).map((x) => x.einheitId)).size).toBe(2);
+  });
+});

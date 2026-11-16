@@ -21,6 +21,12 @@ const lib = libModul as unknown as {
   ledgerZeilen: (text: string) => Ledger[];
   pruefeAdrVerweise: (zeilen: Zeile[], ledger: Ledger[]) => string[];
   pruefeLedgerIds: (ledger: Ledger[], ids: string[], einfuehrung?: string) => string[];
+  VERFALL_PFLICHTFELDER: string[];
+  FREIE_PARAMETER: string[];
+  fangquote: (zeile: Zeile, zeilen: Zeile[], punkte: Zeile[]) => { wert?: number; laeufe?: number; faenge?: number; luecke?: string };
+  fangquoteExport: (punkte: { datei: string; einheitId: string; ts: number; wert: number }[], o?: { luecke?: string }) => Record<string, unknown>;
+  leseMesspunkte: (json: unknown, pfad: string) => { quelle: string; punkte: Zeile[] };
+  auswertung: (register: { zeilen: Zeile[] }, exporte: unknown[], o: Record<string, unknown>) => { zeilen: unknown[] };
 };
 
 const basis = (): Zeile => ({
@@ -205,12 +211,22 @@ describe("Messgrößen-Katalog", () => {
     for (const [, e] of eintraege) {
       expect(lib.QUELLEN).toContain(e.quelle);
       expect(lib.ARTEN).toContain(e.art);
-      expect(e.parameter === undefined || Array.isArray(lib.PARAMETER[e.parameter])).toBe(true);
+      expect(e.parameter === undefined || lib.FREIE_PARAMETER.includes(e.parameter) || Array.isArray(lib.PARAMETER[e.parameter])).toBe(true);
     }
   });
 
-  it("alle fünf Startgrößen sind vorhanden", () => {
-    expect(Object.keys(lib.MESSGROESSEN).sort()).toEqual(["blocker-schwere-brille", "ci-fix-runden", "kosten-je-ticket", "kosten-je-ticket-rolle", "nacharbeit-quote"]);
+  it("alle Startgrößen und die Fangquote sind vorhanden", () => {
+    expect(Object.keys(lib.MESSGROESSEN).sort()).toEqual(["blocker-schwere-brille", "ci-fix-runden", "fangquote", "kosten-je-ticket", "kosten-je-ticket-rolle", "nacharbeit-quote"]);
+  });
+
+  it("fangquote: Qualitätsmaß der Quelle gate-fundquote mit dem freien Parameter ziel (factory#607)", () => {
+    expect(lib.MESSGROESSEN.fangquote).toMatchObject({ quelle: "gate-fundquote", art: "qualitaet", parameter: "ziel" });
+    expect(lib.QUELLEN).toContain("gate-fundquote");
+    expect(fehler(mit({ messgroesse: "fangquote", parameter: "test/harness/a.test.ts" }))).toEqual([]);
+    const ohne = mit({ messgroesse: "fangquote" });
+    delete ohne.parameter;
+    expect(fehler(ohne).join("\n")).toMatch(/verlangt den Parameter ziel/);
+    expect(fehler(mit({ messgroesse: "fangquote", parameter: " " })).join("\n")).toMatch(/parameter: nicht leerer Text/);
   });
 });
 
@@ -228,5 +244,107 @@ describe("Realdaten: Register und ADR 0027", () => {
     expect(ledger.length).toBeGreaterThan(10);
     expect(lib.pruefeAdrVerweise(register.zeilen, ledger)).toEqual([]);
     expect(lib.pruefeLedgerIds(ledger, register.zeilen.map((z) => String(z.id)))).toEqual([]);
+  });
+});
+
+const verfall = (z: Zeile = {}): Zeile => ({ id: "w-a", art: "verfall", ziel: "test/harness/a.test.ts", aufgenommen: "2026-11-16", ablauf: "2027-05-16", messgroesse: "fangquote", ...z });
+const regel = (z: Zeile = {}): Zeile => verfall({ id: "r-x", ziel: "AGENTS.md#kein-gruen-durch-aufweichen", durch: ["w-a"], ...z });
+
+describe("Zeilenart verfall (factory#607)", () => {
+  it("ein Wächter und eine Regel mit durch sind gültig (Gegenbeweis)", () => {
+    expect(lib.pruefeRegister([verfall(), regel()])).toEqual([]);
+    expect(lib.pruefeRegister([verfall(), regel({ durch: undefined })])).toEqual([]); // Regel ohne durch: gültig, Fangquote ist eine Lücke
+  });
+
+  it.each(lib.VERFALL_PFLICHTFELDER.filter((f) => f !== "art"))("fehlendes Pflichtfeld %s ist rot", (feld) => {
+    const z = verfall();
+    delete z[feld];
+    expect(lib.pruefeRegister([z]).join("\n")).toContain(`Pflichtfeld ${feld} fehlt`);
+  });
+
+  const faelle: [string, Zeile[], RegExp][] = [
+    ["unbekanntes Feld", [verfall({ zusatz: 1 })], /unbekannte Felder zusatz/],
+    ["Messgröße ≠ fangquote", [verfall({ messgroesse: "ci-fix-runden" })], /nur fangquote/],
+    ["ablauf nicht nach aufgenommen", [verfall({ ablauf: "2026-11-16" })], /ablauf: muss nach aufgenommen/],
+    ["ungültiges Datum", [verfall({ aufgenommen: "2026-02-30" })], /aufgenommen: Datum/],
+    ["leeres ziel", [verfall({ ziel: " " })], /ziel: Pfad oder Anker/],
+    ["ungültige id", [verfall({ id: "Gross_X" })], /id: nur/],
+    ["durch bei einem Wächter (Pfad ohne Anker)", [verfall({ durch: ["w-a"] })], /durch: nur bei Regeln/],
+    ["durch leer", [verfall(), regel({ durch: [] })], /durch: nicht leere Liste/],
+    ["durch kein Array", [verfall(), regel({ durch: "w-a" })], /durch: nicht leere Liste/],
+    ["durch nennt eine unbekannte Id", [regel({ durch: ["fehlt"] })], /durch fehlt nennt keinen Wächter/],
+    ["durch nennt eine Regel statt eines Wächters", [verfall(), regel(), regel({ id: "r-y", durch: ["r-x"] })], /durch r-x nennt keinen Wächter/],
+  ];
+  it.each(faelle)("%s ist rot", (_n, zeilen, muster) => {
+    expect(lib.pruefeRegister(zeilen).join("\n")).toMatch(muster);
+  });
+
+  it("doppelte Ids gelten auch zwischen den Zeilenarten", () => {
+    expect(lib.pruefeRegister([verfall(), verfall()]).join("\n")).toMatch(/id w-a: doppelt/);
+    expect(lib.pruefeRegister([basis(), verfall({ id: "beispiel-1" })]).join("\n")).toMatch(/id beispiel-1: doppelt/);
+  });
+
+  it("eine Zeile mit art ≠ verfall bleibt eine Wirkungszeile: art ist dort ein unbekanntes Feld", () => {
+    expect(fehler(mit({ art: "wirkung" })).join("\n")).toMatch(/unbekannte Felder art/);
+  });
+
+  it("die Wirkungsprüfung ignoriert Verfall-Zeilen (kein Urteil, kein Absturz)", () => {
+    const e = lib.auswertung({ zeilen: [basis(), verfall(), regel()] }, [], { heute: "2027-01-01", eigenerRepoTag: "x" });
+    expect(e.zeilen).toHaveLength(1);
+  });
+});
+
+describe("Fangquote je Wächter und Regel (factory#607)", () => {
+  const pt = (einheitId: string, wert: number, parameter = "test/harness/a.test.ts", tag = "2026-12-01"): Zeile => ({ messgroesse: "fangquote", parameter, zeitpunkt: `${tag}T10:00:00.000Z`, einheitId, wert });
+  const zeilen = [verfall(), regel()];
+
+  it("Wächter: Anteil der Läufe mit Fang", () => {
+    const p = [pt("1", 1), pt("2", 0), pt("3", 0), pt("4", 0)];
+    expect(lib.fangquote(zeilen[0], zeilen, p)).toEqual({ wert: 0.25, laeufe: 4, faenge: 1 });
+  });
+
+  it("ein Wächter ohne einen einzigen Fang hat die Quote 0 (echte Null, nur mit Messpunkten)", () => {
+    expect(lib.fangquote(zeilen[0], zeilen, [pt("1", 0), pt("2", 0)])).toMatchObject({ wert: 0, laeufe: 2 });
+  });
+
+  it("Negativfall: Regel ohne durch ist eine Lücke, nie 0", () => {
+    const ohne = regel({ durch: undefined });
+    expect(lib.fangquote(ohne, [verfall(), ohne], [pt("1", 1)])).toEqual({ luecke: "kein erzwingender Wächter (durch)" });
+  });
+
+  it("Negativfall: ohne Messpunkte im Fenster (Logs fehlen) ist es eine Lücke mit Grund, nie 0", () => {
+    expect(lib.fangquote(zeilen[0], zeilen, [])).toEqual({ luecke: "keine Messpunkte im Fenster (Logs fehlen)" });
+    expect(lib.fangquote(zeilen[0], zeilen, [pt("1", 1, "test/harness/a.test.ts", "2026-11-15")]).luecke).toMatch(/keine Messpunkte/); // vor aufgenommen
+    expect(lib.fangquote(zeilen[0], zeilen, [pt("1", 1, "test/harness/a.test.ts", "2027-05-17")]).luecke).toMatch(/keine Messpunkte/); // nach ablauf
+    expect(lib.fangquote(zeilen[0], zeilen, [pt("1", 1, "test/harness/anderer.test.ts")]).luecke).toMatch(/keine Messpunkte/);
+  });
+
+  it("Regel: Fang, wenn mindestens einer der Wächter in durch im Lauf rot war", () => {
+    const z = [verfall(), verfall({ id: "w-b", ziel: "test/harness/b.test.ts" }), regel({ durch: ["w-a", "w-b"] })];
+    const p = [pt("1", 1), pt("1", 0, "test/harness/b.test.ts"), pt("2", 0), pt("2", 1, "test/harness/b.test.ts"), pt("3", 0), pt("3", 0, "test/harness/b.test.ts")];
+    expect(lib.fangquote(z[2], z, p)).toEqual({ wert: 2 / 3, laeufe: 3, faenge: 2 });
+  });
+
+  it("Regel mit durch auf eine unbekannte Id oder eine Regel ist eine Lücke", () => {
+    expect(lib.fangquote(regel({ durch: ["fehlt"] }), zeilen, [pt("1", 1)]).luecke).toMatch(/keinen Wächter/);
+    expect(lib.fangquote(regel({ durch: ["r-x"] }), [verfall(), regel(), regel({ id: "r-y", durch: ["r-x"] })], [pt("1", 1)]).luecke).toMatch(/keinen Wächter/);
+  });
+});
+
+describe("Messpunkte-Export der Fangquote (factory#607)", () => {
+  const p = [{ datei: "test/harness/a.test.ts", einheitId: "ci:1:5", ts: Date.parse("2026-11-20T10:00:00Z"), wert: 1 }];
+
+  it("der Export besteht leseMesspunkte (gleiches Format wie jede andere Quelle)", () => {
+    const e = lib.leseMesspunkte(lib.fangquoteExport(p), "x.json");
+    expect(e.quelle).toBe("gate-fundquote");
+    expect(e.punkte[0]).toMatchObject({ messgroesse: "fangquote", parameter: "test/harness/a.test.ts", zeitpunkt: "2026-11-20T10:00:00.000Z", wert: 1 });
+  });
+
+  it("ohne Punkte trägt der Export die Lücke mit Grund und keinen Punkt (nie eine 0)", () => {
+    const e = lib.fangquoteExport([], { luecke: "keine Logs im Fenster" });
+    expect(e).toMatchObject({ luecke: "keine Logs im Fenster", punkte: [] });
+    expect(lib.fangquoteExport([]).luecke).toMatch(/keine Messpunkte/);
+    expect(lib.fangquoteExport(p)).not.toHaveProperty("luecke");
+    expect(lib.leseMesspunkte(e, "x.json").punkte).toEqual([]);
   });
 });
