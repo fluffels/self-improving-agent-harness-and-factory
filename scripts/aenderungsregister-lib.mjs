@@ -289,6 +289,8 @@ export const bereichKontext = (exporte, bereich, { eigenerRepoTag, repoTagAb = R
     else if (punkte.some((p) => p.repoTag === undefined)) aus[quelle] = { grund: "Repo-Tag fehlt im Export (Quelle langfuse)" };
     else if (bereich === "fabrik") aus[quelle] = { punkte: punkte.filter((p) => p.repoTag === eigenerRepoTag) };
     else aus[quelle] = { punkte: punkte.filter((p) => p.repoTag !== eigenerRepoTag && tagVon(p.zeitpunkt) >= repoTagAb) };
+    // Eine angegebene, aber fehlende Datei lässt sich keiner Quelle zuordnen: jede Quelle mit Daten gilt dann als unvollständig (nie ein Urteil aus Teildaten).
+    if (dateien && aus[quelle].punkte) aus[quelle] = { grund: `Export unvollständig${dateien}` };
   }
   return aus;
 };

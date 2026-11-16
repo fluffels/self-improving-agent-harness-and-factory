@@ -298,12 +298,38 @@ describe("CLI", () => {
     const r = cli.auswerten(cli.parseArgs(["--register", join(FIX, "register.json"), "--export", join(FIX, "messpunkte-fabrik.json"), "--export", fehlt, "--json"]), basis);
     expect(r.exitCode).toBe(0);
     const z = JSON.parse(r.text).zeilen;
+    expect(z[0].fabrik).toMatchObject({ urteil: "Lücke", messwert: null }); // die Quelle lauf-ergebnis ist unvollständig: nie ein Urteil aus Teildaten
+    expect(z[0].fabrik.grund).toContain(`angegebene Datei fehlt: ${fehlt}`);
     expect(z[0].fabrik.kosten.luecke).toContain(`angegebene Datei fehlt: ${fehlt}`);
-    expect(z[0].fabrik).toMatchObject({ urteil: "Überlappung" }); // die übrigen Zeilen werden weiter bewertet
-    expect(z[1].fabrik.urteil).toBe("noch nicht fällig");
+    expect(z[1].fabrik.urteil).toBe("noch nicht fällig"); // die übrigen Zeilen werden weiter bewertet
     const nur = JSON.parse(cli.auswerten(cli.parseArgs(["--register", join(FIX, "register.json"), "--export", fehlt, "--json"]), basis).text).zeilen[0].fabrik;
     expect(nur).toMatchObject({ urteil: "Lücke", messwert: null });
     expect(nur.grund).toContain("fehlt.json");
+  });
+  it("eine fehlende Datei neben einer lesbaren Datei derselben Quelle: Lücke statt Verstoß aus Teildaten, kein Ticket", () => {
+    const a = ["--register", join(FIX, "register-solo.json"), "--export", join(FIX, "messpunkte-verstoss.json"), "--export", join(FIX, "zweiter-lauf.json"), "--json"];
+    const angelegt: Z[] = [];
+    const r = cli.auswerten(cli.parseArgs([...a, "--nach", "5"]), { ...basis, legeAn: (x: Z) => (angelegt.push(x), "u/1") });
+    expect(r.exitCode).toBe(0);
+    expect(JSON.parse(r.text).zeilen[0].fabrik).toMatchObject({ urteil: "Lücke", messwert: null });
+    expect(angelegt).toEqual([]);
+  });
+  it("mehrere fehlende Dateien stehen alle im Grund", () => {
+    const k = lib.bereichKontext([], "fabrik", { ...O, fehlend: ["a.json", "b.json"] });
+    expect((k.langfuse as Z).grund).toBe("Export fehlt (Quelle langfuse; angegebene Datei fehlt: a.json, b.json)");
+  });
+  it("ohne fehlende Datei trägt der Grund keinen Zusatz", () => {
+    expect((lib.bereichKontext([], "fabrik", O).langfuse as Z).grund).toBe("Export fehlt (Quelle langfuse)");
+  });
+  it("ein anderer Lesefehler als ENOENT (EACCES) bleibt Exit 1 mit Dateiname", () => {
+    const lies = (p: string) => {
+      if (p.endsWith("register.json")) return readFileSync(p, "utf8");
+      throw Object.assign(new Error("EACCES: permission denied"), { code: "EACCES" });
+    };
+    const r = cli.auswerten(cli.parseArgs([...args]), { ...basis, lies });
+    expect(r.exitCode).toBe(1);
+    expect(r.text).toContain("--export");
+    expect(r.text).toContain("messpunkte-fabrik.json");
   });
   it("eine lesbare, aber kaputte Exportdatei bleibt Exit 1 (nie ein Teilwert)", () => {
     expect(cli.auswerten(cli.parseArgs([...args]), { ...basis, lies: (p: string) => (p.endsWith("register.json") ? readFileSync(p, "utf8") : "{kaputt") }).exitCode).toBe(1);
