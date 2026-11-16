@@ -1417,7 +1417,7 @@ describe("Risikostufe: die Wächter rechnen nach (factory#526)", () => {
   });
   test("L4: kleiner Diff mit Stufe-2-Treffer (scripts/check-x.mjs), lenses=kombiniert: Meldung sagt KOMBI: nein, nie KOMBI: ja (Rechenpfad risikostufe.kombi)", () => {
     const kombi = `head=${SHA} runden=2 lenses=kombiniert blocker=kombiniert:0 sollte=kombiniert:0 hinweis=kombiniert:0 teilbrillen=architektur:0,requirement-treue:0,test-adaequanz:0 verdikt=ok`;
-    const r = checkReviewNachweis({ runGit: fakeGit({ messages: text(PL, kombi, true), files: "scripts/check-x.mjs\n", numstat: "5\t1\tscripts/check-x.mjs\n" }), env: { FACTORY_DIFF_BASE: "base" } } as never) as { fehler: string[]; risikostufe: Stufe };
+    const r = checkReviewNachweis({ runGit: fakeGit({ messages: text(PL, kombi, true), files: "scripts/check-x.mjs\n", numstat: "5\t1\tscripts/check-x.mjs\n" }), env: { FACTORY_DIFF_BASE: "base" } }) as unknown as { fehler: string[]; risikostufe: Stufe };
     assert.equal(r.risikostufe.stufe, 2);
     const f = r.fehler.join("\n");
     assert.match(f, /kombiniert genügt nur unter der Kombi-Lens-Grenze.*KOMBI: nein, Risikostufe 2/);
