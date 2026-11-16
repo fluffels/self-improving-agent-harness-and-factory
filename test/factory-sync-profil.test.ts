@@ -16,7 +16,7 @@ interface Plan {
   fehler: string[];
   meldungen: string[];
   dateien: Map<string, { text: string; neu: boolean }>;
-  stand: { einheiten: Record<string, string> } | null;
+  stand: { einheiten: Record<string, string>; profil?: string } | null;
 }
 interface PlanArgs {
   quelleLies(p: string): string | null;
@@ -96,11 +96,15 @@ describe("planeSync und Besitz-Profil", () => {
     expect(Object.keys(p.stand?.einheiten ?? {})).not.toContain(VOLL);
     expect(Object.keys(p.stand?.einheiten ?? {})).toContain(HOOK);
   });
-  test("ein unbekannter Profilname ist ein Fehler mit Fix, geschrieben wird nichts", () => {
+  test("der Sync-Stand vermerkt nur ein gewähltes minimal, sonst bleibt er ohne Schlüssel", () => {
+    expect(plane((c) => void (c.profil = "minimal")).stand?.profil).toBe("minimal");
+    expect(plane(() => undefined).stand).not.toHaveProperty("profil");
+  });
+  test("ein unbekannter Profilname ist ein Fehler mit Fix und nennt den Namen, geschrieben wird nichts", () => {
     const p = plane((c) => {
       c.profil = "klein";
     });
-    expect(p.fehler.join("\n")).toMatch(/profil.*Fix:/s);
+    expect(p.fehler.join("\n")).toMatch(/profil.*klein.*Fix:/s);
     expect(p.dateien.size).toBe(0);
   });
   test("Wechsel voll auf minimal löscht nichts und meldet einen Hinweis", () => {
@@ -131,7 +135,7 @@ describe("planeSync und Besitz-Profil", () => {
   test("pruefeProjektConfig meldet einen ungültigen Profilnamen mit Fix", () => {
     const c = JSON.parse(configText((x) => void (x.profil = "klein"))) as unknown;
     expect(configLib.pruefeProjektConfig(c).join("\n")).toMatch(/profil.*Fix:/s);
-    expect(configLib.pruefeProjektConfig(JSON.parse(configText(() => undefined)) as unknown).join("\n")).not.toContain("profil muss");
+    expect(configLib.pruefeProjektConfig(JSON.parse(configText(() => undefined)) as unknown).join("\n")).not.toContain("ist unbekannt");
   });
   test("Drift: ein ungültiger Profilname ist ein Fehler mit Fix und gilt wie voll (fail-closed)", () => {
     const voll = plane(() => undefined);

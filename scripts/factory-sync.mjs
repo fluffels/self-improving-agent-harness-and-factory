@@ -141,6 +141,9 @@ function waehleModule(manifest, zielConfig) {
   return { gewaehlt: w.gewaehlt, fehler: w.fehler, begruendet, meldungen: [`Module: gewählt ${liste(w.gewaehlt)}; nicht gewählt ${liste(w.nichtGewaehlt)} (Wahl: module in ${PROJEKT_CONFIG})`] };
 }
 
+/** Vermerk des gewählten Profils im Sync-Stand: nur `minimal` steht dort, bei `voll` bleibt der Stand ohne Schlüssel (byte-gleich zu vorher). */
+const profilVermerk = (profil) => (profil === "minimal" ? { profil } : {});
+
 /**
  * Profilwahl des Ziels (factory#519): `{ profil, fehler, meldungen }`. Nur wenn das Quell-Manifest Einheiten mit `profil` hat, wird die Ziel-Config gelesen;
  * ohne den Schlüssel `profil` gilt `voll` (alles wird verteilt), ein ungültiger Wert ist ein Fehler mit Fix.
@@ -246,7 +249,8 @@ export function planeSync({
   // Das Factory-Repo, aus dem der Besitz kommt: Bezieher lesen daraus Tags und Seiten-Links (nie aus ihrem eigenen Board-Routing).
   const quelleRepo = quelleRepoAusText(quelleLies(PROJEKT_PFAD));
   if (quelleRepo !== undefined) herkunft.repo = quelleRepo;
-  res.stand = { version: 2, quelle: herkunft, manifest: textHash(manifestText), einheiten: sortiert };
+  // Das gewählte Profil steht nur bei `minimal` im Stand (rein vermerkend, kein neuer Pflichtschlüssel: Version 2 und Stand ohne Schlüssel bleiben gültig).
+  res.stand = { version: 2, quelle: herkunft, manifest: textHash(manifestText), einheiten: sortiert, ...profilVermerk(pw.profil) };
   ziehe(STAND_PFAD, `${JSON.stringify(res.stand, null, 2)}\n`, zielLies(STAND_PFAD), false);
 
   res.meldungen.push(...altStandMeldungen(alt, sortiert, alle, manifest, wahl.gewaehlt, pw.profil));

@@ -40,6 +40,7 @@ describe("Formfehler der Config", () => {
       const f = lib.profilFormFehler({ profil: w });
       expect(f).toHaveLength(1);
       expect(f[0]).toContain("Fix:");
+      expect(f[0]).toContain(JSON.stringify(w));
     }
   });
 });

@@ -1,5 +1,5 @@
 // Aufrufstatistik der Besitz-Skripte, -Skills und -Agenten aus Claude-Code-Transkripten (factory#519): was ein Projekt real nutzt, was ungenutzt bleibt, und der Footprint je Besitz-Profil.
-// `node scripts/aufrufstatistik.mjs --transkripte <projekt-ordner> [--transkripte <weiterer>] [--seit JJJJ-MM-TT] [--json] [--footprint]`; Exit 0 ok, 2 Aufruf. Liest nur lokal, schreibt nichts.
+// `node scripts/aufrufstatistik.mjs --transkripte <projekt-ordner> [--transkripte <weiterer>] [--seit JJJJ-MM-TT] [--json] [--footprint]`; Exit 0 ok, 1 keine Aufrufdaten (0 Sessions), 2 Aufruf. Liest nur lokal, schreibt nichts.
 // Die Ausgabe nennt nur Skript-, Skill- und Agentennamen mit Zahlen. Methode und Grenzen: `aufrufstatistik-lib.mjs` (Kopfkommentar).
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -57,7 +57,9 @@ function statistik({ transkripte, seit }, wurzel, eintraege, lies) {
   const { aufrufe, sessions } = zaehleOrdner(transkripte, seit);
   const einstiege = [...EINSTIEG_QUELLEN, ...dateienIn(wurzel, ".github/workflows"), ...dateienIn(wurzel, ".githooks"), ...dateienIn(wurzel, ".claude/agents")].flatMap((p) => skripteImText(lies(p)));
   const genutzt = genutzteSkripte({ direkt: Object.keys(aufrufe.skripte), einstiege, besitzPfade: eintraege.map((e) => e.pfad), lies });
-  return { sessions, aufrufe, ungenutzt: ungenutzteEinheiten({ eintraege: verteilteEinheiten(eintraege, "voll"), genutzt, aufrufe }) };
+  const verteilt = verteilteEinheiten(eintraege, "voll");
+  const ueberEinstieg = [...genutzt].filter((p) => !(p in aufrufe.skripte) && verteilt.some((e) => e.pfad === p)).sort();
+  return { sessions, aufrufe, ueberEinstieg, ungenutzt: ungenutzteEinheiten({ eintraege: verteilt, genutzt, aufrufe }) };
 }
 
 /** Kommandozeile; Rückgabe = Exit-Code. */
@@ -76,6 +78,10 @@ export function cli(argv, { wurzel = join(dirname(fileURLToPath(import.meta.url)
   const json = {};
   if (w.transkripte !== undefined) {
     const st = statistik(w, wurzel, eintraege, lies);
+    if (st.sessions === 0) {
+      err("aufrufstatistik: keine Aufrufdaten (0 Sessions im Ordner und Zeitfenster); eine Ungenutzt-Liste ohne Material wäre irreführend");
+      return 1;
+    }
     ausgabe.push(formatiere(st));
     Object.assign(json, st);
   }

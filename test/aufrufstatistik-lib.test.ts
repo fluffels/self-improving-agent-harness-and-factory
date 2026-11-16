@@ -124,10 +124,22 @@ describe("CLI", () => {
     expect(alle.code).toBe(0);
     expect(alle.out).toContain("Sessions: 2");
     expect(alle.out).toMatch(/UNGENUTZT:\n\s+\(keine\)/);
+    expect(alle.out).toMatch(/Genutzt über Einstieg oder Import:\n\s+scripts\/hook\.mjs/);
+    for (const p of ["scripts/a.mjs", "scripts/b.mjs", "scripts/hook.mjs"]) expect(alle.out.split(p).length - 1, p).toBe(1);
     const neu = lauf(["--transkripte", t, "--seit", "2026-11-01"], wurzel);
     expect(neu.out).toContain("Sessions: 1");
     expect(neu.out).toMatch(/UNGENUTZT:\n\s+scripts\/b\.mjs/);
     expect(neu.out).not.toMatch(/ungenutzt:[\s\S]*scripts\/hook\.mjs/i);
+  });
+  test("Negativfall: ein Ordner ohne Sessions meldet fehlende Aufrufdaten mit Exit 1 statt einer Ungenutzt-Liste", () => {
+    const { wurzel, t } = fixture();
+    const leer = join(t, "leer");
+    mkdirSync(leer);
+    const r = lauf(["--transkripte", leer], wurzel);
+    expect(r.code).toBe(1);
+    expect(r.err).toContain("keine Aufrufdaten");
+    expect(r.out).not.toContain("UNGENUTZT");
+    expect(lauf(["--transkripte", t, "--seit", "2030-01-01"], wurzel).code).toBe(1);
   });
   test("--footprint allein misst ohne Transkripte; Subagenten-Events zählen mit, ein aufgerufener Skill ist nicht ungenutzt", () => {
     const { wurzel, t } = fixture();

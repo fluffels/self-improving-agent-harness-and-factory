@@ -51,7 +51,7 @@ export const profilGewaehlt = (e, profil) => e.profil !== PROFIL_VOLL || profil 
 /** Fehler der Form von `profil` in der Config (leer = in Ordnung). */
 export function profilFormFehler(config) {
   if (config?.profil === undefined || textOk(config.profil)) return [];
-  return [`profil muss einer der Werte ${PROFILE.map((p) => `"${p}"`).join(", ")} sein\nFix: ${FIX}`];
+  return [`profil ${JSON.stringify(config.profil)} ist unbekannt: erlaubt sind ${PROFILE.map((p) => `"${p}"`).join(", ")}\nFix: ${FIX}`];
 }
 
 /** Darf `von` die Einheit `nach` importieren? Eine Einheit ohne `profil` importiert keine Einheit mit `profil` (sie fehlte im Minimalprofil). */

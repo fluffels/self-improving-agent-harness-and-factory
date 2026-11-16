@@ -95,12 +95,16 @@ export function footprint(eintraege, profil, lies) {
 const sortiert = (o) => Object.entries(o).sort(([a, x], [b, y]) => y - x || (a < b ? -1 : 1));
 const zeile = ([n, k]) => `  ${String(k).padStart(5)}  ${n}`;
 
-/** Text der Statistik: Top-Aufrufe je Art und die Liste `UNGENUTZT:` (Skripte, Skills, Agenten, die verteilt werden, aber nie vorkommen). */
-export function formatiere({ aufrufe, ungenutzt, sessions }) {
+/**
+ * Text der Statistik, je Pfad des Besitzes genau ein Abschnitt: `(Aufrufe)` je Art (alle, mit Anzahl), `Genutzt über Einstieg oder Import:` (Skripte ohne eigenen Aufruf, die ein Hook, Workflow,
+ * `package.json`-Skript oder ein genutztes Skript einbindet) und `UNGENUTZT:` (verteilt, aber nie vorkommend).
+ */
+export function formatiere({ aufrufe, ungenutzt, sessions, ueberEinstieg = [] }) {
   const out = [`Sessions: ${sessions}`];
   for (const [art, titel] of [["skripte", "Skripte"], ["skills", "Skills"], ["agenten", "Agenten"]]) {
-    out.push(`${titel} (Aufrufe):`, ...(sortiert(aufrufe[art]).slice(0, 15).map(zeile)), ...(Object.keys(aufrufe[art]).length === 0 ? ["  (keine)"] : []));
+    out.push(`${titel} (Aufrufe):`, ...(sortiert(aufrufe[art]).map(zeile)), ...(Object.keys(aufrufe[art]).length === 0 ? ["  (keine)"] : []));
   }
+  out.push("Genutzt über Einstieg oder Import:", ...ueberEinstieg.map((p) => `  ${p}`), ...(ueberEinstieg.length === 0 ? ["  (keine)"] : []));
   out.push("UNGENUTZT:", ...ungenutzt.map((p) => `  ${p}`), ...(ungenutzt.length === 0 ? ["  (keine)"] : []));
   return out.join("\n");
 }
