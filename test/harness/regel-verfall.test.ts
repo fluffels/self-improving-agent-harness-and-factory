@@ -1,6 +1,6 @@
 /* @harness-waechter – Fitness-Function, im geschützten test/harness/ (factory#608, Regel-Verfall 2/4 von factory#517). */
 import { describe, it, expect } from "vitest";
-import { readFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
@@ -21,9 +21,28 @@ const lib = libModul as unknown as {
   pruefeAbdeckung: (o: { zeilen: Zeile[]; waechterPfade: string[]; agentsText: string }) => string[];
   pruefeAusnahmen: (a: unknown[], existiert: (z: string) => boolean) => string[];
   kandidaten: (r: { zeilen: Zeile[] }, e: { punkte: Zeile[] }[], o: { heute: string; ausnahmen?: { ziel: string; grund: string }[] }) => Ergebnis;
+  STREICH_LABEL: string;
+  WIDERSPRUCH_LABEL: string;
+  streichMarker: (id: string) => string;
+  streichBranch: (id: string) => string;
+  streichPlan: (ziel: string, text?: string) => { aktion: string; pfad: string; neuerText?: string; zeilen?: string[]; grund?: string };
+  registerGestrichen: (r: { zeilen: Zeile[] }, id: string, heute: string) => { zeilen: Zeile[] };
+  planeStreichPRs: (k: Kand[], offene: { headRefName?: string; body?: string }[], o?: { ausnahmen?: { ziel: string; grund: string }[] }) => { neu: Kand[]; uebersprungen: { id: string; grund: string }[] };
+  streichText: (k: Kand, o: { fenster: { von: string; bis: string }; heute: string; plan: { aktion: string; pfad: string; zeilen?: string[] } }) => { titel: string; commit: string; body: string };
+  hatWiderspruch: (labels: string[], teile: { vertraut: boolean; text: string }[]) => boolean;
+  checksGruen: (c: unknown) => boolean;
+  fettTitel: (z: string) => string | null;
+  NACHWEIS_ZEILEN: string[];
+  auditKommentar: (z: string) => string;
+  fristAbgelaufen: (angelegt: string, jetzt: Date) => boolean;
+  mergeEntscheidung: (o: { labels: string[]; teile: { vertraut: boolean; text: string }[]; checks: unknown; angelegt: string; jetzt: Date }) => { merge: boolean; grund: string };
 };
+type Kand = { id: string; ziel: string; ablauf: string; laeufe: number; faenge: number };
 const skript = skriptModul as unknown as {
   waechterPfade: () => string[];
+  pflichtChecks: (nr: number, gh: (a: string[]) => string) => unknown;
+  fremdtextTeile: (nr: number, gh: (a: string[]) => string) => { vertraut: boolean; text: string }[];
+  streichAnlegen: (k: Kand, o: { fenster: { von: string; bis: string }; heute: string }, io: { git: (a: string[]) => string; gh: (a: string[]) => string; wurzel: string }) => string;
   zielExistiert: (z: string) => boolean;
   parseArgs: (a: string[]) => { fehler?: string };
   ausfuehren: (a: Record<string, unknown>, d?: Record<string, unknown>) => { exitCode: number; text: string };
@@ -45,7 +64,7 @@ describe("Regel-Verfall: Bremse und Abdeckung des echten Registers (factory#608)
   });
 
   it("jede Verfall-Zeile zeigt auf ein existierendes Ziel (Pfad und Anker)", () => {
-    expect(verfallZeilen().filter((z) => !skript.zielExistiert(String(z.ziel))).map((z) => `${String(z.id)}: ${String(z.ziel)}`)).toEqual([]);
+    expect(verfallZeilen().filter((z) => z.gestrichen === undefined && !skript.zielExistiert(String(z.ziel))).map((z) => `${String(z.id)}: ${String(z.ziel)}`)).toEqual([]);
   });
 
   it("die Ziele der Wächter- und AGENTS.md-Regel-Zeilen sind eindeutig (Regeln in Doku-Seiten teilen sich Anker)", () => {
@@ -215,6 +234,9 @@ describe("Regel-Verfall: Skript", () => {
     expect(skript.ausfuehren({ kandidaten: true, exporte: [], register: "r.json" }, deps({ bezieher: true })).exitCode).toBe(4);
     expect(skript.ausfuehren(skript.parseArgs([]), deps()).exitCode).toBe(2);
     expect(skript.parseArgs(["--kandidaten", "--generieren"]).fehler).toBeDefined();
+    expect(skript.parseArgs(["--streich-pr", "--faellige-mergen"]).fehler).toBeDefined();
+    expect(skript.parseArgs(["--streich-pr"]).fehler).toBeUndefined();
+    expect(skript.parseArgs(["--faellige-mergen"]).fehler).toBeUndefined();
     expect(skript.parseArgs(["--kandidaten", "--heute", "morgen"]).fehler).toBeDefined();
     expect(skript.parseArgs(["--kandidaten"]).fehler).toBeUndefined();
   });
@@ -323,5 +345,313 @@ describe("Regel-Verfall: Lücken der Erstfassung (Review Runde 1)", () => {
     const p = skript.parseArgs(["--kandidaten"]) as unknown as { exporte: string[]; register: string };
     expect(p.exporte).toEqual([]);
     expect(p.register).toMatch(/aenderungsregister\.json$/);
+  });
+});
+
+describe("Regel-Verfall: Streich-PR und Widerspruchsfrist (factory#610)", () => {
+  const k: Kand = { id: "verfall-routine", ziel: ROUTINE, ablauf: "2026-01-31", laeufe: 4, faenge: 0 };
+  const fenster = { von: "2026-01-17", bis: "2026-02-15" };
+
+  it("Streich-Plan: Wächter-Datei wird gelöscht, ohne den Text zu brauchen", () => {
+    expect(lib.streichPlan(ROUTINE)).toEqual({ aktion: "loeschen", pfad: ROUTINE });
+  });
+
+  it("Streich-Plan: die exakten Zeilen der Regel in AGENTS.md entfallen (Listenpunkt samt tiefer eingerückter Folgezeilen), Nachbarregeln bleiben", () => {
+    const text = "# Kopf\n\n- **Eins:** a\n- **Zwei:** b\n  Fortsetzung von zwei\n  - Unterpunkt\n- **Drei:** c\n\nSchluss\n";
+    const p = lib.streichPlan("AGENTS.md#zwei", text);
+    expect(p.aktion).toBe("entfernen");
+    expect(p.zeilen).toEqual(["- **Zwei:** b", "  Fortsetzung von zwei", "  - Unterpunkt"]);
+    expect(p.neuerText).toBe("# Kopf\n\n- **Eins:** a\n- **Drei:** c\n\nSchluss\n");
+  });
+
+  it("Streich-Plan: nicht gefunden oder mehrdeutig ist kein Plan (nie geraten), ohne lesbare Datei ebenso", () => {
+    expect(lib.streichPlan("AGENTS.md#nix", "- **Eins:** a\n").aktion).toBe("keine");
+    expect(lib.streichPlan("AGENTS.md#eins", "- **Eins:** a\n- **Eins.** b\n").grund).toContain("mehrdeutig");
+    expect(lib.streichPlan("AGENTS.md#eins", undefined).aktion).toBe("keine");
+  });
+
+  it("Streich-Plan: ein Überschriften-Abschnitt entfällt bis zur nächsten gleich- oder höherrangigen Überschrift, Unterabschnitte gehen mit", () => {
+    const text = "# A\ntext\n## B\nb\n### B1\nb1\n## C\nc\n";
+    const p = lib.streichPlan("docs/x.md#b", text);
+    expect(p.neuerText).toBe("# A\ntext\n## C\nc\n");
+    expect(p.zeilen).toEqual(["## B", "b", "### B1", "b1"]);
+    expect(lib.streichPlan("docs/x.md#fehlt", text).aktion).toBe("keine");
+  });
+
+  it("Registerzeile wird auf gestrichen gesetzt, die übrigen bleiben; eine unbekannte Id wirft", () => {
+    const r = lib.registerGestrichen({ zeilen: [zeile("verfall-routine", ROUTINE), zeile("verfall-b", "test/harness/b.test.ts")] }, "verfall-routine", "2026-02-15");
+    expect(r.zeilen[0].gestrichen).toBe("2026-02-15");
+    expect(r.zeilen[1].gestrichen).toBeUndefined();
+    expect(() => lib.registerGestrichen({ zeilen: [] }, "verfall-x", "2026-02-15")).toThrow();
+  });
+
+  it("eine gestrichene Zeile ist nie wieder Kandidat und das Schema nimmt das Feld an", () => {
+    const e = lib.kandidaten({ zeilen: [zeile("verfall-routine", ROUTINE, { gestrichen: "2026-02-15" })] }, [{ punkte: [punkt(ROUTINE, "2026-02-10", "l1", 0)] }], { heute: "2026-03-15" });
+    expect(e.kandidaten).toEqual([]);
+    expect(e.nichtMessbar).toEqual([]);
+    const reg = skript.ausfuehren({ generieren: true, trocken: true, register: "r.json", exporte: [] }, { bezieher: false, lies: () => JSON.stringify({ version: 1, zeilen: [zeile("verfall-routine", ROUTINE, { gestrichen: "2026-02-15" })] }), waechter: () => [], agentsText: () => "" });
+    expect(reg.exitCode).toBe(0);
+    const falsch = skript.ausfuehren({ generieren: true, trocken: true, register: "r.json", exporte: [] }, { bezieher: false, lies: () => JSON.stringify({ version: 1, zeilen: [zeile("verfall-routine", ROUTINE, { gestrichen: "gestern" })] }), waechter: () => [], agentsText: () => "" });
+    expect(falsch.exitCode).toBe(1);
+  });
+
+  it("Negativfall: für ein Ziel der Sicherheits-Ausnahmeliste entsteht nie ein PR, auch nicht als gelieferter Kandidat (Red-Green)", () => {
+    const schutz: Kand = { ...k, id: "verfall-schutz", ziel: SCHUTZ };
+    const p = lib.planeStreichPRs([schutz, k], []);
+    expect(p.neu.map((x) => x.id)).toEqual(["verfall-routine"]);
+    expect(p.uebersprungen).toEqual([{ id: "verfall-schutz", grund: "Sicherheits-Ausnahme" }]);
+    expect(lib.planeStreichPRs([schutz], [], { ausnahmen: [] }).neu).toHaveLength(1); // Gegenprobe
+  });
+
+  it("Negativfall: ist für die Registerzeile schon ein Streich-PR offen (Branch oder Marker), entsteht kein zweiter (Red-Green)", () => {
+    expect(lib.planeStreichPRs([k], [{ headRefName: lib.streichBranch(k.id) }]).neu).toEqual([]);
+    expect(lib.planeStreichPRs([k], [{ headRefName: "anders", body: `text ${lib.streichMarker(k.id)}` }]).uebersprungen[0].grund).toBe("Streich-PR schon offen");
+    expect(lib.planeStreichPRs([k], [{ headRefName: "verfall/streich-andere-id", body: lib.streichMarker("andere-id") }]).neu).toHaveLength(1);
+    expect(lib.streichMarker("a")).not.toBe(lib.streichMarker("ab"));
+  });
+
+  it("der PR-Text trägt Fangquote, Fenster, Rohwerte, Frist, Widerspruchsweg, Marker und Umkehr", () => {
+    const t = lib.streichText(k, { fenster, heute: "2026-02-15", plan: { aktion: "loeschen", pfad: ROUTINE } });
+    expect(t.body).toContain(lib.streichMarker(k.id));
+    expect(t.body).toContain("0 Fänge in 4 Läufen");
+    expect(t.body).toContain("2026-01-17 bis 2026-02-15");
+    expect(t.body).toContain("laeufe 4, faenge 0");
+    expect(t.body).toContain("bis 2026-03-01");
+    expect(t.body).toContain(lib.WIDERSPRUCH_LABEL);
+    expect(t.body).toContain("gestrichen: 2026-02-15");
+    expect(t.body).toContain("Revert");
+    expect(t.titel).toContain(ROUTINE);
+    expect(lib.streichText(k, { fenster, heute: "2026-02-15", plan: { aktion: "entfernen", pfad: "AGENTS.md", zeilen: ["a", "b"] } }).body).toContain("2 Zeile(n)");
+  });
+
+  describe("Merge-Entscheidung", () => {
+    const jetzt = new Date("2026-03-01T12:00:00Z");
+    const alt = "2026-02-15T12:00:00Z"; // genau 14 Tage vorher
+    const gruen = [{ name: "verify", bucket: "pass" }, { name: "lint", bucket: "skipping" }];
+    const teile: { vertraut: boolean; text: string }[] = [];
+    const basis = { labels: [lib.STREICH_LABEL], teile, checks: gruen, angelegt: alt, jetzt };
+
+    it("alle drei Bedingungen erfüllt mergt", () => {
+      expect(lib.mergeEntscheidung(basis).merge).toBe(true);
+    });
+
+    it("Negativfall: Label status:widerspruch verhindert den Merge (Red-Green)", () => {
+      expect(lib.mergeEntscheidung({ ...basis, labels: [lib.STREICH_LABEL, "status:widerspruch"] })).toEqual({ merge: false, grund: "Widerspruch" });
+    });
+
+    it("Negativfall: der Kommentar einer vertrauten Person ist Widerspruch, ein Kommentar eines Fremden, ein leerer Kommentar und der PR-Body nicht", () => {
+      expect(lib.mergeEntscheidung({ ...basis, teile: [...teile, { vertraut: true, text: "Bitte nicht streichen" }] }).merge).toBe(false);
+      expect(lib.hatWiderspruch([], [...teile, { vertraut: false, text: "[Fremdtext ausgeblendet: Kommentar von @x, u]" }])).toBe(false);
+      expect(lib.hatWiderspruch([], [...teile, { vertraut: true, text: "  " }])).toBe(false);
+          });
+
+    it("Negativfall: ein roter, offener oder nicht lesbarer Check verhindert den Merge (Red-Green)", () => {
+      for (const checks of [[...gruen, { name: "x", bucket: "fail" }], [...gruen, { name: "x", bucket: "pending" }], [...gruen, { name: "x", bucket: "cancel" }], [], null, undefined, "kaputt"]) {
+        expect(lib.mergeEntscheidung({ ...basis, checks }), JSON.stringify(checks)).toEqual({ merge: false, grund: "Required Checks nicht grün" });
+      }
+      expect(lib.checksGruen(gruen)).toBe(true);
+    });
+
+    it("Frist: 14 Tage sind genau abgelaufen, eine Sekunde davor nicht, ein kaputtes Datum nie", () => {
+      expect(lib.fristAbgelaufen(alt, jetzt)).toBe(true);
+      expect(lib.fristAbgelaufen("2026-02-15T12:00:01Z", jetzt)).toBe(false);
+      expect(lib.fristAbgelaufen("morgen", jetzt)).toBe(false);
+      expect(lib.mergeEntscheidung({ ...basis, angelegt: "2026-02-20T00:00:00Z" }).grund).toContain("Frist");
+    });
+
+    it("Widerspruch geht vor Frist und Checks", () => {
+      expect(lib.mergeEntscheidung({ ...basis, labels: ["status:widerspruch"], checks: [], angelegt: "2026-02-28T00:00:00Z" }).grund).toBe("Widerspruch");
+    });
+  });
+
+  describe("Skript --streich-pr und --faellige-mergen", () => {
+    const reg = JSON.stringify({ version: 1, zeilen: [zeile("verfall-routine", ROUTINE), zeile("verfall-schutz", SCHUTZ)] });
+    const exportDatei = JSON.stringify({ art: "fangquote-messpunkte", quelle: "gate-fundquote", punkte: [punkt(ROUTINE, "2026-02-10", "l1", 0), punkt(SCHUTZ, "2026-02-10", "l1", 0)] });
+    const lies = (p: string) => (p === "e.json" ? exportDatei : reg);
+    const streichArgs = { streichPr: true, register: "r.json", exporte: ["e.json"], heute: "2026-02-15" };
+
+    it("legt je Kandidat einen PR an, die Sicherheits-Ausnahme nie; --trocken legt nichts an", () => {
+      const angelegt: string[] = [];
+      const d = { bezieher: false, lies, gh: () => "[]", streichAnlegen: (kand: Kand) => (angelegt.push(kand.id), "https://pr/1") };
+      const r = skript.ausfuehren(streichArgs, d);
+      expect(r.exitCode).toBe(0);
+      expect(angelegt).toEqual(["verfall-routine"]);
+      expect(r.text).toContain("https://pr/1");
+      expect(skript.ausfuehren({ ...streichArgs, trocken: true }, { ...d, streichAnlegen: () => { throw new Error("darf nicht"); } }).text).toContain("Trocken");
+    });
+
+    it("offener Streich-PR: kein zweiter; Fehler eines Kandidaten ist Exit 1", () => {
+      const offen = JSON.stringify([{ number: 5, headRefName: "verfall/streich-verfall-routine", body: "" }]);
+      const r = skript.ausfuehren(streichArgs, { bezieher: false, lies, gh: () => offen, streichAnlegen: () => { throw new Error("darf nicht"); } });
+      expect(r.exitCode).toBe(0);
+      expect(r.text).toContain("Streich-PR schon offen");
+      const fehler = skript.ausfuehren(streichArgs, { bezieher: false, lies, gh: () => "[]", streichAnlegen: () => { throw new Error("push abgelehnt"); } });
+      expect(fehler.exitCode).toBe(1);
+      expect(fehler.text).toContain("push abgelehnt");
+    });
+
+    const prs = (labels: string[], createdAt = "2026-02-01T00:00:00Z") => JSON.stringify([{ number: 7, createdAt, labels: labels.map((name) => ({ name })) }]);
+    const mergeD = (liste: string, extra: Record<string, unknown> = {}) => {
+      const gh: string[][] = [];
+      return { gh, d: { bezieher: false, jetzt: () => new Date("2026-03-01T00:00:00Z"), gh: (a: string[]) => (gh.push(a), a[1] === "list" ? liste : ""), fremdtext: () => [], checks: () => [{ bucket: "pass" }], ...extra } };
+    };
+    const gemergt = (gh: string[][]) => gh.some((a) => a[1] === "merge");
+
+    it("--faellige-mergen mergt nur bei Frist, ohne Widerspruch und mit grünen Checks", () => {
+      const ok = mergeD(prs([lib.STREICH_LABEL]));
+      const r = skript.ausfuehren({ faelligeMergen: true }, ok.d);
+      expect(r.exitCode).toBe(0);
+      expect(gemergt(ok.gh)).toBe(true);
+      expect(ok.gh.find((a) => a[1] === "merge")).toEqual(["pr", "merge", "7", "--squash", "--delete-branch"]);
+      const trocken = mergeD(prs([lib.STREICH_LABEL]));
+      expect(skript.ausfuehren({ faelligeMergen: true, trocken: true }, trocken.d).text).toContain("Trocken");
+      expect(gemergt(trocken.gh)).toBe(false);
+    });
+
+    it("Negativfälle: Widerspruch (Label oder vertrauter Kommentar), roter Check, junge Frist und Lesefehler mergen nie (Red-Green)", () => {
+      const faelle: [string, ReturnType<typeof mergeD>][] = [
+        ["Label", mergeD(prs([lib.STREICH_LABEL, "status:widerspruch"]))],
+        ["Kommentar", mergeD(prs([lib.STREICH_LABEL]), { fremdtext: () => [{ vertraut: true, text: "nein" }] })],
+        ["rot", mergeD(prs([lib.STREICH_LABEL]), { checks: () => [{ bucket: "pass" }, { bucket: "fail" }] })],
+        ["jung", mergeD(prs([lib.STREICH_LABEL], "2026-02-25T00:00:00Z"))],
+        ["Fremdtext-Fehler", mergeD(prs([lib.STREICH_LABEL]), { fremdtext: () => { throw new Error("gh weg"); } })],
+        ["Checks unlesbar", mergeD(prs([lib.STREICH_LABEL]), { checks: () => null })],
+      ];
+      for (const [name, f] of faelle) {
+        const r = skript.ausfuehren({ faelligeMergen: true }, f.d);
+        expect(gemergt(f.gh), name).toBe(false);
+        expect(r.text, name).toContain("nicht gemergt");
+      }
+    });
+
+    it("das Skript ruft den Streich-Merge nicht aus einem Workflow auf (kein GITHUB_TOKEN-Lauf, der keine CI startet)", () => {
+      const workflows = readdirSync(join(WURZEL, ".github", "workflows")).map((n) => lies(join(".github", "workflows", n)));
+      expect(workflows.filter((t) => t.includes("regel-verfall.mjs"))).toEqual([]);
+    });
+  });
+  describe("Review Runde 1: Nachweis, Streich-Grenzfälle, Verdrahtung", () => {
+    it("die Commit-Zeilen eines Streich-PRs gelten für beide Nachweis-Gates (Review- und Abnahme-Override mit Begründung)", () => {
+      const t = lib.streichText({ id: "verfall-x", ziel: ROUTINE, ablauf: "2026-01-31", laeufe: 1, faenge: 0 }, { fenster: { von: "a", bis: "b" }, heute: "2026-02-15", plan: { aktion: "loeschen", pfad: ROUTINE } });
+      const nachricht = [t.commit, ...(t as unknown as { nachweis: string[] }).nachweis].join("\n\n");
+      expect(lib.NACHWEIS_ZEILEN).toHaveLength(2);
+      for (const schluessel of ["SIH-Review-Override", "SIH-Abnahme-Override"]) {
+        expect(nachricht, schluessel).toMatch(new RegExp(`^${schluessel}: #\\d+ \\S.+`, "m"));
+      }
+    });
+
+    it("fettTitel ist die eine Erkennung: eingerückt, ohne Schlusszeichen, nicht gierig, kein Fließtext", () => {
+      expect(lib.fettTitel("  - **Zwei (x).** b")).toBe("Zwei (x)");
+      expect(lib.fettTitel("- **A:** x **B**")).toBe("A");
+      expect(lib.fettTitel("Satz - **kein Punkt**")).toBeNull();
+    });
+
+    it("Streich-Plan: ein gleich eingerückter, nicht fetter Listenpunkt nach der Regel bleibt; eine eingerückte fette Unterregel bleibt als eigene Regel; die Regel am Dateiende", () => {
+      const p1 = lib.streichPlan("AGENTS.md#zwei", "- **Zwei:** b\n- Nachbar\n");
+      expect(p1.neuerText).toBe("- Nachbar\n");
+      const p2 = lib.streichPlan("AGENTS.md#zwei", "- **Zwei:** b\n  - **Unter:** x\n  weiter\n");
+      expect(p2.zeilen).toEqual(["- **Zwei:** b"]);
+      const p3 = lib.streichPlan("AGENTS.md#zwei", "- **Eins:** a\n- **Zwei:** b");
+      expect(p3.neuerText).toBe("- **Eins:** a");
+    });
+
+    it("Streich-Plan: ein eingerückter Titel wird gefunden, der Titel mit Schlusszeichen ebenso, und nicht gefunden unterscheidet sich von mehrdeutig im Grund", () => {
+      expect(lib.streichPlan("AGENTS.md#zwei", "  - **Zwei.** b\n").aktion).toBe("entfernen");
+      expect(lib.streichPlan("AGENTS.md#zwei", "- **Eins:** a\n").grund).toContain("nicht gefunden");
+      expect(lib.streichPlan("AGENTS.md#zwei", "- **Zwei:** a\n- **Zwei:** b\n").grund).toContain("mehrdeutig");
+      expect(lib.streichPlan("AGENTS.md#zwei", undefined).grund).toBe("Datei nicht lesbar");
+    });
+
+    it("Streich-Plan: Abschnitt vor einer höherrangigen Überschrift und letzter Abschnitt der Datei", () => {
+      expect(lib.streichPlan("docs/x.md#b", "# A\n## B\nb\n# X\nx\n").neuerText).toBe("# A\n# X\nx\n");
+      expect(lib.streichPlan("docs/x.md#b", "# A\n## B\nb").neuerText).toBe("# A");
+    });
+
+    it("Streich-Plan: doppelte Leerzeilen um die gestrichene Regel werden zu einer", () => {
+      expect(lib.streichPlan("AGENTS.md#zwei", "a\n\n- **Zwei:** b\n\nc\n").neuerText).toBe("a\n\nc\n");
+    });
+
+    it("registerGestrichen markiert nur Verfall-Zeilen und prüft nur gegen sie", () => {
+      const fremd = { id: "verfall-routine", art: "umstellung" };
+      expect(() => lib.registerGestrichen({ zeilen: [fremd] }, "verfall-routine", "2026-02-15")).toThrow();
+      const r = lib.registerGestrichen({ zeilen: [fremd, zeile("verfall-routine", ROUTINE)] }, "verfall-routine", "2026-02-15");
+      expect(r.zeilen[0].gestrichen).toBeUndefined();
+      expect(r.zeilen[1].gestrichen).toBe("2026-02-15");
+    });
+
+    it("die Liste der Streich-PRs ist auf offene PRs mit dem Streich-Label begrenzt (sonst mergte --faellige-mergen jeden PR)", () => {
+      const gh: string[][] = [];
+      skript.ausfuehren({ faelligeMergen: true }, { bezieher: false, gh: (a: string[]) => (gh.push(a), "[]") });
+      const liste = gh.find((a) => a[1] === "list") as string[];
+      expect(liste.slice(liste.indexOf("--label"), liste.indexOf("--label") + 2)).toEqual(["--label", lib.STREICH_LABEL]);
+      expect(liste.slice(liste.indexOf("--state"), liste.indexOf("--state") + 2)).toEqual(["--state", "open"]);
+    });
+
+    it("ein Fehler beim Merge oder beim Lesen ist Exit 1, und nach dem Merge steht der Audit-Kommentar", () => {
+      const aufrufe: string[][] = [];
+      const liste = JSON.stringify([{ number: 7, createdAt: "2026-02-01T00:00:00Z", labels: [{ name: lib.STREICH_LABEL }], body: "- **Rohwerte:** id `verfall-routine`, ziel `test/harness/bash-parser.test.ts`, ablauf" }]);
+      const d = { bezieher: false, jetzt: () => new Date("2026-03-01T00:00:00Z"), fremdtext: () => [], checks: () => [{ bucket: "pass" }] };
+      const ok = skript.ausfuehren({ faelligeMergen: true }, { ...d, gh: (a: string[]) => (aufrufe.push(a), a[1] === "list" ? liste : "") });
+      expect(ok.exitCode).toBe(0);
+      const kommentar = aufrufe.find((a) => a[1] === "comment") as string[];
+      expect(kommentar[kommentar.indexOf("--body") + 1]).toContain("🛡️ Leitplanken-Änderung selbst gemergt");
+      expect(kommentar[kommentar.indexOf("--body") + 1]).toContain(ROUTINE);
+      const fehler = skript.ausfuehren({ faelligeMergen: true }, { ...d, gh: (a: string[]) => { if (a[1] === "merge") throw new Error("nicht mergbar"); return a[1] === "list" ? liste : ""; } });
+      expect(fehler.exitCode).toBe(1);
+      expect(fehler.text).toContain("nicht gemergt");
+      expect(skript.ausfuehren({ faelligeMergen: true }, { ...d, fremdtext: () => { throw new Error("x"); }, gh: (a: string[]) => (a[1] === "list" ? liste : "") }).exitCode).toBe(1);
+    });
+
+    it("pflichtChecks liest die JSON-Ausgabe auch aus dem Fehler (gh pr checks endet bei rot oder offen mit Exit ≠ 0), Müll ist null", () => {
+      const aus = JSON.stringify([{ name: "verify", bucket: "pending" }]);
+      expect(skript.pflichtChecks(3, () => aus)).toEqual([{ name: "verify", bucket: "pending" }]);
+      expect(skript.pflichtChecks(3, () => { throw Object.assign(new Error("exit 8"), { stdout: aus }); })).toEqual([{ name: "verify", bucket: "pending" }]);
+      expect(skript.pflichtChecks(3, () => { throw new Error("kein stdout"); })).toBeNull();
+      expect(skript.pflichtChecks(3, () => "kein json")).toBeNull();
+    });
+
+    it("fremdtextTeile ordnet jedem Beitrag die Vertrauensprüfung des Fremdtext-Gates zu (Owner und vertraute Bots ja, Fremde nein)", () => {
+      const nutzer = (login: string, type = "User") => ({ login, type });
+      const gh = (a: string[]) => {
+        if (a[1] === "repos/{owner}/{repo}") return JSON.stringify({ owner: { login: "ich" } });
+        if (a.some((x) => x.includes("/issues/"))) return JSON.stringify([[{ user: nutzer("ich"), body: "vom Owner" }, { user: nutzer("fremd"), body: "von Fremden" }]]);
+        if (a.some((x) => x.includes("/reviews"))) return JSON.stringify([[{ user: nutzer("github-actions[bot]", "Bot"), body: "" }]]);
+        return JSON.stringify([[]]);
+      };
+      expect(skript.fremdtextTeile(9, gh)).toEqual([{ vertraut: true, text: "vom Owner" }, { vertraut: false, text: "von Fremden" }, { vertraut: true, text: "" }]);
+      expect(() => skript.fremdtextTeile(9, () => JSON.stringify({}))).toThrow();
+    });
+
+    it("streichAnlegen: Worktree von origin/main, Datei gelöscht, Registerzeile gestrichen, Commit mit Nachweis-Zeilen, Push, PR mit Label, Aufräumen auch bei Abbruch", () => {
+      const befehle: string[][] = [];
+      let zustand = { geloescht: false, register: "" };
+      const git = (a: string[]) => {
+        befehle.push(a);
+        if (a[2] === "worktree" && a[3] === "add") {
+          mkdirSync(join(a[6], ".github"), { recursive: true });
+          mkdirSync(join(a[6], "test", "harness"), { recursive: true });
+          writeFileSync(join(a[6], ROUTINE), "x");
+          writeFileSync(join(a[6], ".github", "aenderungsregister.json"), JSON.stringify({ version: 1, zeilen: [zeile("verfall-routine", ROUTINE)] }));
+        }
+        if (a[2] === "commit") {
+          const wurzel = a[1];
+          zustand = { geloescht: !existsSync(join(wurzel, ROUTINE)), register: readFileSync(join(wurzel, ".github", "aenderungsregister.json"), "utf8") };
+        }
+        return "";
+      };
+      const ghAufrufe: string[][] = [];
+      const gh = (a: string[]) => (ghAufrufe.push(a), a[1] === "create" && a[0] === "pr" ? "https://pr/9\n" : "");
+      const url = skript.streichAnlegen({ id: "verfall-routine", ziel: ROUTINE, ablauf: "2026-01-31", laeufe: 2, faenge: 0 }, { fenster: { von: "2026-01-17", bis: "2026-02-15" }, heute: "2026-02-15" }, { git, gh, wurzel: "/x" });
+      expect(url).toBe("https://pr/9");
+      expect(zustand.geloescht).toBe(true);
+      expect(zustand.register).toContain('"gestrichen": "2026-02-15"');
+      expect(befehle.find((a) => a[2] === "worktree" && a[3] === "add")?.slice(4, 5)).toEqual(["-b"]);
+      expect(befehle.find((a) => a[2] === "worktree" && a[3] === "add")?.at(-1)).toBe("origin/main");
+      const commit = befehle.find((a) => a[2] === "commit") as string[];
+      expect(commit.filter((x) => x.startsWith("SIH-"))).toHaveLength(2);
+      expect(befehle.some((a) => a[2] === "push")).toBe(true);
+      const pr = ghAufrufe.find((a) => a[0] === "pr") as string[];
+      expect(pr[pr.indexOf("--label") + 1]).toBe(lib.STREICH_LABEL);
+      expect(befehle.some((a) => a[2] === "worktree" && a[3] === "remove")).toBe(true);
+    });
   });
 });
