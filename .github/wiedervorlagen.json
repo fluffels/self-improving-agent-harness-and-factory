@@ -18,6 +18,12 @@
     "text": "Messen: `git log --since 2026-11-15 --grep 'Folge #'` und `node scripts/lauf-ergebnis.mjs --von <Merge von factory#541> --bis <Termin> --json`: gab es seit dem Merge ein Probe-Ticket (synthetische Gegenprobe, Messlauf), das Wirkung je Ergebnis sowie Kosten gegen erwartete Ersparnis vorab nannte, und ein Modellwechsel nach Anbieter-Empfehlung, dessen Umbau Nacharbeit (Revert oder `Folge #` binnen 14 Tagen) auslöste? Probe ohne Vorab-Bewertung oder Modellwechsel mit Nacharbeit durch die Empfehlung: die Regel nachschärfen (Evidenz nach ADR 0027 Punkt 2). Gab es keinen Fall, um 8 Wochen schieben und das festhalten. Dann Eintrag löschen."
   },
   {
+    "id": "token-budget-je-lauf-560",
+    "faellig": "2027-02-15",
+    "titel": "Regel Token-Budget je Lauf prüfen (factory#560, ADR 0027)",
+    "text": "Messen aus vorhandenen Daten, ohne eigenen Messlauf: Wurde die Regel verletzt (Gegenprobe, Messlauf oder Zusatzpass im Lauf; Beleg: PR-Texte und `Review:`-Zeilen seit dem Merge von factory#560)? Löste ein Verstoß Nacharbeit aus (`Folge #` binnen 14 Tagen)? Danach schärfen, um 8 Wochen schieben oder löschen (Evidenz nach ADR 0027 Punkt 2)."
+  },
+  {
     "id": "ticket-drift-28",
     "faellig": "2027-02-10",
     "titel": "Ticket-Drift-Wochenlauf auswerten (factory#28, factory#498, ADR 0027)",

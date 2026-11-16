@@ -32,6 +32,7 @@ const P = rawPlace as unknown as {
     itemsUeberIssues: (b: unknown, n: number[], o: object, repo: string) => unknown[];
     loadItems: (b: unknown, o: { repo: string; token?: string }) => unknown[];
     ladeLabels: (nr: number, repo: string) => string[] | null;
+    ghJson: (args: string[]) => unknown;
     addToBoardTodo: (b: unknown, nodeId: string, o: object) => string;
     setPosition: (b: unknown, id: string, after: string | null) => void;
     entferneVomBoard: (b: unknown, id: string) => void;
@@ -81,6 +82,11 @@ describe("ECHTE_PLACE_IO: die übrigen Methoden (#101 L6a)", () => {
     expect(P.ECHTE_PLACE_IO.ladeLabels(7, "zz-org/ziel")).toEqual([]);
     jsonAntwort = () => { throw new Error("404"); };
     expect(P.ECHTE_PLACE_IO.ladeLabels(7, "zz-org/ziel")).toBeNull();
+  });
+  test("ghJson reicht die Argumente an das echte ghJson durch (factory#560)", () => {
+    jsonAntwort = () => ({ number: 5 });
+    expect(P.ECHTE_PLACE_IO.ghJson(["api", "repos/zz-org/ziel/issues/5"])).toEqual({ number: 5 });
+    expect(aufrufe[0].args).toEqual(["api", "repos/zz-org/ziel/issues/5"]);
   });
   test("setPosition und entferneVomBoard schicken die Mutation mit Board-, Item- und Anker-ID", () => {
     P.ECHTE_PLACE_IO.setPosition(factory, "ITEM_1", "ITEM_0");

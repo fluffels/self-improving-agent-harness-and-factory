@@ -5,7 +5,7 @@ description: Gestaffelter Mehr-Perspektiven-Review des Ticket-Diffs: erst `gate-
 
 # Mehr-Perspektiven-Review mit Gate-Short-Circuit
 
-**Codex:** Die `Agent`-/`SendMessage`-Beispiele und Claude-Hook-Guards unten sind für Codex nicht registriert oder nicht als wirksam nachgewiesen (Grenze bis zur Freigabe des Codex-Adapters). Tatsächliche Aufrufe, Feature-Reduktionen und offene Schutzgrenzen: [Codex](../../../docs/codex/einstieg.md). Der gesperrte Codex-Einstieg aus `AGENTS.md` gilt auch hier.
+**Codex:** Die `Agent`-/`SendMessage`-Beispiele und Claude-Hook-Guards unten sind für Codex nicht registriert oder nicht als wirksam nachgewiesen (Grenze bis zur Freigabe des Codex-Adapters). Tatsächliche Aufrufe, Feature-Reduktionen und offene Schutzgrenzen: [Codex](../../../docs/codex/einstieg.md).
 
 Gestaffelter Review: **erst die deterministischen Gates, dann (nur bei Grün) die Lenses.** Kein Ersatz für die CI-Gates, sondern eine Schicht davor; **kein Auto-Merge** (das Mergen bleibt der [Ticket-Ablauf](../factory/ablauf.md)). Regeln: [AGENTS.md](../../../AGENTS.md), Begründungen: [docs/agent-harness.md › §3a](../../../docs/agent-harness.md#3a-langfassung-der-harten-regeln-ausgelagert-aus-agentsmd).
 
@@ -105,7 +105,7 @@ Im Ticket-Ablauf ist der Review vor dem PR **Pflicht**, als **beschränkte revie
 1. Lenses nach der Staffel auf den **aktuellen** Stand (AGENTS.md § Mehr-Perspektiven-Review): Runde 1 der volle Diff, ab Runde 2 die blockierten Brillen auf dem Delta.
 2. **Filterdurchlauf** (factory#532): `node scripts/lens-filter.mjs --runde <n> --ticket <nr>` (Arm, Verwerfen: `.agents/skills/review-lenses/ablauf-filter.md`). Keine Findings `❌ blockierend` oder `🔶 sollte` mehr ⇒ **konvergiert** (`schlank`: ohne blockierend). `⚠️ Hinweis` löst nichts aus.
 3. Sonst nachbessern, erst wenn **alle Berichte der Runde da sind** (solange eine Lens läuft, kein Edit und kein Commit im Feature-Worktree; **warten heißt: den Turn mit einer kurzen Statuszeile beenden, ohne `SubagentHandback`**, jeder Lens-Bericht setzt den Lauf fort; kein `Monitor`, kein `sleep`), dann **zurück zu 1**. Jeder Fix-Commit trägt im Body die Zeile `Runde <n>: lenses=<Brillen des Passes> blocker=<b>:<k>,… sollte=<b>:<k>,… hinweis=<b>:<k>,…` (vom Filter fertig ausgegeben; je Brille ein Eintrag, auch `:0`; Abnahme-Fix: `lenses=abnahme blocker=abnahme:<k> sollte=abnahme:0 hinweis=abnahme:0`).
-4. **Cap 2** Fix-Runden, also höchstens 3 Pässe (AGENTS.md § Mehr-Perspektiven-Review). **Strittige Blocker** (Kritiker und Umsetzer uneins, Fix-Richtung offen) entscheidet der Umsetzer ausgewogen: A/B-Vergleich, Nachrecherche, bei Bedarf ein frischer Subagent; Ergebnis als „Entscheidung: X, weil Y“ im PR, auch vor jedem Festgefahren-Abbruch. Bleibt ein Blocker: **Hand-off** (Festgefahren) an den Hauptchat (`ablauf.md` › `festgefahren`), kein PR mit bekannten Blockern.
+4. **Cap 2** Fix-Runden, also höchstens 3 Pässe (AGENTS.md § Mehr-Perspektiven-Review), an die Risikostufe gebunden (`node scripts/risikostufe.mjs`; Stufe ≤ 1: `runden=2`, mehr nur mit `zusatzpass`). **Strittige Blocker** entscheidet der Umsetzer ausgewogen: A/B-Vergleich, Nachrecherche, bei Bedarf ein frischer Subagent; Ergebnis als „Entscheidung: X, weil Y“ im PR, auch vor jedem Festgefahren-Abbruch. Bleibt ein Blocker: **Hand-off** (Festgefahren) an den Hauptchat (`ablauf.md` › `festgefahren`), kein PR mit bekannten Blockern.
    - Cap erschöpft, Blocker belegt: `.agents/skills/review-lenses/ablauf-zusatzpass.md`.
    - Abnahme-Urteil `fix`: `.agents/skills/review-lenses/ablauf-abnahme-fix.md`.
 

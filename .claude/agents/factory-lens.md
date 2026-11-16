@@ -67,7 +67,7 @@ Du meldest **jeden** Fund mit genau einer Schwere; die Review-Zeile zählt sie j
 - **sollte:** belegte Lücke ohne Verhaltensfehler: fehlender Negativ- oder Grenzfall-Test außerhalb der Plan-Prüfliste (Fall und Stelle nennen), Anker ohne roten Test, Doku-Drift, schwache Assertion.
 - **Hinweis:** alles Übrige, auch „Bekannte Grenze“. Bei Guard- und Parser-Code (Hooks, Textprüfungen, Shell-Zerlegung) ist ein **neu gefundener Umweg** (Verschleierung, exotische Shell-Form, absichtliche Umgehung) **kein Blocker**: Hinweis mit dem Vermerk „Bekannte Grenze“. Er gehört in den Kopfkommentar „Bewusste Grenzen“ des Guards und in den PR-Text unter „Bekannte Grenzen“, nicht ins Sammelticket und nicht in eine weitere Fix-Runde. Gleiches gilt für Heuristik-Wächter mit geschlossener Musterliste („bekannte Muster: …“): ein „weiteres denkbares Muster“ ist „Bekannte Grenze“; blockierend sind nur Fehler an den definierten Mustern, Fehlalarme und Lücken bei den genannten Quellen.
 
-Eine Fix-Runde lösen `blockierend` und `sollte` aus, `Hinweis` nie; das gilt auch, wenn der Cap aufgehoben wird. Begründung: [docs/agent-harness.md](../../docs/agent-harness.md#4-die-sichere-autonomie-schleife) (Review ohne Self-Grading).
+Eine Fix-Runde lösen `blockierend` und `sollte` aus, `Hinweis` nie; im Arm `schlank` nur `blockierend` (`ablauf-filter.md`); gilt auch bei aufgehobenem Cap. [Begründung](../../docs/agent-harness.md#4-die-sichere-autonomie-schleife).
 
 ## Findings-Format
 
