@@ -1149,12 +1149,15 @@ describe("Härtungs-Takt: das Harness-Sammelticket erst ab dem Füllstand (#1888
     expect(r.ticket?.nr).toBe(1);
     expect(gefragt).toEqual([]);
   });
-  test("factory#156: das Codequalität-Sammelticket hängt am selben Füllstand (9/10 übersprungen, 10 gewählt)", () => {
-    const cq = { title: "Codequalität (gesammelt)", labels: [{ name: HARNESS }] };
-    const lauf = (n: number) => (frei as (i: unknown[], e: unknown) => Ergebnis)([item(1, cq), item(2, { labels: [{ name: HARNESS }] })], { bereich: "agentic", fuellstand: () => n });
+  test.each(["Refactoring (gesammelt)", "Codequalität (gesammelt)"])("factory#156: das Refactoring-Sammelticket „%s“ hängt am selben Füllstand (9 übersprungen, 10 und 12 gewählt, der Lader wird gefragt)", (titel) => {
+    const rf = { title: titel, labels: [{ name: HARNESS }] };
+    const gefragt: number[] = [];
+    const lauf = (n: number) => (frei as (i: unknown[], e: unknown) => Ergebnis)([item(1, rf), item(2, { labels: [{ name: HARNESS }] })], { bereich: "agentic", fuellstand: (nr: number) => (gefragt.push(nr), n) });
     expect(lauf(9).uebersprungen).toEqual([{ nr: 1, grund: "füllt sich (9/10 offene Befund-Zeilen)" }]);
+    expect(gefragt).not.toEqual([]);
     expect(lauf(9).ticket?.nr).toBe(2);
     expect(lauf(10).ticket?.nr).toBe(1);
+    expect(lauf(12).ticket?.nr).toBe(1);
   });
   test("--ticket umgeht die Schwelle: die Einzelprüfung nimmt das Sammelticket auch bei Füllstand 3", () => {
     const pruefe = N.pruefeTicket({ item: N.itemAusIssue(item(1, SAMMEL).content), offene: new Set(), owner: OWNER, namen: NAMEN, repo: FREMD.repo, config: CFG } as never);

@@ -6,7 +6,7 @@
  *
  *   node scripts/sammelticket-anlegen.mjs harness [--vorgaenger <nr>] [--dry-run]   # Harness-Sammelticket auf der Position laut AGENTS.md
  *   node scripts/sammelticket-anlegen.mjs langfuse [--top] [--dry-run]              # Langfuse-Sammelticket (mit --top an die Spitze)
- *   node scripts/sammelticket-anlegen.mjs codequalitaet [--vorgaenger <nr>] [--dry-run]   # Codequalität-Sammelticket im eigenen Repo (factory#156)
+ *   node scripts/sammelticket-anlegen.mjs codequalitaet [--vorgaenger <nr>] [--dry-run]   # Refactoring-Sammelticket im eigenen Repo (factory#156)
  *
  * Idempotent: gibt es schon ein ungeclaimtes Sammelticket dieser Art, legt das Skript nichts an (bei `harness` prüft es nur die
  * Position). Sonst: Issue per REST anlegen (Harness-Label der Config, kein Assignee, kein Such-Index), ins Board holen (Status Todo),
@@ -28,8 +28,9 @@ import { flagsLesen } from "./flag-lib.mjs";
 import { mitKontingent } from "./kontingent-lib.mjs";
 import { BEFUND_ZEILE, BEFUND_ZEILE_OFFEN } from "./produktquote-lib.mjs";
 import {
-  CODEQUALITAET_SAMMELTICKET_TITEL,
   LANGFUSE_SAMMELTICKET_TITEL,
+  REFACTORING_SAMMELTICKET_TITEL,
+  REFACTORING_TITEL_AKZEPTIERT,
   SAMMELTICKET_TITEL,
   addToBoardTodo,
   boardFuerRolle,
@@ -59,8 +60,10 @@ import { fileURLToPath } from "node:url";
 
 const WURZEL = fileURLToPath(new URL("..", import.meta.url));
 
-const TITEL = { harness: SAMMELTICKET_TITEL, langfuse: LANGFUSE_SAMMELTICKET_TITEL, codequalitaet: CODEQUALITAET_SAMMELTICKET_TITEL };
-const KEIN_LABEL_TEXT = "labels.codequalitaet ist in der Projekt-Config nicht gesetzt: kein Codequalität-Sammelticket in diesem Projekt, nichts angelegt.";
+const TITEL = { harness: SAMMELTICKET_TITEL, langfuse: LANGFUSE_SAMMELTICKET_TITEL, codequalitaet: REFACTORING_SAMMELTICKET_TITEL };
+/** Titel, unter denen ein vorhandenes ungeclaimtes Ticket der Art erkannt wird (Anlage nur mit `TITEL`; der alte Codequalität-Titel gilt im Übergang weiter). */
+const SUCHTITEL = { harness: [SAMMELTICKET_TITEL], langfuse: [LANGFUSE_SAMMELTICKET_TITEL], codequalitaet: REFACTORING_TITEL_AKZEPTIERT };
+const KEIN_LABEL_TEXT = "labels.codequalitaet ist in der Projekt-Config nicht gesetzt: kein Refactoring-Sammelticket in diesem Projekt, nichts angelegt.";
 const PRUEF_VERSUCHE = 5;
 const PRUEF_PAUSE_MS = 3000;
 const NEU_SETZEN_MAX = 2;
@@ -116,7 +119,7 @@ const ANHAENGEN = "Befunde als Kommentar anhängen, je Zeile `- [ ] …` (Fließ
 const BODY_ZEILE = {
   harness: () => `Sammelticket für Harness-Befunde (AGENTS.md › Harness-Befunde sind Zeilen, keine Tickets). ${ANHAENGEN}`,
   langfuse: () => `Sammelticket für Befunde aus Langfuse-Daten (${factorySeiteIn(WURZEL, "docs/ticket-reihenfolge.md", "langfuse-befunde-gesammelt")}). ${ANHAENGEN}`,
-  codequalitaet: () => `Sammelticket für Codequalität außerhalb des Slices: fehlender Test, zu lange oder umständliche Funktion, doppeltes Muster (${factorySeiteIn(WURZEL, "docs/ticket-reihenfolge.md", "codequalität-gesammelt")}). Im Slice des Tickets behebt der Umsetzer sofort, hier steht nur, was außerhalb liegt. ${ANHAENGEN}`,
+  codequalitaet: () => `Refactoring-Sammelticket für Code-Befunde außerhalb des Slices: fehlender Test, zu lange oder umständliche Funktion, doppeltes Muster (${factorySeiteIn(WURZEL, "docs/ticket-reihenfolge.md", "refactoring-gesammelt")}). Im Slice des Tickets behebt der Umsetzer sofort, hier steht nur, was außerhalb liegt. ${ANHAENGEN}`,
 };
 
 /**
@@ -142,7 +145,7 @@ export { kandidatenSammelticket, waehleBestaetigtes };
  * des eigenen (Zeilen, die nicht verloren gehen dürfen) nur `warnung`. Sonst `keine`. Der `vorgaenger` (Nachfolger beim Claim, `--vorgaenger`) und ältere Tickets sind keine Dubletten: nur strikt jüngere zählen. Pur.
  */
 export function dublettenEntscheidung({ eigenNr, titel, eigenKommentare, andere, vorgaenger = null }) {
-  const aeltere = andere.filter((i) => i.titel === titel && i.number < eigenNr && (vorgaenger === null || i.number > vorgaenger) && (i.assignees ?? []).length === 0);
+  const aeltere = andere.filter((i) => [].concat(titel).includes(i.titel) && i.number < eigenNr && (vorgaenger === null || i.number > vorgaenger) && (i.assignees ?? []).length === 0);
   if (aeltere.length === 0) return { art: "keine" };
   const aelter = Math.min(...aeltere.map((i) => i.number));
   return eigenKommentare > 0 ? { art: "warnung", aelter } : { art: "eigenes-schliessen", aelter };
@@ -150,7 +153,7 @@ export function dublettenEntscheidung({ eigenNr, titel, eigenKommentare, andere,
 
 /**
  * Pur (factory#156): das Label, mit dem das Sammelticket der Art angelegt wird: `harness`/`langfuse` tragen `labels.harness`, `codequalitaet` das freiwillige
- * `labels.codequalitaet` der Config; fehlt oder leer ist es → `null` (kein Codequalität-Sammelticket in diesem Projekt, es wird nichts angelegt).
+ * `labels.codequalitaet` der Config; fehlt oder leer ist es → `null` (kein Refactoring-Sammelticket in diesem Projekt, es wird nichts angelegt).
  */
 export function sammelLabel(config, art) {
   if (art !== "codequalitaet") return labelAus(config, "harness");
@@ -158,7 +161,7 @@ export function sammelLabel(config, art) {
 }
 
 /**
- * Pur (factory#156): der Platzierungsplan des neuen Codequalität-Sammeltickets `nr` (steht schon in `items`): hinter dem Kopf des Boards (letztes Kopf-Item als Anker,
+ * Pur (factory#156): der Platzierungsplan des neuen Refactoring-Sammeltickets `nr` (steht schon in `items`): hinter dem Kopf des Boards (letztes Kopf-Item als Anker,
  * ohne Kopf die Spitze), ohne Klemmung hinter andere Sammeltickets (factory#162). Das Füllstand-Gate in naechstes-ticket.mjs hält es bis zur Schwelle zurück.
  */
 export function codequalitaetPlan(items, nr) {
@@ -347,7 +350,7 @@ function setzeErstePosition({ art, top, board, repo, itemId, nr, titel }, d) {
 const istBezieher = (d) => d.bezieher ?? istBezieherWurzel(d.wurzel ?? WURZEL);
 
 /** Neu anlegen (Zweig von `main`): liefert die Nummer, oder `null`, wenn nichts weiter zu tun ist (Dublette). */
-async function legeNeuAn({ args, d, config, ziel, label, board, repo, titel, position }) {
+async function legeNeuAn({ args, d, config, ziel, label, board, repo, titel, suchtitel, position }) {
   const { vorgaenger } = args;
   const vZustand = vorgaenger === null ? "zu" : d.vorgaengerZustand(vorgaenger, repo);
   const body = sammelticketBody({ art: args.art, vorgaenger, vorgaengerZustand: vZustand, blocker: spracheAus(config).spezifikation.blocker });
@@ -361,7 +364,7 @@ async function legeNeuAn({ args, d, config, ziel, label, board, repo, titel, pos
   const nr = neu.number;
   d.log(`Angelegt: #${nr}`);
   await d.sleep(DUBLETTEN_PAUSE_MS); // die Liste hinkt nach: erst nach einer Pause sieht ein paralleler Lauf dieses Ticket und umgekehrt
-  if (d.schliesseWennDublette(nr, titel, vorgaenger, ziel)) return null;
+  if (d.schliesseWennDublette(nr, suchtitel, vorgaenger, ziel)) return null;
   if (vZustand !== "zu") { // die Blocker-Zeile steht im Body; zusätzlich die native Kante (Blocked-Icon im Board), Scheitern nur Warnung (factory#202 L1)
     const warnung = verknuepfeBlocker(neu, [{ repo, nummer: vorgaenger }], repo, { verknuepfeBlocker: d.verknuepfeBlocker });
     if (warnung) d.log(warnung.trimEnd());
@@ -408,24 +411,25 @@ export async function main(argv = process.argv.slice(2), deps = {}) {
   const board = boardFuerRolle(ziel.rolle);
   const { repo } = ziel;
   const titel = TITEL[args.art];
+  const suchtitel = SUCHTITEL[args.art];
   const position = args.art === "harness" ? positionLautAgentsMd() : null;
   const { vorgaenger } = args;
-  const vorhanden = d.findeVorhandenes({ repo, titel, vorgaenger, owner: ziel.owner });
+  const vorhanden = d.findeVorhandenes({ repo, titel: suchtitel, vorgaenger, owner: ziel.owner });
   let nr;
   if (vorhanden) {
     nr = vorhanden.number;
-    d.log(`Ungeclaimtes „${titel}“ gibt es schon: #${nr}, nichts wird angelegt.`);
+    d.log(`Ungeclaimtes „${vorhanden.titel ?? titel}“ gibt es schon: #${nr}, nichts wird angelegt.`);
   } else if (args.dry) {
     d.log(`Würde „${titel}“ anlegen${position ? ` und auf Position ${position} setzen` : ""}.`);
     return;
   } else {
-    const angelegt = await legeNeuAn({ args, d, config, ziel, label, board, repo, titel, position });
+    const angelegt = await legeNeuAn({ args, d, config, ziel, label, board, repo, titel, suchtitel, position });
     if (angelegt === null) return;
     nr = angelegt;
   }
   if (args.art !== "harness") return;
   const stand = await d.setzeUndPruefe({ nr, position, dry: args.dry, board, repo });
-  if (!vorhanden && d.schliesseWennDublette(nr, titel, vorgaenger, ziel)) return; // zweiter Check: ein paralleler Lauf kann erst während der Positions-Schleife sichtbar werden
+  if (!vorhanden && d.schliesseWennDublette(nr, suchtitel, vorgaenger, ziel)) return; // zweiter Check: ein paralleler Lauf kann erst während der Positions-Schleife sichtbar werden
   meldeStand({ stand, nr, position, dry: args.dry }, d);
 }
 

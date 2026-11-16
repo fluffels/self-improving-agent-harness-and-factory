@@ -174,11 +174,12 @@ export function planPlacements(items, numbers, afterNumber = null) {
   return { steps, missing, anchorMissing: false };
 }
 
-export { CODEQUALITAET_SAMMELTICKET_TITEL, LANGFUSE_SAMMELTICKET_TITEL, SAMMELTICKET_TITEL, SAMMELTICKET_TITEL_LISTE } from "./sammelticket-titel.mjs";
+export { LANGFUSE_SAMMELTICKET_TITEL, REFACTORING_SAMMELTICKET_TITEL, REFACTORING_TITEL_AKZEPTIERT, SAMMELTICKET_TITEL, SAMMELTICKET_TITEL_LISTE } from "./sammelticket-titel.mjs";
 
-/** Die Kandidaten (offen laut Liste aus `normalizeOffene`, exakter Titel, ungeclaimt) in absteigender Nummer (das jüngste zuerst). `nach`: der Vorgänger (`--vorgaenger`); nur strikt jüngere Tickets zählen (der Vorgänger und ältere Tickets davor sind kein „schon vorhanden“). Pur. */
+/** Die Kandidaten (offen laut Liste aus `normalizeOffene`, exakter Titel oder einer aus der Titelliste, ungeclaimt) in absteigender Nummer (das jüngste zuerst). `nach`: der Vorgänger (`--vorgaenger`); nur strikt jüngere Tickets zählen (der Vorgänger und ältere Tickets davor sind kein „schon vorhanden“). Pur. */
 export function kandidatenSammelticket(offene, titel, { nach = null } = {}) {
-  return offene.filter((i) => i.titel === titel && (i.assignees ?? []).length === 0 && (nach === null || i.number > nach)).sort((a, b) => b.number - a.number);
+  const titelListe = [].concat(titel);
+  return offene.filter((i) => titelListe.includes(i.titel) && (i.assignees ?? []).length === 0 && (nach === null || i.number > nach)).sort((a, b) => b.number - a.number);
 }
 
 /**

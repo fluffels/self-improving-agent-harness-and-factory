@@ -118,6 +118,18 @@ describe("sammelticketBody", () => {
   });
 });
 
+describe("Alt-Titel „Codequalität (gesammelt)“ im Übergang (Refactoring 1/5)", () => {
+  const AKZ = ["Refactoring (gesammelt)", "Codequalität (gesammelt)"];
+  const o = (number: number, titel: string): Offen => ({ number, titel, assignees: [], createdAt: "2026-10-01T00:00:00Z" });
+  test("kandidatenSammelticket mit Titelliste findet das Alt-Titel-Ticket und das neue, das jüngste zuerst", () => {
+    expect(A.kandidatenSammelticket([o(5, AKZ[1]), o(9, AKZ[0]), o(7, "Harness-Härtung (gesammelt)")], AKZ as never).map((i) => i.number)).toEqual([9, 5]);
+  });
+  test("dublettenEntscheidung mit Titelliste: das ältere Alt-Titel-Ticket ist das Original (eigenes schließen)", () => {
+    expect(A.dublettenEntscheidung({ eigenNr: 20, titel: AKZ as never, eigenKommentare: 0, andere: [o(15, AKZ[1])] })).toEqual({ art: "eigenes-schliessen", aelter: 15 });
+    expect(A.dublettenEntscheidung({ eigenNr: 20, titel: AKZ as never, eigenKommentare: 0, andere: [o(15, "Harness-Härtung (gesammelt)")] })).toEqual({ art: "keine" });
+  });
+});
+
 describe("kandidatenSammelticket", () => {
   const o = (number: number, titel: string, assignees: string[] = []): Offen => ({ number, titel, assignees, createdAt: "2026-10-01T00:00:00Z" });
   const T = "Harness-Härtung (gesammelt)";
@@ -761,10 +773,38 @@ describe("main mit injizierten gh-/Board-Nähten (factory#189 L7): Verzweigung j
     expect(namen(rufe)).not.toContain("setzeUndPruefe");
   });
 
+  test("Negativfall (AK3): ein offenes, ungeclaimtes Ticket mit dem alten Titel verhindert die Anlage eines zweiten", async () => {
+    const naht = {
+      env: {},
+      gh: (_a: string[]) => ({ state: "open", assignees: [], user: ownerUser, comments: 0 }),
+      ladeSeiten: () => [[{ number: 15, title: "Codequalität (gesammelt)", created_at: "2026-10-01T00:00:00Z", assignees: [] }]],
+      log: () => {},
+      err: () => {},
+      exit: (c: number) => { throw new Error(`exit ${c}`); },
+    };
+    const { deps, rufe, log } = fakes({ findeVorhandenes: (a: { repo: string; titel: string; vorgaenger: number | null; owner: string }) => raw.findeVorhandenes(a, naht) });
+    await M(["codequalitaet"], deps);
+    expect(namen(rufe)).not.toContain("legeAn");
+    expect(log.join("\n")).toContain("„Codequalität (gesammelt)“ gibt es schon: #15");
+  });
+  test("Gegenprobe: ist das Alt-Titel-Ticket geclaimt, wird unter dem neuen Titel angelegt", async () => {
+    const naht = {
+      env: {},
+      gh: (_a: string[]) => ({ state: "open", assignees: [{ login: OWNER }], user: ownerUser, comments: 0 }),
+      ladeSeiten: () => [[{ number: 15, title: "Codequalität (gesammelt)", created_at: "2026-10-01T00:00:00Z", assignees: [{ login: OWNER }] }]],
+      log: () => {},
+      err: () => {},
+      exit: (c: number) => { throw new Error(`exit ${c}`); },
+    };
+    const { deps, rufe } = fakes({ findeVorhandenes: (a: { repo: string; titel: string; vorgaenger: number | null; owner: string }) => raw.findeVorhandenes(a, naht) });
+    await M(["codequalitaet"], deps);
+    expect(rufe.find((r) => r[0] === "legeAn")![1]).toMatchObject({ titel: "Refactoring (gesammelt)" });
+  });
+
   test("codequalitaet: Label aus labels.codequalitaet, Produkt-Board im eigenen Repo, immer hinter den Kopf gesetzt", async () => {
     const { deps, rufe } = fakes();
     await M(["codequalitaet"], deps);
-    expect(rufe.find((r) => r[0] === "legeAn")![1]).toMatchObject({ repo: cfg.repo, titel: "Codequalität (gesammelt)", harness: "area:code" });
+    expect(rufe.find((r) => r[0] === "legeAn")![1]).toMatchObject({ repo: cfg.repo, titel: "Refactoring (gesammelt)", harness: "area:code" });
     const board = BOARD("produkt");
     expect(rufe.find((r) => r[0] === "addToBoardTodo")![1]).toEqual(board);
     const set = rufe.filter((r) => r[0] === "setPosition");

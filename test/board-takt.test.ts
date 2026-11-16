@@ -393,6 +393,13 @@ describe("produktquote-lib (#1729)", () => {
       expect(s.abschluss).toEqual({ number: 2, closedAt: "2026-10-05T00:00:00Z" });
       expect([...s.sammelIssues].sort()).toEqual([1, 2, 3, 4]);
     });
+    test("Refactoring-Sammelticket zählt unter dem neuen und dem alten Titel zu sammelIssues", () => {
+      const s = SS([
+        { number: 5, title: "Refactoring (gesammelt)", state: "CLOSED", closedAt: "2026-10-09T00:00:00Z" },
+        { number: 6, title: "Codequalität (gesammelt)", state: "CLOSED", closedAt: "2026-10-08T00:00:00Z" },
+      ]);
+      expect([...s.sammelIssues].sort()).toEqual([5, 6]);
+    });
     test("Langfuse-Sammelticket zählt zu sammelIssues, nie als Abschluss und nie als in Arbeit", () => {
       const s = SS([
         { number: 5, title: "Langfuse-Befunde (gesammelt)", state: "CLOSED", closedAt: "2026-10-09T00:00:00Z" },

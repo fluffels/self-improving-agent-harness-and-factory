@@ -189,13 +189,15 @@ describe("Sammelticket erkennen, board-place ohne Klemmung (#1322 Z19, factory#1
   const b = (number: number, extra: Partial<B> = {}): B => ({ id: `I${number}`, number, status: "Todo", title: `T${number}`, assignees: [], state: "open", ...extra });
   const sammel = (number: number, extra: Partial<B> = {}) => b(number, { title: TITEL, ...extra });
   const LT = "Langfuse-Befunde (gesammelt)";
-  const CQ = "Codequalität (gesammelt)";
+  const RF = "Refactoring (gesammelt)";
+  const ALT = "Codequalität (gesammelt)";
   const K = rawLib as unknown as {
     sammelticketItem: (items: B[], ohne?: number[]) => B | null;
     normalizeItems: (raw: unknown) => B[];
     SAMMELTICKET_TITEL: string;
     LANGFUSE_SAMMELTICKET_TITEL: string;
-    CODEQUALITAET_SAMMELTICKET_TITEL: string;
+    REFACTORING_SAMMELTICKET_TITEL: string;
+    REFACTORING_TITEL_AKZEPTIERT: string[];
     SAMMELTICKET_TITEL_LISTE: string[];
     ungeclaimt: (i: { assignees?: string[] }) => boolean;
   };
@@ -221,10 +223,11 @@ describe("Sammelticket erkennen, board-place ohne Klemmung (#1322 Z19, factory#1
     expect(K.sammelticketItem([])).toBeNull();
   });
 
-  test("Titelliste: Harness, Langfuse und Codequalität (naechstes-ticket und die Quote rechnen mit allen)", () => {
-    expect(K.SAMMELTICKET_TITEL_LISTE).toEqual([TITEL, LT, CQ]);
+  test("Titelliste: Harness, Langfuse und Refactoring samt Alt-Titel (naechstes-ticket und die Quote rechnen mit allen)", () => {
+    expect(K.SAMMELTICKET_TITEL_LISTE).toEqual([TITEL, LT, RF, ALT]);
     expect(K.LANGFUSE_SAMMELTICKET_TITEL).toBe(LT);
-    expect(K.CODEQUALITAET_SAMMELTICKET_TITEL).toBe(CQ);
+    expect(K.REFACTORING_SAMMELTICKET_TITEL).toBe(RF);
+    expect(K.REFACTORING_TITEL_AKZEPTIERT).toEqual([RF, ALT]);
   });
 
   test("der Titel, an dem das Einsortieren das Sammelticket erkennt, steht wörtlich in AGENTS.md, Skill und ticket-reihenfolge.md (keine stille Drift)", () => {
@@ -235,19 +238,19 @@ describe("Sammelticket erkennen, board-place ohne Klemmung (#1322 Z19, factory#1
       expect(readFileSync(new URL(`../${datei}`, import.meta.url), "utf8"), datei).toContain(K.LANGFUSE_SAMMELTICKET_TITEL);
     }
     for (const datei of ["AGENTS.md", ".agents/skills/factory/ablauf.md", "docs/ticket-reihenfolge.md"]) {
-      expect(readFileSync(new URL(`../${datei}`, import.meta.url), "utf8"), datei).toContain(K.CODEQUALITAET_SAMMELTICKET_TITEL);
+      expect(readFileSync(new URL(`../${datei}`, import.meta.url), "utf8"), datei).toContain(K.REFACTORING_SAMMELTICKET_TITEL);
     }
   });
 
-  test("factory#156: Planer-Abschnitt 8 und der Befunde-Absatz des Umsetzers nennen das Codequalität-Sammelticket mit der Ortsregel „außerhalb des Slices“", () => {
+  test("factory#156: Planer-Abschnitt 8 und der Befunde-Absatz des Umsetzers nennen das Refactoring-Sammelticket mit der Ortsregel „außerhalb des Slices“", () => {
     const text = (datei: string) => readFileSync(new URL(`../${datei}`, import.meta.url), "utf8");
     const planer = text(".claude/agents/factory-planer.md");
     const abschnitt8 = planer.slice(planer.indexOf("8. **Befunde**"));
-    expect(abschnitt8.slice(0, 1500)).toContain(K.CODEQUALITAET_SAMMELTICKET_TITEL);
+    expect(abschnitt8.slice(0, 1500)).toContain(K.REFACTORING_SAMMELTICKET_TITEL);
     expect(abschnitt8.slice(0, 1500)).toContain("außerhalb des Slices");
     const umsetzer = text(".claude/agents/factory-umsetzer.md");
     const absatz = umsetzer.slice(umsetzer.indexOf("Befunde außerhalb des Tickets"));
-    expect(absatz.slice(0, 2500)).toContain(K.CODEQUALITAET_SAMMELTICKET_TITEL);
+    expect(absatz.slice(0, 2500)).toContain(K.REFACTORING_SAMMELTICKET_TITEL);
     expect(absatz.slice(0, 2500)).toContain("außerhalb des Slices");
   });
 
