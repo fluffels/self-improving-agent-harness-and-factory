@@ -1132,6 +1132,16 @@
       "grund": "Gegenstand ist Besitz"
     },
     {
+      "muster": "test/profil-lib.test.ts",
+      "art": "kern-test",
+      "grund": "Gegenstand ist Besitz"
+    },
+    {
+      "muster": "test/aufrufstatistik-lib.test.ts",
+      "art": "kern-test",
+      "grund": "Gegenstand ist Besitz"
+    },
+    {
       "muster": "test/notfall-doku.test.ts",
       "art": "kern-test",
       "grund": "Gegenstand ist Besitz"
