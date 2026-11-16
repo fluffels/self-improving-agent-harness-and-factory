@@ -1232,6 +1232,11 @@
       "grund": "Fabrik-eigen (factory#518), nicht im Besitz"
     },
     {
+      "muster": "test/harness/wiedervorlagen-art.test.ts",
+      "art": "projekt-test",
+      "grund": "Prüft das Feld art der Fabrik-Wiedervorlagen (factory#573, nicht im Besitz)"
+    },
+    {
       "muster": "test/harness/aenderungsregister.test.ts",
       "art": "projekt-test",
       "grund": "Prüft das Änderungsregister der Fabrik (.github/aenderungsregister.json, nicht im Besitz)"
