@@ -55,7 +55,9 @@ const F = W.wochenFenster(MONTAG);
 const { filter: PF } = W.projektFilterAus({ tags: ["factory"], repoName: "repo" });
 const TYPE = { column: "type", operator: "=", value: "GENERATION", type: "string" };
 const g = (traceName: string, name: string, modell: string, env: string, count: number, cost: number) => ({ traceName, name, providedModelName: modell, environment: env, count_count: count, sum_totalCost: cost });
-const exp = (art: string, von: string, bis: string, data: unknown[], filters: unknown[] = [TYPE, PF]) => ({ art, abfrage: { view: "observations", filters, fromTimestamp: von, toTimestamp: bis }, data });
+const LEER_FILTER = { column: "providedModelName", operator: "none of", value: ["claude"], type: "stringOptions" };
+// Alle Exporte außer `leer` tragen den Filter gegen die leeren Hook-Generations (factory#522).
+const exp = (art: string, von: string, bis: string, data: unknown[], filters: unknown[] = [TYPE, PF]) => ({ art, abfrage: { view: "observations", filters: art === "leer" ? filters : [...filters, LEER_FILTER], fromTimestamp: von, toTimestamp: bis }, data });
 const tage = (von: string, mitLuecke = false) =>
   Array.from({ length: 7 }, (_, i) => ({ time_dimension: new Date(Date.parse(von) + i * 86400000).toISOString(), count_count: mitLuecke && i === 3 ? 0 : 5, sum_totalCost: mitLuecke && i === 3 ? null : 1 }));
 const gesamtW = (cost = 20) => [g("Claude Code Turn", "LLM Call", "claude-opus-5-5", "default", 10, cost - 4), g("Abgleich", "Model response", "claude-sonnet-5-5", "repo", 6, 4)];
@@ -357,6 +359,7 @@ describe("Negativfälle (Exit 4)", () => {
       const von = q.fromTimestamp;
       const data = q.view === "scores-numeric" ? [{ sessionId: "s1", name: "erfassung", avg_value: 1 }]
         : q.dimensions?.[0]?.field === "sessionId" ? [{ sessionId: "s1", traceName: "Claude Code Turn", count_count: 2 }]
+        : q.dimensions?.length === 1 ? [{ providedModelName: "claude-opus-5-5", count_count: 4, sum_totalCost: 2, sum_totalTokens: 10 }]
         : q.timeDimension ? tage(von)
         : q.filters.some((x) => x.type === "stringObject") ? []
         : [{ ...g("Claude Code Turn", "LLM Call", "claude-opus-5-5", "default", 4, 2), min_latency: 1 }];
@@ -717,5 +720,86 @@ describe("Kosten je Merge (factory#324)", () => {
       expect(r.stderr).toMatch(/gh kaputt|Merges nicht ermittelbar/);
       expect(existsSync(join(home, ".claude", "state", "langfuse-wochenbericht", "own__repo", `${MONTAG}.md`))).toBe(false);
     }
+  });
+});
+
+describe("Leere Hook-Generations und Preislücke (factory#522)", () => {
+  const leerEx = (rows: Array<[string, number, number]>) => ({
+    art: "leer",
+    abfrage: { view: "observations", filters: [TYPE, PF], dimensions: [{ field: "providedModelName" }], fromTimestamp: F.von, toTimestamp: F.bis },
+    data: rows.map(([providedModelName, count_count, sum_totalTokens]) => ({ providedModelName, count_count, sum_totalCost: 0, sum_totalTokens })),
+  });
+  const leerOk = (claude = 42) => leerEx([["claude-opus-5-5", 10, 100], ["claude-sonnet-5-5", 6, 100], ["claude", claude, 0]]);
+  const ohnePreis = (r: ReturnType<typeof g>): ReturnType<typeof g> => ({ ...r, sum_totalCost: null as unknown as number });
+
+  test("wochenRezept enthält genau einen Export leer mit Projektfilter, ohne Modellfilter, im Fenster der Woche", () => {
+    const rez = W.wochenRezept({ montag: MONTAG, jetzt: JETZT.toISOString(), projektFilter: PF }) as unknown as Array<{ art: string; abfrage: { filters: Array<{ column: string }>; fromTimestamp: string } }>;
+    const leer = rez.filter((r) => r.art === "leer");
+    expect(leer).toHaveLength(1);
+    expect(leer[0].abfrage.filters).toContainEqual(PF);
+    expect(leer[0].abfrage.filters.some((f) => f.column === "providedModelName")).toBe(false);
+    expect(leer[0].abfrage.fromTimestamp).toBe(F.von);
+    for (const r of rez.filter((x) => x.art === "gesamt")) expect(r.abfrage.filters).toContainEqual(LEER_FILTER);
+  });
+  test("die Zeile „leere Hook-Generations: n (nicht gezählt)“ steht im Markdown und im JSON, nie in der Summe", async () => {
+    const r = await lauf([], { ...satz({ kostenW: 40, kostenV: 20 }), "leer.json": leerOk() });
+    expect(r.stdout).toContain("leere Hook-Generations: 42 (nicht gezählt)");
+    expect(r.stdout).toContain("Woche 40.00 $, Vorwoche 20.00 $, Δ +100.0 %");
+    expect(r.stdout).not.toContain("nicht geprüft (Export leer fehlt)");
+    const j = await lauf(["--json"], { ...satz(), "leer.json": leerOk() });
+    expect(lese<{ leereHookGenerations: unknown; datenluecken: string[] }>(j.stdout)).toMatchObject({ leereHookGenerations: { count: 42 } });
+  });
+  test("ohne Export leer (kein Pflicht-Export): „nicht geprüft“ in Zeile und Datenlücke, der Bericht entsteht trotzdem", async () => {
+    const r = await lauf([], satz());
+    expect(r.exitCode).toBe(0);
+    expect(r.stdout).toContain("leere Hook-Generations: nicht geprüft (Export leer fehlt)");
+    const j = await lauf(["--json"], satz());
+    expect(lese<{ datenluecken: string[] }>(j.stdout).datenluecken).toContain("leere Hook-Generations: nicht geprüft (Export leer fehlt)");
+  });
+  test("Negativfall: claude mit Usage steht als Datenlücke im Wochenbericht, nicht als leer", async () => {
+    const r = await lauf([], { ...satz(), "leer.json": leerEx([["claude-opus-5-5", 10, 100], ["claude-sonnet-5-5", 6, 100], ["claude", 5, 900]]) });
+    expect(r.stdout).toContain("Modell claude mit Usage: 5 Calls, 900 Tokens");
+    expect(r.stdout).toContain("leere Hook-Generations: 0 (nicht gezählt)");
+  });
+  test("Woche mit teilweise fehlendem Preis: „mindestens x $, ohne k Calls“ in der Summe und je Merge, nie ein glatter Betrag", async () => {
+    const gW = [g("Claude Code Turn", "LLM Call", "claude-opus-5-5", "default", 10, 16), ohnePreis(g("Abgleich", "Model response", "claude-sonnet-5-5", "repo", 6, 0))];
+    const r = await lauf([], { ...satz(), "gesamtW.json": exp("gesamt", F.von, F.bis, gW), "leer.json": leerOk() });
+    expect(r.stdout).toContain("Woche mindestens 16.00 $, ohne 6 Calls, Vorwoche 20.00 $");
+    expect(r.stdout).toMatch(/Kosten je Merge mindestens [\d.]+ \$, ohne 6 Calls/);
+  });
+  test("Woche komplett ohne Preis: Lücke statt 0 $, Δ nicht bewertbar, Schwelle nicht bewertet", async () => {
+    const gW = [ohnePreis(g("Claude Code Turn", "LLM Call", "claude-opus-5-5", "default", 16, 0))];
+    const r = await lauf([], { ...satz(), "gesamtW.json": exp("gesamt", F.von, F.bis, gW), "leer.json": leerOk() }, { projekt: { ...PROJEKT, schwellen: { erfassungLueckenMax: 0, kostenAnstiegProzent: 50 } } });
+    expect(r.stdout).toContain("Woche Lücke: ohne Preis (claude-opus-5-5), Vorwoche 20.00 $, Δ – (Woche ohne Preis, nicht bewertbar)");
+    expect(r.stdout).toContain("kostenAnstiegProzent: nicht bewertbar");
+    const j = await lauf(["--json"], { ...satz(), "gesamtW.json": exp("gesamt", F.von, F.bis, gW), "leer.json": leerOk() });
+    const k = lese<{ summe: { deltaProzent: number | null; preis: { woche: { ohnePreis: number } } } }>(j.stdout).summe;
+    expect(k.deltaProzent).toBeNull();
+    expect(k.preis.woche.ohnePreis).toBe(16);
+  });
+  test("Vorwoche mit Calls ohne Preis: Untergrenze bzw. Lücke in der Summenzeile; der Grund in der Je-Merge-Zeile nennt die Woche ohne Preis", async () => {
+    const vor = [ohnePreis(g("Claude Code Turn", "LLM Call", "claude-opus-5-5", "default", 10, 0))];
+    const teil = await lauf([], { ...satz(), "gesamtV.json": exp("gesamt", F.vorVon, F.vorBis, vor), "leer.json": leerOk() });
+    expect(teil.stdout).toContain("Vorwoche Lücke: ohne Preis (claude-opus-5-5)");
+    const gemischt = [g("Claude Code Turn", "LLM Call", "claude-opus-5-5", "default", 10, 3), ohnePreis(g("Abgleich", "Model response", "claude-sonnet-5-5", "repo", 2, 0))];
+    const mix = await lauf([], { ...satz(), "gesamtV.json": exp("gesamt", F.vorVon, F.vorBis, gemischt), "leer.json": leerOk() });
+    expect(mix.stdout).toContain("Vorwoche mindestens 3.00 $, ohne 2 Calls");
+    const gW = [ohnePreis(g("Claude Code Turn", "LLM Call", "claude-opus-5-5", "default", 16, 0))];
+    const woche = await lauf([], { ...satz(), "gesamtW.json": exp("gesamt", F.von, F.bis, gW), "leer.json": leerOk() });
+    expect(woche.stdout).toMatch(/Kosten je Merge Lücke: ohne Preis \(claude-opus-5-5\)[^\n]*Δ – \(Woche ohne Preis, nicht bewertbar\)/);
+  });
+  test("ein Export leer ohne Projektfilter wird abgelehnt (wie jeder Export)", async () => {
+    const roh = leerOk();
+    const r = await lauf([], { ...satz(), "leer.json": { ...roh, abfrage: { ...roh.abfrage, filters: [TYPE] } } });
+    expect(r.exitCode).toBe(1);
+  });
+});
+
+describe("Datenlücke ohne Rolle oder Modell mit Preislücke (factory#522)", () => {
+  test("Zeilen ohne Modell und ohne Preis: die Lücken-Zeile zeigt „Lücke“ statt 0.00 $", async () => {
+    const gW = [{ ...g("Claude Code Turn", "LLM Call", "", "default", 5, 0), providedModelName: null, sum_totalCost: null }];
+    const leer = { art: "leer", abfrage: { view: "observations", filters: [TYPE, PF], dimensions: [{ field: "providedModelName" }], fromTimestamp: F.von, toTimestamp: F.bis }, data: [{ providedModelName: null, count_count: 5, sum_totalCost: null, sum_totalTokens: 0 }] };
+    const r = await lauf([], { ...satz(), "gesamtW.json": exp("gesamt", F.von, F.bis, gW), "leer.json": leer });
+    expect(r.stdout).toMatch(/Zeilen ohne Rolle oder Modell: 5 Calls \(Lücke: ohne Preis \(unzugeordnet\)\)/);
   });
 });

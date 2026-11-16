@@ -21,6 +21,7 @@ type Tab = { zeilen: Zeile[]; summe: { count: number; cost: number }; davon: { u
 type Bericht = {
   vermerk: string;
   roh: { count: number; cost: number };
+  leer: { count: number } | null;
   bereinigt: { count: number; cost: number };
   audit: { count: number; cost: number };
   negativ: { gruppen: number; count: number; cost: number };
@@ -41,6 +42,7 @@ const L = libRaw as unknown as {
   quelleVon: (t: string | null, n: string | null) => string;
   rezept: (o: { von: string; bis: string; rollen?: string[]; efforts?: string[]; codexRollen?: string[]; projektFilter?: unknown }) => { art: string; name: string; abfrage: Abfr & { fromTimestamp: string; toTimestamp: string } }[];
   leseExport: (j: unknown, pfad: string) => unknown;
+  betrag: (p: { cost: number; count: number; ohnePreis?: number; modelle?: string[] }) => string;
   bericht: (e: unknown[]) => Bericht;
   renderMarkdown: (b: Bericht) => string;
   tagesLuecken: (von: string, bis: string, data: unknown[]) => string[];
@@ -54,7 +56,9 @@ const agentenNamen = (agentenRoh as unknown as { agentenNamen: (ordner: string, 
 const VON = "2026-11-01T00:00:00Z";
 const BIS = "2026-11-04T00:00:00Z";
 const FILTER = { column: "type", operator: "=", value: "GENERATION", type: "string" };
-const exp = (art: string, data: unknown[], filters: unknown[] = [FILTER], bis = BIS) => ({ art, abfrage: { view: "observations", filters, fromTimestamp: VON, toTimestamp: bis }, data });
+const LEER_FILTER = { column: "providedModelName", operator: "none of", value: ["claude"], type: "stringOptions" };
+// Jeder Export außer `leer` trägt den Filter gegen die leeren Hook-Generations (factory#522); Negativfälle bauen die Abfrage von Hand.
+const exp = (art: string, data: unknown[], filters: unknown[] = [FILTER], bis = BIS) => ({ art, abfrage: { view: "observations", filters: art === "leer" ? filters : [...filters, LEER_FILTER], fromTimestamp: VON, toTimestamp: bis }, data });
 const g = (traceName: string | null, name: string, modell: string | null, env: string | null, count: number, cost: number, min?: number) => ({
   traceName, name, providedModelName: modell, environment: env, count_count: count, sum_totalCost: cost, ...(min === undefined ? {} : { min_latency: min }),
 });
@@ -69,7 +73,16 @@ const gesamtRows = [g(...R1, 10, 5), g(...R2, 20, 10), g(...R3, 4, 2)];
 const gesamt = exp("gesamt", gesamtRows);
 const tageVoll = exp("tage", ["2026-11-01", "2026-11-02", "2026-11-03"].map((t) => ({ traceName: "Claude Code Turn", time_dimension: t, count_count: 1, sum_totalCost: 1 })));
 const latenzOk = exp("latenz", [g(...R1, 10, 5, 0), g(...R2, 20, 10, 5), g(...R3, 4, 2, 7)]);
-const basis = [gesamt, tageVoll, latenzOk];
+/** Kontroll-Export `leer` passend zu gesamt-Zeilen: je Modell die Calls, dazu `claude` mit den übergebenen Calls und Tokens. */
+const leerVon = (zeilen: ReturnType<typeof g>[], claude = { count: 0, tokens: 0 }) => {
+  const je = new Map<string, number>();
+  for (const z of zeilen) je.set(String(z.providedModelName), (je.get(String(z.providedModelName)) ?? 0) + z.count_count);
+  const rows: unknown[] = [...je].map(([m, c]) => ({ providedModelName: m, count_count: c, sum_totalCost: 1, sum_totalTokens: 100 }));
+  if (claude.count > 0) rows.push({ providedModelName: "claude", count_count: claude.count, sum_totalCost: 0, sum_totalTokens: claude.tokens });
+  return { ...exp("leer", rows), abfrage: { view: "observations", filters: [FILTER], dimensions: [{ field: "providedModelName" }], fromTimestamp: VON, toTimestamp: BIS } };
+};
+const leerOk = leerVon(gesamtRows, { count: 42, tokens: 0 });
+const basis = [gesamt, tageVoll, latenzOk, leerOk];
 const alleRollen = [meta("agent_type", "Plan", [g(...R1, 10, 5, 3), g(...R2, 20, 10, 3)]), meta("agent_role", "main", [g(...R3, 4, 2, 7)])];
 const alleEfforts = [meta("effort", "high", [g(...R1, 10, 5, 3), g(...R2, 20, 10, 3)]), meta("reasoning_effort", "high", [g(...R3, 4, 2, 7)])];
 const unzZeile = (t: Tab) => t.zeilen[t.zeilen.length - 1];
@@ -113,7 +126,7 @@ describe("unzugeordnet (AK7)", () => {
   test("der Wert unbekannt zählt als unzugeordnet, nie als Rolle", () => {
     const b = rep(...basis, meta("agent_type", "unbekannt", [g(...R1, 10, 5, 3)]), meta("agent_type", "Plan", [g(...R2, 20, 10, 3)]));
     expect(b.rolle.zeilen.map((z) => z.name)).not.toContain("unbekannt");
-    expect(b.rolle.davon.unbekannt).toEqual({ count: 10, cost: 5 });
+    expect(b.rolle.davon.unbekannt).toMatchObject({ count: 10, cost: 5 });
     expect(unzZeile(b.rolle)).toMatchObject({ count: 14, cost: 7 });
     expect(L.renderMarkdown(b)).toContain("Davon unzugeordnet: unbekannt 10 Calls (5.00 $)");
   });
@@ -470,7 +483,7 @@ describe("Randfälle", () => {
 
 describe("Funde Runde 1", () => {
   test("ein Rest ohne Calls und mit positivem Rundungsrauschen ist keine Lücke", () => {
-    const b = rep(exp("gesamt", [g(...R1, 10, 5.0000000000001)]), tageVoll, exp("latenz", [g(...R1, 10, 5.0000000000001, 0)]), meta("agent_type", "Plan", [g(...R1, 10, 5, 3)]), meta("effort", "high", [g(...R1, 10, 5, 3)]));
+    const b = rep(exp("gesamt", [g(...R1, 10, 5.0000000000001)]), tageVoll, exp("latenz", [g(...R1, 10, 5.0000000000001, 0)]), meta("agent_type", "Plan", [g(...R1, 10, 5, 3)]), meta("effort", "high", [g(...R1, 10, 5, 3)]), leerVon([g(...R1, 10, 5)]));
     expect(b.luecken).toEqual([]);
     expect(b.unzugeordnet.count).toBe(0);
   });
@@ -535,7 +548,7 @@ describe("Funde Runde 1", () => {
     };
     const rez = L.rezept({ von: VON, bis: BIS });
     const nimm = (art: string, key?: string, wert?: string) => rez.find((r) => r.art === art && (key === undefined || (r.abfrage.filters?.[1]?.key === key && r.abfrage.filters[1].value === wert)));
-    const wahl = [nimm("gesamt"), nimm("tage"), nimm("latenz"), nimm("metadaten", "agent_type", "hauptchat"), nimm("metadaten", "effort", "high")];
+    const wahl = [nimm("gesamt"), nimm("tage"), nimm("latenz"), nimm("leer"), nimm("metadaten", "agent_type", "hauptchat"), nimm("metadaten", "effort", "high")];
     const b = L.bericht(wahl.map((r) => lese({ art: r?.art, abfrage: r?.abfrage, data: r ? zeilen(r.abfrage) : [] })));
     expect(nimm("tage")?.abfrage.dimensions).toEqual([]);
     expect(b.luecken).toEqual([]);
@@ -655,5 +668,204 @@ describe("CLI", () => {
     expect(schlecht.status).toBe(2);
     expect(schlecht.stderr).toContain("Aufruf: node scripts/langfuse-auswertung.mjs");
     expect(schlecht.stdout).toBe("");
+  });
+});
+
+describe("Leere Hook-Generations (factory#522)", () => {
+  const rez = L.rezept({ von: VON, bis: BIS });
+  const filtersVon = (r: { abfrage: Abfr }) => r.abfrage.filters ?? [];
+  test("AK1: jede Kosten- und Zähl-Abfrage schließt das Modell claude aus, genau ein Export leer zählt es", () => {
+    for (const r of rez.filter((x) => x.art !== "leer")) expect(filtersVon(r), `${r.art} ${r.name}`).toContainEqual(LEER_FILTER);
+    const leer = rez.filter((r) => r.art === "leer");
+    expect(leer).toHaveLength(1);
+    expect(leer[0].abfrage.dimensions).toEqual([{ field: "providedModelName" }]);
+    expect(leer[0].abfrage.metrics).toEqual([{ measure: "count", aggregation: "count" }, { measure: "totalCost", aggregation: "sum" }, { measure: "totalTokens", aggregation: "sum" }]);
+    expect(filtersVon(leer[0]).some((f) => f.column === "providedModelName")).toBe(false);
+    expect(filtersVon(leer[0])).toContainEqual(FILTER);
+  });
+  test("der Projektfilter hängt auch am Export leer", () => {
+    const pf = { column: "environment", operator: "=", value: "repoA", type: "string" };
+    const mit = L.rezept({ von: VON, bis: BIS, projektFilter: pf });
+    expect(filtersVon(mit.find((r) => r.art === "leer")!)).toContainEqual(pf);
+  });
+  test("ein Export ohne den Filter (alter Export) ist ein Formfehler, jede Art", () => {
+    const roh = (art: string) => ({ art, abfrage: { view: "observations", filters: [FILTER, { column: "metadata", key: "agent_type", operator: "=", value: "Plan", type: "stringObject" }], fromTimestamp: VON, toTimestamp: BIS }, data: [] });
+    for (const art of ["gesamt", "tage", "latenz", "metadaten"]) expect(() => lese(roh(art)), art).toThrow(/Filter providedModelName none of \[claude\] fehlt/);
+    const falsch = { ...exp("gesamt", gesamtRows), abfrage: { ...exp("gesamt", gesamtRows).abfrage, filters: [FILTER, { ...LEER_FILTER, value: ["gpt"] }] } };
+    expect(() => lese(falsch)).toThrow(/none of \[claude\] fehlt/);
+  });
+  test("der Export leer braucht die Dimension providedModelName und darf nicht auf das Modell filtern", () => {
+    const ok = leerVon(gesamtRows);
+    expect(() => lese(ok)).not.toThrow();
+    expect(() => lese({ ...ok, abfrage: { ...ok.abfrage, dimensions: [] } })).toThrow(/Dimension providedModelName/);
+    expect(() => lese({ ...ok, abfrage: { ...ok.abfrage, filters: [FILTER, LEER_FILTER] } })).toThrow(/keinen Filter auf providedModelName/);
+  });
+  test("leer-Zeilen: fehlende oder nicht numerische Metriken sind ein Formfehler, Tokens null zählen 0", () => {
+    const mit = (z: object) => ({ ...leerVon(gesamtRows), data: [z] });
+    const gut = { providedModelName: "claude", count_count: 3, sum_totalCost: null, sum_totalTokens: null };
+    expect(() => lese(mit(gut))).not.toThrow();
+    for (const kaputt of [{ count_count: "x" }, { count_count: undefined }, { sum_totalTokens: undefined }, { sum_totalCost: "viel" }]) expect(() => lese(mit({ ...gut, ...kaputt }))).toThrow(/ohne numerische Metriken count_count, sum_totalCost und sum_totalTokens/);
+    expect(() => lese({ ...leerVon(gesamtRows), data: Array.from({ length: L.ROW_LIMIT }, () => gut) })).toThrow(/abgeschnitten/);
+  });
+  test("AK1: die Zeile nennt n, nie in Summen, Rollen- oder Modell-Tabellen", () => {
+    const b = rep(...basis, ...alleRollen, ...alleEfforts);
+    expect(b.leer).toEqual({ count: 42 });
+    const md = L.renderMarkdown(b);
+    expect(md).toContain("leere Hook-Generations: 42 (nicht gezählt)");
+    expect(md.split("\n").findIndex((z) => z.startsWith("leere Hook-Generations"))).toBe(md.split("\n").findIndex((z) => z.startsWith("Gesamt")) + 1);
+    expect(b.roh).toEqual({ count: 34, cost: 17 });
+    for (const t of [b.modell, b.rolle, b.quelle, b.repo, b.effort]) expect(t.zeilen.map((z) => z.name)).not.toContain("claude");
+    expect(b.luecken).toEqual([]);
+  });
+  test("ohne Export leer: „nicht geprüft“ in der Zeile und als Datenlücke, nie eine stille 0", () => {
+    const b = rep(gesamt, tageVoll, latenzOk);
+    expect(b.leer).toBeNull();
+    expect(L.renderMarkdown(b)).toContain("leere Hook-Generations: nicht geprüft (Export leer fehlt)");
+    expect(b.luecken).toContain("leere Hook-Generations: nicht geprüft (Export leer fehlt)");
+  });
+  test("AK5 Negativfall: Modell claude mit Tokens über 0 wird nicht still gefiltert, sondern Datenlücke, und zählt nicht als leer", () => {
+    const b = rep(gesamt, tageVoll, latenzOk, leerVon(gesamtRows, { count: 7, tokens: 500 }));
+    expect(b.leer).toEqual({ count: 0 });
+    expect(b.luecken).toContain("Modell claude mit Usage: 7 Calls, 500 Tokens (nicht in Summen, keine leeren Hook-Generations)");
+    expect(L.renderMarkdown(b)).toContain("- Modell claude mit Usage: 7 Calls");
+    const gemischt = { ...leerVon(gesamtRows), data: [...leerVon(gesamtRows).data, { providedModelName: "claude", count_count: 5, sum_totalCost: 0, sum_totalTokens: 0 }, { providedModelName: "claude", count_count: 2, sum_totalCost: 0, sum_totalTokens: 9 }] };
+    expect(rep(gesamt, tageVoll, gemischt).leer).toEqual({ count: 5 });
+  });
+  test("AK5: eine echte Generation ohne Modell bleibt unzugeordnet (Summe und Modell-Tabelle), claude nie", () => {
+    const ohneModell = g("Claude Code Turn", "LLM Call", null, "repoA", 6, 3);
+    const rows = [...gesamtRows, ohneModell];
+    const b = rep(exp("gesamt", rows), tageVoll, leerVon(rows, { count: 4, tokens: 0 }));
+    expect(unzZeile(b.modell)).toMatchObject({ name: "unzugeordnet", count: 6 });
+    expect(b.bereinigt.count).toBe(40);
+    expect(b.leer).toEqual({ count: 4 });
+    expect(b.luecken.join("\n")).not.toMatch(/claude|Kontrolle/);
+  });
+  test("Kontrolle: schließt der Filter Generations still aus (gesamt führt weniger Calls als der Export leer ohne claude), steht die Differenz als Datenlücke", () => {
+    const b = rep(gesamt, tageVoll, latenzOk, leerVon([...gesamtRows, g("X", "Y", null, "repoA", 9, 1)], { count: 3, tokens: 0 }));
+    expect(b.luecken.join("\n")).toMatch(/Kontrolle leere Hook-Generations: Export leer führt 43 Calls ohne Modell claude, gesamt 34 \(Differenz -9/);
+    expect(b.leer).toEqual({ count: 3 });
+  });
+  test("claude mit Tokens 0 und Kosten null ist gültig und zählt als leer", () => {
+    const ex = { ...leerVon(gesamtRows), data: [...leerVon(gesamtRows).data, { providedModelName: "claude", count_count: 11, sum_totalCost: null, sum_totalTokens: 0 }] };
+    expect(rep(gesamt, tageVoll, latenzOk, ex).leer).toEqual({ count: 11 });
+  });
+});
+
+describe("Preislücke (factory#522, AK4)", () => {
+  const ohnePreis = (r: ReturnType<typeof g>): ReturnType<typeof g> => ({ ...r, sum_totalCost: null as unknown as number });
+  const mitLeer = (rows: ReturnType<typeof g>[]) => [exp("gesamt", rows), tageVoll, leerVon(rows)];
+  test("betrag: mit Preis die Zahl, komplett ohne Preis die Lücke, gemischt „mindestens“", () => {
+    expect(L.betrag({ cost: 5, count: 3 })).toBe("5.00 $");
+    expect(L.betrag({ cost: 0, count: 3, ohnePreis: 3, modelle: ["a", "b"] })).toBe("Lücke: ohne Preis (a, b)");
+    expect(L.betrag({ cost: 1.234, count: 5, ohnePreis: 3, modelle: ["a"] })).toBe("mindestens 1.23 $, ohne 3 Calls");
+    expect(L.betrag({ cost: 0, count: 0 })).toBe("0.00 $");
+  });
+  test("eine Basisgruppe ohne Preis: Modell-Zelle und Quell-Spalte zeigen die Lücke, nie 0.00 $", () => {
+    const b = rep(...mitLeer([g(...R1, 10, 5), ohnePreis(g(...R2, 3, 0))]));
+    const md = L.renderMarkdown(b);
+    const zeile = md.split("\n").find((z) => z.startsWith("| claude-opus-5-5 |"))!;
+    expect(zeile).toBe("| claude-opus-5-5 | 3 | 0.00 $ | Lücke: ohne Preis (claude-opus-5-5) | 0.00 $ | 0.00 $ | Lücke: ohne Preis (claude-opus-5-5) |");
+    expect(b.luecken).toContain("Kosten unvollständig: 3 Calls in 1 Gruppen ohne Preis (claude-opus-5-5)");
+  });
+  test("gemischte Gesamtsumme: „mindestens x $, ohne k Calls“ in roh und bereinigt", () => {
+    const md = L.renderMarkdown(rep(...mitLeer([g(...R1, 10, 5), ohnePreis(g(...R2, 3, 0))])));
+    expect(md).toContain("Gesamt: roh mindestens 5.00 $, ohne 3 Calls (13 Calls), bereinigt mindestens 5.00 $, ohne 3 Calls (13 Calls;");
+  });
+  test("eine Zeile mit beiden Gruppen desselben Modells: mindestens-Form in der Σ-Zelle", () => {
+    const md = L.renderMarkdown(rep(...mitLeer([g(...R1, 10, 5), ohnePreis(g("Fremd", "Call", "claude-sonnet-5-5", "repoA", 2, 0))])));
+    expect(md).toContain("| claude-sonnet-5-5 | 12 |");
+    expect(md).toContain("mindestens 5.00 $, ohne 2 Calls |");
+  });
+  test("zwei Gruppen derselben Zeile, die erste ohne Preis: die Zahl der Calls ohne Preis geht nicht verloren (Merge in teile)", () => {
+    const b = rep(...mitLeer([ohnePreis(g("Claude Code Turn", "LLM Call", "claude-sonnet-5-5", null, 4, 0)), g("Claude Code Turn", "LLM Call", "claude-sonnet-5-5", "", 6, 3)]));
+    expect(L.renderMarkdown(b)).toContain("bereinigt mindestens 3.00 $, ohne 4 Calls (10 Calls;");
+  });
+  test("Rolle: Zelle komplett ohne Preis und Rest mit Preis stehen getrennt", () => {
+    const rows = [ohnePreis(g(...R1, 4, 0)), g(...R2, 20, 10)];
+    const b = rep(exp("gesamt", rows), tageVoll, leerVon(rows), meta("agent_type", "Plan", [ohnePreis(g(...R1, 4, 0, 3))]));
+    const md = L.renderMarkdown(b);
+    expect(md).toContain("| Plan | 4 | Lücke: ohne Preis (claude-sonnet-5-5) |");
+    expect(b.rolle.zeilen.find((z) => z.name === "unzugeordnet")).toMatchObject({ count: 20, cost: 10 });
+  });
+  test("Rest einer Gruppe mit Teilpreis nie unter 0 Calls ohne Preis", () => {
+    const rows = [ohnePreis(g(...R1, 4, 0))];
+    const b = rep(exp("gesamt", rows), tageVoll, leerVon(rows), meta("agent_type", "Plan", [ohnePreis(g(...R1, 4, 0, 3))]));
+    expect(L.renderMarkdown(b)).not.toContain("NaN");
+    expect(L.renderMarkdown(b)).not.toContain("ohne -");
+  });
+});
+
+describe("Preislücke und Filter, Nachschärfung Runde 1 (factory#522)", () => {
+  const ohnePreis = (r: ReturnType<typeof g>): ReturnType<typeof g> => ({ ...r, sum_totalCost: null as unknown as number });
+  const mitLeer = (rows: ReturnType<typeof g>[]) => [exp("gesamt", rows), tageVoll, leerVon(rows)];
+  test("AK4: „unzugeordnet“ und „Davon unzugeordnet“ nennen Calls ohne Preis als Untergrenze, bei komplett fehlendem Preis die Lücke, nie 0 $", () => {
+    const rows = [g(...R1, 10, 5), ohnePreis(g("Claude Code Turn", "LLM Call", null, "repoA", 6, 0))];
+    const md = L.renderMarkdown(rep(...mitLeer(rows)));
+    expect(md).toContain("unzugeordnet: 16 Calls (mindestens 5.00 $, ohne 6 Calls) ohne Rolle oder ohne Modell.");
+    expect(md).toMatch(/Davon unzugeordnet: unbekannt 0 Calls \(0\.00 \$\); ohne Schlüssel oder Wert ohne Export 16 Calls \(mindestens 5\.00 \$, ohne 6 Calls\)/);
+    const nur = L.renderMarkdown(rep(...mitLeer([ohnePreis(g("Claude Code Turn", "LLM Call", null, "repoA", 6, 0))])));
+    expect(nur).toContain("unzugeordnet: 6 Calls (Lücke: ohne Preis (unzugeordnet)) ohne Rolle oder ohne Modell.");
+    expect(nur).not.toMatch(/unzugeordnet: 6 Calls \(0\.00 \$\)/);
+  });
+  test("Audit-Kopien und negative Latenz ohne Preis stehen in der Gesamtzeile als Untergrenze oder Lücke", () => {
+    const rows = [g(...R1, 10, 5), ohnePreis(g("Abgleich", "[duplicate audit] Call", "claude-opus-5-5", "repoA", 4, 0))];
+    expect(L.renderMarkdown(rep(...mitLeer(rows)))).toContain("ohne doppelte Audit-Markierungen 4 Calls Lücke: ohne Preis (claude-opus-5-5))");
+  });
+  test("Rest ohne Rollen-Zelle: Gruppe komplett ohne Preis ergibt in Rolle „unzugeordnet“ die Lücke, eine Zelle nimmt nur einen Teil", () => {
+    const rows = [ohnePreis(g(...R1, 4, 0))];
+    const ganz = rep(...mitLeer(rows));
+    expect(L.renderMarkdown(ganz)).toContain("| unzugeordnet | 4 | Lücke: ohne Preis (claude-sonnet-5-5) |");
+    const teil = rep(exp("gesamt", rows), tageVoll, leerVon(rows), meta("agent_type", "Plan", [ohnePreis(g(...R1, 1, 0, 3))]));
+    const md = L.renderMarkdown(teil);
+    expect(md).toContain("| Plan | 1 | Lücke: ohne Preis (claude-sonnet-5-5) |");
+    expect(md).toContain("| unzugeordnet | 3 | Lücke: ohne Preis (claude-sonnet-5-5) |");
+  });
+  test("Quell-Spalte: dasselbe Modell und dieselbe Quelle in zwei Repos addieren Preislücken (nicht nur die letzte Gruppe)", () => {
+    const rows = [ohnePreis(g("Claude Code Turn", "LLM Call", "claude-sonnet-5-5", "repoA", 2, 0)), g("Claude Code Turn", "LLM Call", "claude-sonnet-5-5", "repoB", 3, 1.5)];
+    const md = L.renderMarkdown(rep(...mitLeer(rows)));
+    expect(md).toContain("| claude-sonnet-5-5 | 5 | mindestens 1.50 $, ohne 2 Calls |");
+  });
+  test("Formfehler: Filter any of statt none of, anderer Wert und Export leer mit falscher Dimension", () => {
+    const mit = (f: unknown) => ({ ...gesamt, abfrage: { ...gesamt.abfrage, filters: [FILTER, f] } });
+    expect(() => lese(mit({ ...LEER_FILTER, operator: "any of" }))).toThrow(/none of \[claude\] fehlt/);
+    expect(() => lese(mit({ ...LEER_FILTER, value: ["claude-opus-5-5"] }))).toThrow(/none of \[claude\] fehlt/);
+    const ok = leerVon(gesamtRows);
+    expect(() => lese({ ...ok, abfrage: { ...ok.abfrage, dimensions: [{ field: "traceName" }] } })).toThrow(/Dimension providedModelName/);
+  });
+  test("leer-Zeile mit Tokens null zählt als leer (0 Tokens), nicht als Usage", () => {
+    const ex = { ...leerVon(gesamtRows), data: [...leerVon(gesamtRows).data, { providedModelName: "claude", count_count: 3, sum_totalCost: null, sum_totalTokens: null }] };
+    const b = rep(gesamt, tageVoll, latenzOk, ex);
+    expect(b.leer).toEqual({ count: 3 });
+    expect(b.luecken.join("\n")).not.toContain("mit Usage");
+  });
+});
+
+describe("Preislücke in Gesamtzeile und Datenlücken, Nachschärfung Runde 2 (factory#522)", () => {
+  const ohnePreis = (r: ReturnType<typeof g>): ReturnType<typeof g> => ({ ...r, sum_totalCost: null as unknown as number });
+  test("negative Latenz ohne Preis: Gesamtzeile und Datenlücke zeigen die Lücke, nie 0.00 $", () => {
+    const rows = [g(...R1, 10, 5), ohnePreis(g(...R2, 4, 0))];
+    const b = rep(exp("gesamt", rows), tageVoll, leerVon(rows), exp("latenz", [g(...R1, 10, 5, 0), ohnePreis(g(...R2, 4, 0, -1))]));
+    const md = L.renderMarkdown(b);
+    expect(md).toContain("ohne negative Latenzen 4 Calls Lücke: ohne Preis (claude-opus-5-5),");
+    expect(b.luecken.join("\n")).toContain("4 Calls (Lücke: ohne Preis (claude-opus-5-5)), aus allen Summen genommen");
+    expect(b.luecken.join("\n")).not.toContain("(0.00 $)");
+  });
+  test("Rolle: Gruppe mit negativer Latenz in einer Metadaten-Zelle und ohne Preis: Datenlücke mit Lücke statt 0.00 $", () => {
+    const rows = [ohnePreis(g(...R1, 4, 0)), g(...R2, 20, 10)];
+    const b = rep(exp("gesamt", rows), tageVoll, leerVon(rows), meta("agent_type", "Plan", [ohnePreis(g(...R1, 4, 0, -1))]));
+    expect(b.luecken.join("\n")).toContain("4 Calls (Lücke: ohne Preis (claude-sonnet-5-5)) aus den Summen genommen");
+  });
+  test("Davon unzugeordnet: Wert unbekannt ohne Preis zeigt die Lücke", () => {
+    const rows = [ohnePreis(g(...R1, 4, 0))];
+    const b = rep(exp("gesamt", rows), tageVoll, leerVon(rows), meta("agent_type", "unbekannt", [ohnePreis(g(...R1, 4, 0, 3))]));
+    expect(L.renderMarkdown(b)).toContain("Davon unzugeordnet: unbekannt 4 Calls (Lücke: ohne Preis (claude-sonnet-5-5));");
+  });
+  test("Rest nach einer Zelle: die Calls ohne Preis der Zelle werden abgezogen, der Rest zeigt dann nur den $-Betrag", () => {
+    const rows = [{ ...g(...R1, 10, 5), sum_totalCost: 5 }, ohnePreis(g("Claude Code Turn", "LLM Call", "claude-sonnet-5-5", "repoB", 3, 0))];
+    // Gesamtgruppe 1 (10 Calls, 5 $) und Gruppe 2 (3 ohne Preis) haben verschiedene Schlüssel; die Zelle nimmt nur Gruppe 2 vollständig.
+    const b = rep(exp("gesamt", rows), tageVoll, leerVon(rows), meta("agent_type", "Plan", [ohnePreis(g("Claude Code Turn", "LLM Call", "claude-sonnet-5-5", "repoB", 3, 0, 3))]));
+    const md = L.renderMarkdown(b);
+    expect(md).toContain("| Plan | 3 | Lücke: ohne Preis (claude-sonnet-5-5) |");
+    expect(md).toContain("| unzugeordnet | 10 | 5.00 $ |");
   });
 });

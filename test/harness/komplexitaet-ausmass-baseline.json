@@ -85,10 +85,10 @@
     "complexity": 1
   },
   "scripts/langfuse-abgleich-kern.mjs": {
-    "complexity": 10
+    "complexity": 8
   },
   "scripts/langfuse-abgleich.mjs": {
-    "complexity": 35
+    "complexity": 32
   },
   "scripts/langfuse-lock.mjs": {
     "complexity": 4

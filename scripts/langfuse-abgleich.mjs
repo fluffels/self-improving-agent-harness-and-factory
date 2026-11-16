@@ -79,8 +79,11 @@ function kostenAusSoll(soll) {
   return { kosten, ohnePreis };
 }
 
+/** `leer` (Observations des Diffs, sonst Zählzeilen mit Modell claude) und ob die Zählebene nach Modell getrennt ist. */
+const leerFelder = (diff, ist) => ({ leer: diff?.leer?.length ?? ist.leer ?? 0, modellGetrennt: ist.modellGetrennt === true });
+
 /**
- * Eine Session bewerten. `ist` = `{ calls, tokens, kosten }` (calls null zählt als 0, kosten fehlend/null = unbekannt), `diff` optional aus `diffMultimenge`
+ * Eine Session bewerten. `ist` = `{ calls, tokens, kosten, leer?, modellGetrennt? }` (calls null zählt als 0, `leer` = Zeilen mit Modell claude der Zählebene, kosten fehlend/null = unbekannt), `diff` optional aus `diffMultimenge`
  * (sonst Zählebene: fehlend = max(0, Soll − Ist), Dubletten = max(0, Ist − Soll)). Status: `läuft` (Ruhefrist),
  * `Lücke`, `Dublette`, `Abweichung` (gleiche Zahl, andere Tokens), `vollständig`. Dazu `score` (getrennt vom Status): `vor Stichtag`
  * (der Nachlieferer sendet dort nie), `ausstehend` (der Nachlieferer wartet noch: 150 s bei bekanntem Ende laut Ledger `ledgerEintrag`,
@@ -127,7 +130,7 @@ export function bewerteSession({ soll, ist, mtime, groesse = null, now, diff = n
     hinweisUeberpreis,
     fehlend,
     dubletten,
-    leer: diff?.leer?.length ?? 0,
+    ...leerFelder(diff, ist),
     quote: soll.length ? (soll.length - fehlend) / soll.length : 1,
     fehlendeCalls: diff ? diff.fehlend.map((e) => ({ messageId: e.messageId, ts: e.ts, model: e.model })) : null,
     schluessel: diff?.art ?? "zählung",
@@ -229,9 +232,9 @@ export function renderMarkdown(bewertungen, sum) {
   for (const b of bewertungen.filter((x) => x.ausserhalb)) {
     out.push("", `Hinweis ${String(b.session).slice(0, 8)}: Session außerhalb des Projekts (Projektordner passt nicht). Weder Projekt-Hook noch Nachlieferer erfassen sie, der Score erfassung kommt nie. Kosten: node scripts/token-baseline.mjs --session ${b.session}; Einordnung: ${factorySeiteIn(WURZEL, "docs/langfuse-hook-patch.md", "fehlende-sessions-1382")} › Fehlende Sessions › Läufe außerhalb des Repos.`);
   }
-  const zaehlDubletten = bewertungen.filter((x) => x.schluessel === "zählung" && x.dubletten > 0);
+  const zaehlDubletten = bewertungen.filter((x) => x.schluessel === "zählung" && x.dubletten > 0 && !x.modellGetrennt);
   if (zaehlDubletten.length) {
-    out.push("", `Hinweis: ${zaehlDubletten.length} Session(s) mit Dubletten auf der Zählebene (${zaehlDubletten.map((x) => String(x.session).slice(0, 8)).join(", ")}): leere Hook-GENERATIONs (ohne Message-ID und Tokens) können dort mitzählen (ein Export mit dem Filter providedModelName none of ["claude"] schließt sie aus). Genau prüfen lässt sich das auch mit dem Secret-Key (Observations je Session), dort trennt der Abgleich sie als „leer“ ab.`);
+    out.push("", `Hinweis: ${zaehlDubletten.length} Session(s) mit Dubletten auf der Zählebene (${zaehlDubletten.map((x) => String(x.session).slice(0, 8)).join(", ")}): leere Hook-GENERATIONs (ohne Message-ID und Tokens) können dort mitzählen (der Export trägt keine Dimension providedModelName; mit ihr trennt der Abgleich Zeilen mit Modell claude als „leer“ ab). Genau prüfen lässt sich das auch mit dem Secret-Key (Observations je Session), dort trennt der Abgleich sie als „leer“ ab.`);
   }
   // Beide Werte stehen getrennt und werden nie verrechnet; Sessions in der Ruhefrist zählen nicht (wie in der Summe).
   const festeSessions = bewertungen.filter((x) => x.status !== "läuft");
@@ -250,7 +253,7 @@ export function renderMarkdown(bewertungen, sum) {
 
 export const AUFRUFHILFE = "Aufruf: node scripts/langfuse-abgleich.mjs --pruefen [--seit <ISO>] [--session <id>] [--ist <datei>…] [--json]";
 /** Hinweis ohne Langfuse-Zugang; eine Funktion statt Konstante, damit der Modul-Import keine Sync-Stand-Datei liest (Muster `natives()` in `sandbox-doctor.mjs`). */
-export const ohneZugang = () => "Kein Langfuse-Zugang: LANGFUSE_PUBLIC_KEY + LANGFUSE_SECRET_KEY fehlen. Agentenläufe nutzen den Secret-Key nicht (Regel, technisch gesperrt nur unter der Sandbox, nicht unter Windows): queryMetrics-Export aus dem Langfuse-MCP als --ist <datei> übergeben (View observations, Filter type = GENERATION, Dimension sessionId, Zählung: Metrik count mit zusätzlichem Filter providedModelName none of [\"claude\"] (Typ stringOptions; schließt die leeren Hook-GENERATIONs aus); Tokens: Dimensionen sessionId und usageType, Metrik usageByType; Kosten: Dimension sessionId, Metrik totalCost (sum); jeweils orderBy desc, row_limit 1000, Export unter 1000 Zeilen: sonst enger fenstern oder je --session), siehe " + factorySeiteIn(WURZEL, "docs/model-routing.md", "langfuse-status-überprüfen-1293") + ", Punkt 1.";
+export const ohneZugang = () => "Kein Langfuse-Zugang: LANGFUSE_PUBLIC_KEY + LANGFUSE_SECRET_KEY fehlen. Agentenläufe nutzen den Secret-Key nicht (Regel, technisch gesperrt nur unter der Sandbox, nicht unter Windows): queryMetrics-Export aus dem Langfuse-MCP als --ist <datei> übergeben (View observations, Filter type = GENERATION, Dimension sessionId, Zählung: Metrik count, Dimensionen sessionId und providedModelName (Zeilen mit Modell claude zählen als leer, nie als Dublette); Tokens: Dimensionen sessionId und usageType, Metrik usageByType; Kosten: Dimension sessionId, Metrik totalCost (sum); jeweils orderBy desc, row_limit 1000, Export unter 1000 Zeilen: sonst enger fenstern oder je --session), siehe " + factorySeiteIn(WURZEL, "docs/model-routing.md", "langfuse-status-überprüfen-1293") + ", Punkt 1.";
 
 export function parseArgs(argv) {
   const optionen = { pruefen: { type: "boolean" }, json: { type: "boolean" }, seit: { type: "string" }, session: { type: "string" }, ist: { type: "string", multiple: true } };
@@ -348,7 +351,7 @@ export async function pruefen(args, { env = process.env, now = Date.now(), proje
         const obs = await fetchSessionObservations(id, { ...zugang, fetchImpl, type: "GENERATION", fields: "core,basic,model,usage,metadata" });
         diff = diffMultimenge(eintraege, obs);
       }
-      bewertungen.push(bewerteSession({ soll: eintraege, ist: { calls: istSession.calls ?? 0, tokens: istSession.tokens, kosten: istSession.kosten }, mtime, groesse, now, diff, ledgerEintrag: ledger.sessions[id] ?? null, ausserhalb }));
+      bewertungen.push(bewerteSession({ soll: eintraege, ist: { calls: istSession.calls ?? 0, tokens: istSession.tokens, kosten: istSession.kosten, leer: istSession.leer, modellGetrennt: istSession.modellGetrennt }, mtime, groesse, now, diff, ledgerEintrag: ledger.sessions[id] ?? null, ausserhalb }));
     }
     const sum = summenzeile(bewertungen);
     return { exitCode: 0, text: args.json ? JSON.stringify({ sessions: bewertungen, summe: sum }, null, 2) : renderMarkdown(bewertungen, sum) };
