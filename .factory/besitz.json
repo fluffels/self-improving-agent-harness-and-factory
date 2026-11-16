@@ -3,6 +3,9 @@
   "eintraege": [
     {"pfad":"scripts/arbeitsplatz-lib.mjs","ring":"kern","quelle":"Arbeitsplatz-Pfade (#87, ADR 0022 Fortschreibung #1829)"},
     {"pfad":"scripts/arbeitsplatz.mjs","ring":"kern","quelle":"Arbeitsplatz-Pfade (#87, ADR 0022 Fortschreibung #1829)"},
+    {"pfad":"scripts/profil-lib.mjs","ring":"kern","quelle":"Besitz-Profil und Sicherheits-Einstiege (factory#519)"},
+    {"pfad":"scripts/aufrufstatistik-lib.mjs","ring":"kern","profil":"voll","quelle":"Aufrufstatistik und Footprint (factory#519)"},
+    {"pfad":"scripts/aufrufstatistik.mjs","ring":"kern","profil":"voll","quelle":"Aufrufstatistik und Footprint (factory#519)"},
     {"pfad":"scripts/codex-lib.mjs","ring":"kern","quelle":"Codex-Laufzeitadapter (#79)"},
     {"pfad":"scripts/codex-rollen.mjs","ring":"kern","quelle":"Codex-Rollenquelle (#79)"},
     {"pfad":"scripts/codex-freigaben.mjs","ring":"kern","quelle":"Codex-Freigabetabelle (factory#363)"},
@@ -220,7 +223,7 @@
     {"pfad":".github/workflows/ticket-drift.yml","ring":"kern-nach-entkopplung","quelle":"Ticket-Drift-Lauf (factory#28)"},
     {"pfad":".agents/skills/factory/ticket-drift.md","ring":"kern-nach-entkopplung","quelle":"Ticket-Drift-Lauf (factory#28), Prompt-Datei"},
     {"pfad":"scripts/merge-testabgleich.mjs","ring":"kern","quelle":"Inventar-Einordnung (#1663)"},
-    {"pfad":"scripts/gh-kontingent.mjs","ring":"kern","quelle":"Inventar-Einordnung (#1663)"},
+    {"pfad":"scripts/gh-kontingent.mjs","ring":"kern","profil":"voll","quelle":"Inventar-Einordnung (#1663)"},
     {"pfad":"scripts/budget-lib.mjs","ring":"kern","quelle":"Inventar-Einordnung (#1663)"},
     {"pfad":"scripts/budget-pacing.mjs","ring":"kern","quelle":"Inventar-Einordnung (#1663)"},
     {"pfad":"scripts/statusline.mjs","ring":"kern","quelle":"Inventar-Einordnung (#1663)"},

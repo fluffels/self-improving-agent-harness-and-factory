@@ -14,6 +14,7 @@ import { einheitHash, einheitId, ERGAENZBARE, ergaenzungsBlockVon, istErgaenzbar
 import { projektwertLauf } from "./projektwert-lauf.mjs";
 import { STAND_PFAD, syncStandAusText } from "./sync-stand-lib.mjs";
 import { istVorlage } from "./sync-abgleich-lib.mjs";
+import { gewaehltesProfil, profilFormFehler, profilGewaehlt } from "./profil-lib.mjs";
 import { manifestKenntModule, modulAufteilung, modulFormFehler, modulKopienBefunde, modulWahl } from "./modul-wahl-lib.mjs";
 import { ergaenzungAusText, ladeProjektConfig, PROJEKT_CONFIG } from "./projekt-config-lib.mjs";
 
@@ -88,6 +89,22 @@ function modulWahlAus(manifest, lies) {
   return { gewaehlt: w.gewaehlt, fehler: [...form, ...w.fehler].map((f) => `Modul-Wahl: ${f}`), unbestimmt: false, kopien: form.length === 0 ? (config.modulKopien ?? []) : null };
 }
 
+/**
+ * Profilwahl des Projekts (factory#519): `{ profil, fehler }`. Ohne Einheiten mit `profil` im Manifest gibt es nichts zu wählen; eine fehlende, unlesbare oder ungültige Config
+ * ergibt `voll` (fail-closed: es wird alles verlangt, nichts fällt weg); ein ungültiger Wert ist zusätzlich ein Fehler mit Fix.
+ */
+function profilWahlAus(manifest, lies) {
+  if (!manifest.eintraege.some((e) => e.profil !== undefined)) return { profil: "voll", fehler: [] };
+  let config = null;
+  try {
+    config = JSON.parse(lies(PROJEKT_CONFIG) ?? "null");
+  } catch {
+    // unlesbar: bleibt null, die Modul-Wahl und der Config-Check melden es
+  }
+  if (config === null || typeof config !== "object" || Array.isArray(config)) return { profil: "voll", fehler: [] };
+  return { profil: gewaehltesProfil(config), fehler: profilFormFehler(config).map((f) => `Profil-Wahl: ${f}`) };
+}
+
 const STAND_KAPUTT = (stand) => (stand.version !== 1 && stand.version !== 2) || typeof stand.manifest !== "string" || stand.einheiten === null || typeof stand.einheiten !== "object";
 
 /** Lädt Sync-Stand und Manifest: `{ ergebnis }` (frühes Ergebnis: entfällt oder rot) oder `{ stand, manifest }`. */
@@ -141,12 +158,14 @@ function modulKopienMeldungen(manifest, stand, wahl, lies) {
 }
 
 /** Fehler der Sync-Stand-Einheiten ohne aktive Einheit: `{ fehler, modulRot }` (Modul abgewählt wird getrennt gemeldet). */
-function restFehler(manifest, stand, ids, { wahl, abgewaehlt, modulIds }) {
+function restFehler(manifest, stand, ids, { wahl, abgewaehlt, modulIds, profil }) {
   const nichtVerteilt = new Map(manifest.eintraege.filter((e) => !wirdVerteilt(e)).map((e) => [einheitId(e), e.ring]));
   const vorlagen = new Set(manifest.eintraege.filter((e) => wirdVerteilt(e) && istVorlage(e)).map(einheitId));
+  const profilAb = new Set(manifest.eintraege.filter((e) => wirdVerteilt(e) && !istVorlage(e) && !profilGewaehlt(e, profil)).map(einheitId));
   const out = { fehler: [], modulRot: [] };
   for (const id of Object.keys(stand.einheiten).filter((i) => !ids.has(i) && !(wahl.unbestimmt && modulIds.has(i)))) {
     if (abgewaehlt.has(id)) out.modulRot.push(`${id}: im Sync-Stand, Modul '${abgewaehlt.get(id)}' ist aber nicht gewählt (module in ${PROJEKT_CONFIG}). ${TAG_WEG} oder das Modul wieder wählen`);
+    else if (profilAb.has(id)) out.modulRot.push(`${id}: im Sync-Stand, Profil '${profil}' verteilt sie aber nicht (profil in ${PROJEKT_CONFIG}). ${TAG_WEG} oder das Profil voll wählen`);
     else if (vorlagen.has(id)) out.fehler.push(`${id}: im Sync-Stand, ist aber Vorlage (Vorlagen stehen nicht im Stand)`);
     else if (nichtVerteilt.has(id)) out.fehler.push(`${id}: im Sync-Stand, wird aber nicht verteilt (Ring ${nichtVerteilt.get(id)})`);
     else out.fehler.push(`${id}: im Sync-Stand, aber nicht im Manifest`);
@@ -171,13 +190,14 @@ export function pruefeDrift(lies) {
     configKaputt = true; // die Ergänzungs-Prüfung (pruefeErgaenzung) meldet die kaputte Config mit Weg; ihr Hash wäre hier nicht aussagekräftig.
   }
   const herkunft = herkunftFehler(stand);
-  const verteilt = manifest.eintraege.filter((e) => wirdVerteilt(e) && !istVorlage(e));
+  const profilWahl = profilWahlAus(manifest, lies);
+  const verteilt = manifest.eintraege.filter((e) => wirdVerteilt(e) && !istVorlage(e) && profilGewaehlt(e, profilWahl.profil));
   const aufteilung = modulAufteilung(verteilt, einheitId, wahl);
   const ids = new Set(aufteilung.aktiv.map(einheitId));
   const fehler = aufteilung.aktiv.flatMap((e) => einheitFehler(e, { lies, stand, ergaenzung, configKaputt }));
-  const rest = restFehler(manifest, stand, ids, { wahl, ...aufteilung });
+  const rest = restFehler(manifest, stand, ids, { wahl, profil: profilWahl.profil, ...aufteilung });
   const alle = [...herkunft, ...fehler, ...rest.fehler];
-  return { entfaellt: false, fehler: [...alle.map((f, i) => `${f}. ${i < herkunft.length ? TAG_WEG : WEG}`), ...rest.modulRot, ...modulKopienMeldungen(manifest, stand, wahl, lies), ...wahl.fehler], einheiten: ids.size };
+  return { entfaellt: false, fehler: [...alle.map((f, i) => `${f}. ${i < herkunft.length ? TAG_WEG : WEG}`), ...rest.modulRot, ...modulKopienMeldungen(manifest, stand, wahl, lies), ...wahl.fehler, ...profilWahl.fehler], einheiten: ids.size };
 }
 
 /** Kommandozeile; Rückgabe = Exit-Code. */

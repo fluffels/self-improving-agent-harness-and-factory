@@ -1,0 +1,21 @@
+# Fortschreibung #519 (2026-11-16): Minimalprofil für den Besitz und Aufrufstatistik
+
+Ergänzt [ADR 0022](../0022-dark-factory-kern-und-verteilung.md) (Besitz-Manifest, Sync, Drift-Gate); das Vorbild für Feld, Wahl und Import-Regel ist die [Fortschreibung factory#119](0022-119-sicherheits-module.md). Die Fortschreibung steht als Datei (siehe [Fortschreibung zu ADR 0013](0013-1860-fortschreibungen-als-dateien.md)).
+
+## Entscheidung
+
+- **Ausgangslage:** der Besitz ist für alle Bezieher gleich groß (Messung der Vollprofil-Zahlen: `node scripts/aufrufstatistik.mjs --footprint`), auch dort, wo ein Teil nie läuft. Der feste Aufwand je Ticket hängt nicht an der Produktgröße.
+- **Eigenes Feld `profil` statt Modul:** eine Einheit mit `"profil": "voll"` gehört nur zum Vollprofil. Ein Bezieher wählt mit `"profil": "minimal"` in `.factory/projekt.json` das Minimalprofil, dann entfallen diese Einheiten; ohne Schlüssel gilt `voll` (Verhalten unverändert, Manifest-Version bleibt 3). Ein Modul wäre falsch: Module müsste der Bezieher erst wählen, das änderte das Verhalten ohne Schlüssel.
+- **Sicherheit zuerst:** das Minimalprofil lässt nie ein Sicherheits-Gate oder einen Sicherheits-Hook weg. `profilFehler` verbietet das Feld an Workflows, Einheiten mit `pflichtChecks`, Modul-Einheiten, Vorlagen, Teil-Einheiten und im Ring `oberflaeche`. Dazu ein Wächter in `test/harness/kern-reinheit.test.ts`: eine Einheit ohne `profil` importiert keine Einheit mit `profil` (`profilImportErlaubt`), und keine Einheit der statischen Import-Hülle der geschlossenen Liste `SICHERHEITS_EINSTIEGE` (`scripts/profil-lib.mjs`) trägt `profil`. Ein weiterer Test hält die Hook-Skripte aus `.claude/settings.json` in dieser Liste. Fehlt im Bezieher trotzdem ein Hook oder Gate, ist das Drift-Gate rot wie bisher (`Besitz fehlt`), das Profil ändert daran nichts. Ein ungültiger Profilname ist ein Config-Fehler mit `Fix:` (`ladeProjektConfig`, Sync, Drift-Gate); das Drift-Gate verlangt bei unlesbarer oder ungültiger Config das Vollprofil (fail-closed).
+- **Sync und Drift:** der Sync verteilt eine `profil`-Einheit bei `minimal` nicht und nimmt sie nicht in den Sync-Stand auf. Er löscht nichts: beim Wechsel `voll` auf `minimal` meldet er je Datei „Profil minimal: … ist kein Besitz mehr … im Ziel nicht gelöscht“; das Drift-Gate ist bis zum erneuten Sync rot (eine Stand-Einheit, die das Profil nicht verteilt) und nennt den Weg. Der Bezieher löscht die Restdateien selbst.
+- **Aufrufstatistik:** `node scripts/aufrufstatistik.mjs` zählt aus Transkripten `node scripts/<x>.mjs`, `Skill`- und `Agent`-Aufrufe und nennt unter `UNGENUTZT:` die verteilten Skripte, Skills und Agenten ohne Aufruf, Einstieg (Hook in `settings.json` oder Agentendatei, Workflow, `package.json`) oder statischen Import eines Genutzten. `--footprint` zählt Dateien und Zeilen der verteilten Ganz-Datei-Einheiten je Profil und schätzt den festen Kontext als Zeichen durch vier aus `AGENTS.md` und den Beschreibungen verteilter Skills und Agenten (Größenordnung, keine Messung). Markiert wird nur, was in der Fabrik und bei den Beziehern im Messfenster ungenutzt war und außerhalb der Sicherheits-Hülle liegt.
+
+## Bekannte Grenzen
+
+- Die Hülle sieht nur statische relative Importe; dynamische Importe und zur Laufzeit gebaute Pfade nicht. Ein neues Sicherheits-Skript, das nicht in ein Muster von `SICHERHEITS_EINSTIEGE` passt, muss dort ergänzt werden.
+- Die Statistik zählt nur Claude-Code-Transkripte und Bash-Aufrufe `node scripts/<x>.mjs`; ein Skript, das nur ein anderes per `spawn` startet, braucht selbst einen Aufruf oder Einstieg. Ein kurzes Messfenster ist dünn: ein Bezieher mit wenigen Sitzungen nutzt Teile noch nicht, die das Quellprojekt nutzt; darum zählt der Schnitt beider.
+- `AGENTS.md` bleibt im Minimalprofil gleich groß; der feste Kontext sinkt nur über die Beschreibungen weggelassener Skills und Agenten.
+
+## Re-Evaluierung
+
+Zum Verfallsdatum der Registerzeile `verfall-minimalprofil-519` prüfen: wie viele Bezieher wählen `minimal`, und senkt die Markierung den Footprint messbar?
