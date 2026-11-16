@@ -1,10 +1,10 @@
 [
   {
-    "id": "factory-kennzahlen-schwellen",
+    "id": "factory-kennzahlen-schwellen-2027-03",
     "art": "frist",
-    "faellig": "2026-11-16",
-    "titel": "Schwellen der Factory-Kennzahlen nach 4 Status-Läufen entscheiden (ADR 0022, Fortschreibung quellprojekt#1616)",
-    "text": "Messen: die Blöcke der letzten mindestens 4 Bericht-Kommentare der Wochen-Status-Tickets „Langfuse-Status überprüfen“ auswerten (geschlossene Tickets seit 2026-10-16 zählen: `gh issue list --state all --search '\"Langfuse-Status überprüfen\" in:title' --json number,closedAt --limit 30`). Unter 4 Läufen um die fehlenden Wochen schieben, die Zahl der Läufe als Grund nennen. Ab 4 je Kennzahl (Lauf-Ergebnis, Nacharbeit, Kosten je Ticket, Abo-Kontingent, Abnahme-Quote) eine Schwelle mit Prüftermin (ADR 0027) oder „keine Schwelle, weil …“ festlegen; die Entscheidung gehört nach docs/model-routing.md (Factory-Kennzahlen › Grenzen) und als Fortschreibung zu ADR 0022. Dann diesen Eintrag löschen."
+    "faellig": "2027-03-01",
+    "titel": "Schwellen der Factory-Kennzahlen gegen die Token-Analysen prüfen (factory#626, ADR 0022, ADR 0027)",
+    "text": "Schwellen aus docs/model-routing.md (Factory-Kennzahlen › Schwellen) gegen Teil 0 der Token-Analysen Dezember bis Februar prüfen: je Schwelle behalten, verschieben oder streichen (Mindest-n-Klauseln beachten, eine Überschreitung ist nur ein Befund). Die Kennzahlen Nacharbeit und Abo-Kontingent, für die es noch keine Schwelle gibt, nachentscheiden. Bestätigen die Prüfungen die Schwellen, erwägen, sie als deterministische Prüfung in Code zu heben. Dann diesen Eintrag löschen."
   },
   {
     "id": "ticket-drift-28",
