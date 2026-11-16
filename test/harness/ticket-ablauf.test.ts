@@ -221,7 +221,7 @@ describe("Ticket-Ablauf: das echte Repo", () => {
     assert.ok(cfg.skills !== undefined && "abschluss" in cfg.skills, "skills.abschluss fehlt in .factory/projekt.json");
     const abschluss = cfg.skills.abschluss ?? null;
     const ablauf = leereProjektwerte(lies(TICKET_ABLAUF));
-    assert.ok(ablauf.includes("<skills.abschluss>"), "der Ablauf nutzt den Platzhalter <skills.abschluss>");
+    assert.ok(!ablauf.includes("<skills.abschluss>"), "der Ablauf nennt den Abschluss-Skill nur als <wirksamer Name> (factory#569), nicht als Platzhalter <skills.abschluss>");
     assert.deepEqual(projektwissenImAblauf(ablauf, abschluss), []);
   });
   test("beide Ticket-Skills verweisen auf den gemeinsamen Ablauf", () => {

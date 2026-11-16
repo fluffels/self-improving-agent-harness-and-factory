@@ -20,7 +20,7 @@ Projektwerte aus `.factory/projekt.json` (generiert von `node scripts/projektwer
 | `labels.forum` | `forum` |
 | `labels.dependabotInbox` | `area:harness` |
 | `labels.entscheidung` | `status:entscheidung-noetig` |
-| `skills.abschluss` | `brain-input` |
+| `skills.abschluss` | — |
 <!-- factory:projektwerte:end -->
 
 **Runde 1:** zusätzlich zu den Code-Brillen läuft die Lens `sicherheit` (`brille-sicherheit.md`) auf demselben Patch und demselben Stand, als eigener Subagent. Ihre Plan-Prüfliste ist der Abschnitt „Bedrohungen und Datenflüsse“ des Plans **wörtlich**. Sie zählt als Brille der Runde 1 (`lenses=…,sicherheit`, `blocker=…,sicherheit:<n>`, ebenso `sollte=` und `hinweis=`), nicht als eigene Runde oder Zusatzpass.

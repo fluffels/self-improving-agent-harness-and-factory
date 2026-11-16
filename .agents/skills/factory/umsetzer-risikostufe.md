@@ -20,7 +20,7 @@ Projektwerte aus `.factory/projekt.json` (generiert von `node scripts/projektwer
 | `labels.forum` | `forum` |
 | `labels.dependabotInbox` | `area:harness` |
 | `labels.entscheidung` | `status:entscheidung-noetig` |
-| `skills.abschluss` | `brain-input` |
+| `skills.abschluss` | — |
 <!-- factory:projektwerte:end -->
 
 **Abbildung:** `Plan ohne Planer: stufe <n> — <Pfade>` wird zu `<praefixe.commitZeile>Plan: ohne — stufe <n>`, ohne Pfadliste (die Pfade stehen im PR-Text) und ohne Gedankenstrich hinter der Stufe, sonst ist der Plan in der CI rot (`stufeGrund`).

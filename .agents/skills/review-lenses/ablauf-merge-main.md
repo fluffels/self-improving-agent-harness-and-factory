@@ -20,7 +20,7 @@ Projektwerte aus `.factory/projekt.json` (generiert von `node scripts/projektwer
 | `labels.forum` | `forum` |
 | `labels.dependabotInbox` | `area:harness` |
 | `labels.entscheidung` | `status:entscheidung-noetig` |
-| `skills.abschluss` | `brain-input` |
+| `skills.abschluss` | — |
 <!-- factory:projektwerte:end -->
 
 Gilt für jeden Merge von `origin/main` in den Branch (Stufe 0, echter Konflikt, Merge vor dem Auto-Merge bei einer Gate-Verschärfung); `M` = Merge-Commit. `node scripts/check-abnahme-nachweis.mjs` zeigt lokal (ohne PR-Umgebung) einen Konflikt-Merge hinter der Abnahme.

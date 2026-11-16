@@ -20,7 +20,7 @@ Projektwerte aus `.factory/projekt.json` (generiert von `node scripts/projektwer
 | `labels.forum` | `forum` |
 | `labels.dependabotInbox` | `area:harness` |
 | `labels.entscheidung` | `status:entscheidung-noetig` |
-| `skills.abschluss` | `brain-input` |
+| `skills.abschluss` | — |
 <!-- factory:projektwerte:end -->
 
 Nach dem Cap fährt der Umsetzer **Zusatzpässe ohne Rückfrage** (Ursache im PR-Text, Nachweis `zusatzpass=<n>:<ursache>`), höchstens 3 (der Lens-Worktree zählt weiter: `-lens-r4-<brille>` bis `-lens-r6-<brille>`), jeden nur bei steigender Evidenz: der Vorpass meldet einen **belegten** Blocker einer **neuen Blocker-Klasse** (Brille plus verletzter Prüfpunkt der Brillen-Datei; neu = in keinem früheren Pass dieses PRs blockiert, derselbe Prüfpunkt an anderer Stelle gilt als bekannt; die Ursache nennt die Klasse) und die Blockerzahl sinkt gegenüber dem Vorpass. **Belegt** heißt: Repro oder Beleg an Test oder Doku (roter Test, fehlender Guard, widersprüchliche oder verwaiste Doku); ein Architektur- oder Requirement-Blocker ist nie belegt in diesem Sinn.

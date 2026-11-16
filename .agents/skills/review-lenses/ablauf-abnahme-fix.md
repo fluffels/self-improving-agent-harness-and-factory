@@ -20,7 +20,7 @@ Projektwerte aus `.factory/projekt.json` (generiert von `node scripts/projektwer
 | `labels.forum` | `forum` |
 | `labels.dependabotInbox` | `area:harness` |
 | `labels.entscheidung` | `status:entscheidung-noetig` |
-| `skills.abschluss` | `brain-input` |
+| `skills.abschluss` | — |
 <!-- factory:projektwerte:end -->
 
 Eine **Abnahme-Fix-Runde** hat ein **eigenes Budget** von einer Delta-Runde, ohne Rückfrage und unabhängig vom Review-Cap: der Fix wird gemacht, dann prüft **eine** Delta-Lens auf `<abnahme-head>..HEAD` (Sabotage-Worktree `<praefixe.worktree><nr>-lens-a<n>`) nur Test-Adäquanz und Requirement-Treue (ist der Fix reine Doku, die Doku-Brille), danach neuer Nachweis-Commit und erneuter Abnahme-Durchgang. Der Fix-Commit trägt die Zeile `Runde <n>:` (Format: `SKILL.md`).

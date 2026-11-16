@@ -24,6 +24,8 @@
  * (Fortschreibung zu ADR 0022); `RESTE` scannt die Namen, der Export-Absenz-Test prüft `scripts/besitz-extraktion.mjs`. Bewusste Grenze: `huellenVerstoesse` heißt auch eine lokale Funktion in
  * zwei Wächtern, darum wird der Name nur als Export geprüft, nicht als Text.
  *
+ * Dazu (factory#569): der Abschluss-Wächter heißt `sitzungsabschluss.test.ts` (der alte Dateiname trug den Namen eines privaten Skills); `RESTE` scannt den alten Namen. Bewusste Grenze: freie Nennung des Skills ohne den Dateinamen fängt der Scan nicht (dafür der Wächter selbst).
+ *
  * Dazu (factory#500): die Fabrik führt keine Namen ihrer Bezieher; der Schlüssel `bezieher` der Projekt-Config und `tag-takt --probe` sind entfernt (Fortschreibung zu ADR 0031), `RESTE_BEZIEHER_LISTE`
  * scannt `--probe`, `bezieherProbe`, `probeErgebnisse` und den Schlüssel. Bewusste Grenze: `bezieher` als Rollen-Option oder Gruppen-ID bleibt erlaubt, freie Umschreibungen („Liste der Bezieher“) werden nicht gescannt.
  *
@@ -129,6 +131,11 @@ export const RESTE: Rest[] = [
     name: "Wächter agents-refs (aufgegangen im Kern-Verweis-Wächter)",
     muster: /agents-refs/,
     fix: "Kern-Verweise auf AGENTS.md prüft test/harness/besitz-abschnittsverweise.test.ts (factory#245), den Wächter nicht mehr nennen",
+  },
+  {
+    name: "alter Pfad des Abschluss-Wächters (trug den Namen eines privaten Skills)",
+    muster: /brain-input-abschluss/,
+    fix: "den Wächter test/harness/sitzungsabschluss.test.ts nennen (factory#569); der Dateiname trug den Namen eines privaten Abschluss-Skills",
   },
   {
     name: "entfernte Extraktions-Prüfungen (besitz-extraktion, factory#492)",
@@ -296,6 +303,7 @@ describe("Keine Textreste des entfernten Ticket-Workflows (#1067, ADR 0028)", ()
       "Klemmung und Selbstkorrektur des Sammeltickets": "planMitKorrektur(items, args, n)",
       "A/B Kern je Rolle: Arm-B-Typ und Arm-Wahl (beendet)": "spawnt lens-kern-je-rolle für ungerade Tickets",
       "entfernte Extraktions-Prüfungen (besitz-extraktion, factory#492)": "import { pruefeExtraktion } from besitz-extraktion",
+      "alter Pfad des Abschluss-Wächters (trug den Namen eines privaten Skills)": "siehe test/harness/brain-input-abschluss.test.ts",
     };
     const text = beispiele[r.name];
     assert.ok(text, `Beispiel fehlt für ${r.name}`);
