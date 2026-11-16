@@ -802,6 +802,44 @@ describe("main mit injizierten gh-/Board-Nähten (factory#189 L7): Verzweigung j
     expect(rufe.find((r) => r[0] === "legeAn")![1]).toMatchObject({ titel: "Refactoring (gesammelt)" });
   });
 
+  /** Naht für das echte findeVorhandenes: `tickets` = [Nummer, Titel], `einzel(nr)` = Direktabruf. */
+  const alteNaht = (tickets: [number, string][], einzel: (nr: number) => object) => ({
+    env: {},
+    gh: (a: string[]) => einzel(Number(/issues[/](\d+)$/.exec(a[a.length - 1] ?? "")?.[1])),
+    ladeSeiten: () => [tickets.map(([number, title]) => ({ number, title, created_at: "2026-10-01T00:00:00Z", assignees: [] }))],
+    log: () => {},
+    err: () => {},
+    exit: (c: number) => { throw new Error(`exit ${c}`); },
+  });
+  const offen = { state: "open", assignees: [], user: ownerUser, comments: 0 };
+  const ALT = "Codequalität (gesammelt)";
+  const NEU = "Refactoring (gesammelt)";
+  test("Negativfall: ein Alt-Titel-Ticket eines fremden Autors wird nie gewählt, es wird unter dem neuen Titel angelegt", async () => {
+    const naht = alteNaht([[15, ALT]], () => ({ ...offen, user: { login: "fremd", type: "User" } }));
+    const { deps, rufe } = fakes({ findeVorhandenes: (a: object) => Z.findeVorhandenes(a, naht) });
+    await M(["codequalitaet"], deps);
+    expect(rufe.find((r) => r[0] === "legeAn")![1]).toMatchObject({ titel: NEU });
+  });
+  test("Alt- und Neu-Titel gleichzeitig offen: das höchste bestätigte gilt; ist das höhere nicht bestätigt, das nächste", async () => {
+    const lauf = async (einzel: (nr: number) => object) => {
+      const { deps, rufe, log } = fakes({ findeVorhandenes: (a: object) => Z.findeVorhandenes(a, alteNaht([[15, ALT], [20, NEU]], einzel)) });
+      await M(["codequalitaet"], deps);
+      return { rufe, log: log.join("\n") };
+    };
+    const beide = await lauf(() => offen);
+    expect(beide.log).toContain(`„${NEU}“ gibt es schon: #20`);
+    expect(namen(beide.rufe)).not.toContain("legeAn");
+    const hoeheresGeclaimt = await lauf((nr) => (nr === 20 ? { ...offen, assignees: [{ login: OWNER }] } : offen));
+    expect(hoeheresGeclaimt.log).toContain(`„${ALT}“ gibt es schon: #15`);
+    expect(namen(hoeheresGeclaimt.rufe)).not.toContain("legeAn");
+  });
+  test("der Dubletten-Check nach dem Anlegen bekommt die Titelliste (neu und alt), damit ein parallel sichtbares Alt-Titel-Ticket als Original gilt", async () => {
+    const titel: unknown[] = [];
+    const { deps } = fakes({ schliesseWennDublette: (_nr: number, t: unknown) => (titel.push(t), false) });
+    await M(["codequalitaet"], deps);
+    expect(titel).toEqual([[NEU, ALT]]);
+  });
+
   test("codequalitaet: Label aus labels.codequalitaet, Produkt-Board im eigenen Repo, immer hinter den Kopf gesetzt", async () => {
     const { deps, rufe } = fakes();
     await M(["codequalitaet"], deps);
