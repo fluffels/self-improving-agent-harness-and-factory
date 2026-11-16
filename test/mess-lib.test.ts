@@ -270,6 +270,47 @@ describe("claimNummer (#1616)", () => {
   });
 });
 
+describe("freigabeNummer und istMerge (factory#524)", () => {
+  const C = raw as unknown as { freigabeNummer: (cmd: string) => number | null; istMerge: (cmd: string) => boolean };
+  test("Freigabe-Zeile liefert die Ticketnummer, Claim und Ansehen nicht", () => {
+    expect(C.freigabeNummer("gh issue edit 524 --remove-assignee @me")).toBe(524);
+    expect(C.freigabeNummer("cd x && gh issue edit 12 --add-label a --remove-assignee @me")).toBe(12);
+    expect(C.freigabeNummer("gh issue edit 524 --add-assignee @me")).toBeNull();
+    expect(C.freigabeNummer("gh issue view 524")).toBeNull();
+    expect(C.freigabeNummer(undefined as unknown as string)).toBeNull();
+  });
+  test("Freigabe: Mehrfach-Leerraum, Zeilenwechsel und Verkettung zählen; Zahl mit Anhang, Text im Argument und fremdes Präfix nicht", () => {
+    expect(C.freigabeNummer("gh  issue  edit 5 --remove-assignee @me")).toBe(5);
+    expect(C.freigabeNummer("gh issue edit 5 --add-label a\ngh issue edit 6 --remove-assignee @me")).toBe(6);
+    expect(C.freigabeNummer("git status && gh issue edit 8 --remove-assignee @me")).toBe(8);
+    expect(C.freigabeNummer("git fetch; gh issue edit 5 --remove-assignee @me")).toBe(5);
+    expect(C.freigabeNummer("x | gh issue edit 5 --remove-assignee @me")).toBe(5);
+    expect(C.freigabeNummer("(gh issue edit 5 --remove-assignee @me)")).toBe(5);
+    expect(C.freigabeNummer("gh issue edit  5 --remove-assignee @me")).toBe(5);
+    expect(C.freigabeNummer("gh issue edit 524x --remove-assignee @me")).toBeNull();
+    expect(C.freigabeNummer("gh issue edit 5 --add-label a\ngh issue view 6 --remove-assignee")).toBeNull();
+    expect(C.freigabeNummer('echo "gh issue edit 7 --remove-assignee"')).toBeNull();
+    expect(C.freigabeNummer("xgh issue edit 7 --remove-assignee")).toBeNull();
+  });
+  test("Merge: Mehrfach-Leerraum und Verkettung zählen; --disable-auto, Text im Argument, mergex und fremdes Präfix nicht", () => {
+    expect(C.istMerge("gh  pr  merge 7 --squash")).toBe(true);
+    expect(C.istMerge("cd x && gh pr merge 7 --auto")).toBe(true);
+    expect(C.istMerge("git fetch; gh pr merge 7")).toBe(true);
+    expect(C.istMerge("(gh pr merge 7)")).toBe(true);
+    expect(C.istMerge("x | gh pr merge 7")).toBe(true);
+    expect(C.istMerge("gh pr merge 7 --squash\necho --disable-auto")).toBe(true);
+    expect(C.istMerge("gh pr merge 7 --disable-auto")).toBe(false);
+    expect(C.istMerge('grep -rn "gh pr merge" docs')).toBe(false);
+    expect(C.istMerge("gh pr mergex 7")).toBe(false);
+    expect(C.istMerge("xgh pr merge 7")).toBe(false);
+  });
+  test("gh pr merge ist ein Merge, pr view und Text nicht", () => {
+    expect(C.istMerge("gh pr merge 7 --squash --auto")).toBe(true);
+    expect(C.istMerge("gh pr view 7")).toBe(false);
+    expect(C.istMerge(undefined as unknown as string)).toBe(false);
+  });
+});
+
 describe("Ticketfilter aus flagsLesen-Werten (#1790)", () => {
   const T = raw as unknown as {
     TICKET_OPTIONEN: Record<string, { type: string; multiple: boolean }>;

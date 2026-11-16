@@ -138,9 +138,9 @@ const sendeTags = (env: object, ticket: string | null): string[] => {
 };
 
 describe("Tag-Schema, einzige Quelle (factory#406)", () => {
-  test("Charakterisierung: Sendetags = [repo, ...Projekt-Tags getrimmt ohne Leere, abgleich, ...Tickets]", () => {
+  test("Charakterisierung: Sendetags = [repo, ...Projekt-Tags getrimmt ohne Leere, abgleich, Ticket-Schlüssel]", () => {
     expect(sendeTags({ CC_LANGFUSE_TRACE_TAGS: " x, ,y" }, "factory#9")).toEqual(["repo", "x", "y", "abgleich", "factory#9"]);
-    expect(sendeTags({}, null)).toEqual(["repo", "abgleich"]);
+    expect(sendeTags({}, null)).toEqual(["repo", "abgleich", "ohne-ticket"]); // factory#524: ein Trace trägt genau einen Ticket-Schlüssel
   });
   test("projektTagsAus: kommagetrennt, getrimmt, ohne Leere; kein Text gibt []", () => {
     expect(OTLP.projektTagsAus(" x, ,y")).toEqual(["x", "y"]);
@@ -154,7 +154,7 @@ describe("Tag-Schema, einzige Quelle (factory#406)", () => {
   test("Vertrag: jedes projektbezogene Sendetag und das Codex-Tag liegt im Projektfilter", () => {
     const tags = OTLP.projektTagsAus("x,y");
     const filter = W.projektFilterAus({ tags, repoName: "repo" }).filter as { value: string[] };
-    for (const t of [...sendeTags({ CC_LANGFUSE_TRACE_TAGS: "x,y" }, null).filter((t) => t !== "abgleich"), OTLP.codexProjektTag("repo")]) expect(filter.value).toContain(t);
+    for (const t of [...sendeTags({ CC_LANGFUSE_TRACE_TAGS: "x,y" }, null).filter((t) => t !== "abgleich" && t !== "ohne-ticket"), OTLP.codexProjektTag("repo")]) expect(filter.value).toContain(t);
   });
 });
 

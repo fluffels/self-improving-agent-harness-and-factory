@@ -44,3 +44,7 @@ Das Plugin im Projekt-Scope wieder einschalten und den Nachlieferer auf reines L
 ## Re-Evaluierung
 
 Wenn Langfuse Updates an Generations erlaubt oder das Plugin Tags je Turn anbietet.
+
+## Weitere Fortschreibungen (als Dateien)
+
+Neue Fortschreibungen dieses ADR stehen als Datei unter [`fortschreibungen/`](fortschreibungen/0036-524-umsetzung-claim-fenster.md) (Konvention: [README](README.md#format)); dort die erste: Umsetzung in factory#524 (Plugin im Projekt-Scope aus, Claim-Fenster, ein Trace je Ticket).
