@@ -86,6 +86,7 @@
     "/scripts/workflow-blockform.mjs",
     "/scripts/harness-doctor-meldestelle.mjs",
     "/scripts/harness-doctor-ergebnis.mjs",
+    "/scripts/harness-doctor-refactoring.mjs",
     "/scripts/harness-doctor-factory-update.mjs",
     "/scripts/harness-doctor-melden.mjs",
     "/scripts/sandbox-doctor.mjs",
