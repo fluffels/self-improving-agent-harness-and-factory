@@ -392,4 +392,9 @@ describe("rundenZeilenAus (factory#535)", () => {
     expect(d).toHaveLength(1);
     expect(d[0].blocker).toEqual([{ lens: "doku", n: 0 }]);
   });
+  it("liefert nach Rundennummer sortiert (auch bei Runde 10) und liest hinweis", () => {
+    const r = rz("Runde 10: lenses=doku blocker=doku:0 hinweis=doku:4\nRunde 2: lenses=doku blocker=doku:1\nRunde 1: lenses=doku blocker=doku:2");
+    expect(r.map((z) => z.n)).toEqual([1, 2, 10]);
+    expect(r[2].hinweis).toEqual([{ lens: "doku", n: 4 }]);
+  });
 });

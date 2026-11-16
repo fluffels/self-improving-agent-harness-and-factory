@@ -356,8 +356,8 @@ describe("bewertePrs und Aggregate", () => {
 
 describe("Stichprobenarme und Schattenrunden (factory#535)", () => {
   type Arme = {
-    vollablauf: { prs: number; runden: { median: number | null; verteilung: Record<string, number> }; ohneNacharbeit: number; abnahme: { gemessen: number; ersterDurchgang: number } };
-    schlank: { prs: number; runden: { median: number | null; verteilung: Record<string, number> }; schwere: { blockierend: Record<string, { summe: number }> } };
+    vollablauf: { prs: number; runden: { median: number | null; verteilung: Record<string, number> }; ohneNacharbeit: number; abnahme: { gemessen: number; ersterDurchgang: number }; schwere: { blockierend: Record<string, { summe: number }> } };
+    schlank: { prs: number; runden: { median: number | null; verteilung: Record<string, number> }; ohneNacharbeit: number; abnahme: { gemessen: number; ersterDurchgang: number }; schwere: { blockierend: Record<string, { summe: number }> } };
     ohneArm: { prs: number; liste: { pr: number; arm: string | null }[] };
     schatten: { jePr: { pr: number; schattenrunden: number; blocker: number }[]; gesamt: { prs: number; schattenrunden: number | null; blocker: number | null }; fehlendeRundenZeilen: { pr: number; fehlend: number[] | null }[] };
   };
@@ -377,19 +377,28 @@ describe("Stichprobenarme und Schattenrunden (factory#535)", () => {
   const SCHLANK = "runden=1 arm=schlank lenses=architektur blocker=architektur:3 sollte=architektur:0 hinweis=architektur:0";
 
   test("Arme getrennt: PRs, Median und Verteilung der Runden, Schwere und Abnahme je Arm; ohne arm= in keinem Arm", () => {
+    const abnahme = (d: number) => `${Z.abnahme}: head=${"b".repeat(40)} durchgaenge=${d} urteil=K1:erfuellt`;
     const { arme } = rechne([
-      { felder: VOLL(), runden: [R1, "Runde 2: lenses=architektur blocker=architektur:1 sollte=architektur:0 hinweis=architektur:0"] },
+      { felder: VOLL(), runden: [R1, "Runde 2: lenses=architektur blocker=architektur:1 sollte=architektur:0 hinweis=architektur:0", abnahme(2)] },
       { felder: VOLL("", 2), runden: [R1] },
-      { felder: SCHLANK },
+      { felder: VOLL("", 2), runden: [R1] },
+      { felder: SCHLANK, runden: [abnahme(1)] },
       { felder: "runden=2 lenses=architektur blocker=architektur:9" },
     ]);
-    assert.equal(arme.vollablauf.prs, 2);
-    assert.deepEqual(arme.vollablauf.runden, { median: 2.5, verteilung: { 2: 1, 3: 1 } });
+    assert.equal(arme.vollablauf.prs, 3);
+    assert.deepEqual(arme.vollablauf.runden, { median: 2, verteilung: { 2: 2, 3: 1 } });
     assert.equal(arme.schlank.prs, 1);
     assert.deepEqual(arme.schlank.runden, { median: 1, verteilung: { 1: 1 } });
     assert.equal(arme.ohneArm.prs, 1);
-    assert.deepEqual(arme.ohneArm.liste, [{ pr: 73, arm: null }]);
-    assert.equal(arme.schlank.prs + arme.vollablauf.prs + arme.ohneArm.prs, 4, "kein PR doppelt, keiner verloren");
+    assert.deepEqual(arme.ohneArm.liste, [{ pr: 74, arm: null }]);
+    assert.equal(arme.schlank.prs + arme.vollablauf.prs + arme.ohneArm.prs, 5, "kein PR doppelt, keiner verloren");
+    // Schwere, Nacharbeit und Abnahme je Arm getrennt (nicht über alle PRs)
+    assert.equal(arme.schlank.schwere.blockierend.architektur.summe, 3);
+    assert.equal(arme.vollablauf.schwere.blockierend.architektur.summe, 0);
+    assert.equal(arme.vollablauf.ohneNacharbeit, 3);
+    assert.equal(arme.schlank.ohneNacharbeit, 1);
+    assert.deepEqual([arme.vollablauf.abnahme.gemessen, arme.vollablauf.abnahme.ersterDurchgang], [1, 0]);
+    assert.deepEqual([arme.schlank.abnahme.gemessen, arme.schlank.abnahme.ersterDurchgang], [1, 1]);
   });
 
   test("Schattenrunde: Vorrunde blocker 0 und sollte > 0, ihre blockierenden Funde je PR und gesamt", () => {
@@ -438,6 +447,37 @@ describe("Stichprobenarme und Schattenrunden (factory#535)", () => {
     ]);
     assert.deepEqual(arme.schatten.fehlendeRundenZeilen, [{ pr: 70, fehlend: null }]);
     assert.deepEqual(arme.schatten.jePr, [{ pr: 71, ticket: 81, schattenrunden: 1, blocker: 0 }], "Runde 1 aus blocker=/sollte= der Review-Zeile, letzter Pass ohne Zeile = konvergiert");
+  });
+
+  test("Lücken: sollte= fehlt bei blocker 0, Runde-Zeile ohne blocker=, Review-Zeile ohne blocker= und ohne Runde-1-Zeile", () => {
+    const { arme } = rechne([
+      { felder: VOLL("", 2), runden: ["Runde 1: lenses=architektur blocker=architektur:0"] },
+      { felder: VOLL("", 2), runden: ["Runde 1: lenses=architektur sollte=architektur:2"] },
+      { felder: "runden=2 arm=vollablauf lenses=architektur" },
+      { felder: VOLL("", 3), runden: ["Runde 2: lenses=architektur blocker=architektur:0 sollte=architektur:0"] },
+    ]);
+    assert.deepEqual(arme.schatten.fehlendeRundenZeilen, [
+      { pr: 70, fehlend: [1] },
+      { pr: 71, fehlend: [1] },
+      { pr: 72, fehlend: [1] },
+    ]);
+    assert.deepEqual(arme.schatten.jePr, [{ pr: 73, ticket: 83, schattenrunden: 1, blocker: 0 }], "Runde 1 aus der Review-Zeile (0/2), Pass 2 meldet 0/0");
+  });
+
+  test("Mehrere Schattenrunden je PR zählen einzeln, nicht je PR", () => {
+    const { arme } = rechne([{ felder: VOLL(), runden: [R1, "Runde 2: lenses=architektur blocker=architektur:0 sollte=architektur:1 hinweis=architektur:0"] }]);
+    assert.deepEqual(arme.schatten.jePr, [{ pr: 70, ticket: 80, schattenrunden: 2, blocker: 0 }]);
+    assert.deepEqual(arme.schatten.gesamt, { prs: 1, schattenrunden: 2, blocker: 0 });
+  });
+
+  test("formatiere: leerer Arm mit „–“, Dezimalkomma, keine Lückenzeile ohne Lücke, ohne Review-Nachweis ausgewiesen", () => {
+    const sauber = mod.formatiere(rechne([{ felder: VOLL("", 2), runden: [R1] }, { felder: VOLL("", 3), runden: [R1, "Runde 2: lenses=architektur blocker=architektur:0 sollte=architektur:0 hinweis=architektur:0"] }]).e);
+    assert.match(sauber, /\| vollablauf \| 2 \| 2,5 \| 2×1 3×1 \|/);
+    assert.match(sauber, /\| schlank \| 0 \| – \| – \|/);
+    assert.match(sauber, /ohne arm=: 0$/m);
+    assert.doesNotMatch(sauber, /fehlenden Runde-Zeilen/);
+    const luecke = mod.formatiere(rechne([{ felder: "runden=x arm=vollablauf lenses=architektur" }]).e);
+    assert.match(luecke, /#70 \(ohne Review-Nachweis\)/);
   });
 
   test("Ein unbekannter arm-Wert zählt in ohneArm, nie in einem Arm", () => {
