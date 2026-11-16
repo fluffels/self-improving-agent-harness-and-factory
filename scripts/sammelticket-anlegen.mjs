@@ -250,7 +250,7 @@ function offeneKandidaten({ repo, titel, vorgaenger, vorVon = Infinity }, n) {
   return kandidatenSammelticket(normalizeOffene(n.ladeSeiten(repo, zielOpts(repo, n.env))), titel, { nach: vorgaenger }).filter((i) => i.number < vorVon);
 }
 
-/** Das älteste bestätigte ungeclaimte Sammelticket `titel` im Ziel-Repo (Direktabruf bestätigt, die Liste hinkt nach) oder null. Ein unlesbares Ziel endet mit Exit 1 (`lesbarImZiel`). */
+/** Das höchste bestätigte ungeclaimte Sammelticket mit `titel` (String oder Liste) im Ziel-Repo (Direktabruf bestätigt, die Liste hinkt nach) oder null. Ein unlesbares Ziel endet mit Exit 1 (`lesbarImZiel`). */
 export function findeVorhandenes({ repo, titel, vorgaenger, owner }, naht = {}) {
   const n = naehte(naht);
   return lesbarImZiel(repo, () => waehleBestaetigtes(offeneKandidaten({ repo, titel, vorgaenger }, n), einzelAbrufIn(repo, n.gh, n.env), owner), n);
