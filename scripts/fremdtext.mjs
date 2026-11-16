@@ -15,7 +15,7 @@
 import { istDirektaufruf } from "./direktaufruf.mjs";
 import { ghText } from "./gh-cli.mjs";
 import { ladeProjektConfig } from "./projekt-config-lib.mjs";
-import { flach, issueKommentare, istFremdeingang, istVertraut, prBeitraege } from "./fremdtext-lib.mjs";
+import { flach, issueKommentare, istFremdeingang, istVertraut } from "./fremdtext-lib.mjs";
 import { direktaufruf, flagsLesen } from "./flag-lib.mjs";
 
 const loginVon = (user) => (user && typeof user.login === "string" && user.login !== "" ? user.login : "unbekannt");
@@ -95,7 +95,16 @@ export function lade({ art, nr }, gh) {
     return { owner, kopf: "Issue", eintrag, beitraege: mitArt("Kommentar", issueKommentare(nr, json)) };
   }
   const eintrag = json(["api", `repos/{owner}/{repo}/pulls/${nr}`]);
-  return { owner, kopf: "PR", eintrag, beitraege: prBeitraege(nr, json) };
+  return {
+    owner,
+    kopf: "PR",
+    eintrag,
+    beitraege: [
+      ...mitArt("Kommentar", issueKommentare(nr, json)),
+      ...mitArt("Review", liste(`repos/{owner}/{repo}/pulls/${nr}/reviews?per_page=100`)),
+      ...mitArt("Review-Kommentar", liste(`repos/{owner}/{repo}/pulls/${nr}/comments?per_page=100`)),
+    ],
+  };
 }
 
 /** Exit-Code aus dem Ergebnis: 3 = Fremdeingang, 0 = vertraut. */

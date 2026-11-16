@@ -29,7 +29,7 @@ import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
 import { istBezieher } from "./sync-stand-lib.mjs";
 import { istDatum, leseMesspunkte, pruefeRegister } from "./aenderungsregister-lib.mjs";
 import { ghText } from "./gh-cli.mjs";
-import { istVertraut, prBeitraege } from "./fremdtext-lib.mjs";
+import { flach, issueKommentare, istVertraut } from "./fremdtext-lib.mjs";
 import {
   STREICH_LABEL,
   ankerAus,
@@ -134,7 +134,10 @@ export const fremdtextTeile = (nr, gh = ghStandard) => {
   const json = (args) => JSON.parse(gh(args));
   const owner = json(["api", "repos/{owner}/{repo}"]).owner?.login;
   if (!owner) throw new Error("Repo-Owner nicht ermittelbar");
-  return prBeitraege(nr, json).map((b) => ({ vertraut: istVertraut(b.user, owner), text: b.body ?? "" }));
+  const liste = (pfad) => flach(json(["api", "--paginate", "--slurp", pfad]));
+  // Bewusst keine gemeinsame Funktion mit fremdtext.mjs: beide liegen im Risikopfad Fremdtext, ein Umbau dort hebt die Risikostufe (Entscheidung factory#610).
+  const beitraege = [...issueKommentare(nr, json), ...liste(`repos/{owner}/{repo}/pulls/${nr}/reviews?per_page=100`), ...liste(`repos/{owner}/{repo}/pulls/${nr}/comments?per_page=100`)];
+  return beitraege.map((b) => ({ vertraut: istVertraut(b.user, owner), text: b.body ?? "" }));
 };
 
 /** IO: Required Checks eines PR (`gh pr checks` endet bei rot oder offen mit Exit ≠ 0, die JSON-Ausgabe steht dann in `stdout` des Fehlers); nicht lesbar ist `null`. */
