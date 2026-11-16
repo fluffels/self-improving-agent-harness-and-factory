@@ -144,21 +144,30 @@ type TtlZeile = { rolle: string; ttl: string; netto: number };
 
 /** Die Tabelle unter `TTL_ABSCHNITT`: je Rolle TTL und Netto in $. Fehlt der Abschnitt oder die Spalten, ist die Liste leer (fail-closed: kein Schlüssel erlaubt). */
 function ttlZeilenAusDoku(md: string): TtlZeile[] {
-  const start = md.indexOf(`\n${TTL_ABSCHNITT}`);
+  return tabelleUnterAbschnitt(md, TTL_ABSCHNITT, ["Rolle", "Netto $", "TTL"]).map(([rolle = "", netto = "", ttl = ""]) => ({
+    rolle,
+    ttl,
+    netto: Number(netto.replace("−", "-").replace(",", ".")),
+  }));
+}
+
+/** Zellenzeilen (ohne Kopf und Trennzeile, Backticks entfernt) der ersten Tabelle unter `abschnitt`, geordnet nach `spalten`. Fehlt der Abschnitt oder eine Spalte, ist die Liste leer (fail-closed). */
+function tabelleUnterAbschnitt(md: string, abschnitt: string, spalten: string[]): string[][] {
+  const start = md.indexOf(`\n${abschnitt}`);
   if (start < 0) return [];
-  const rest = md.slice(start + 1 + TTL_ABSCHNITT.length);
+  const rest = md.slice(start + 1 + abschnitt.length);
   const ende = rest.search(/\n#{1,6} /);
   const zellen = (ende < 0 ? rest : rest.slice(0, ende))
     .split("\n")
     .filter((l) => l.trim().startsWith("|"))
     .map((l) => l.trim().replace(/^\||\|$/g, "").split("|").map((z) => z.trim().replace(/`/g, "")));
   const kopf = zellen[0] ?? [];
-  const [iRolle, iNetto, iTtl] = ["Rolle", "Netto $", "TTL"].map((n) => kopf.indexOf(n));
-  if (iRolle < 0 || iNetto < 0 || iTtl < 0) return [];
+  const idx = spalten.map((n) => kopf.indexOf(n));
+  if (idx.some((i) => i < 0)) return [];
   return zellen
     .slice(1)
     .filter((z) => !/^:?-+:?$/.test(z[0] ?? ""))
-    .map((z) => ({ rolle: z[iRolle] ?? "", ttl: z[iTtl] ?? "", netto: Number((z[iNetto] ?? "").replace("−", "-").replace(",", ".")) }));
+    .map((z) => idx.map((i) => z[i] ?? ""));
 }
 
 /** Pfade aller Schlüssel, die nach Cache-TTL heißen (`cache.?ttl`, ohne Groß-/Kleinschreibung), samt Wert; verschachtelt gesucht. */
@@ -1122,22 +1131,7 @@ const STUFE0_VERBOTEN = ["planer", "lens", "holdout-szenario", "holdout-abnahme"
 
 /** Die Tabelle unter `STUFEN_ABSCHNITT`; fehlt Abschnitt oder Spalte, ist die Liste leer (fail-closed: der Prüfer meldet das). */
 function stufenZeilenAusDoku(md: string): StufenZeile[] {
-  const start = md.indexOf(`\n${STUFEN_ABSCHNITT}`);
-  if (start < 0) return [];
-  const rest = md.slice(start + 1 + STUFEN_ABSCHNITT.length);
-  const ende = rest.search(/\n#{1,6} /);
-  const zellen = (ende < 0 ? rest : rest.slice(0, ende))
-    .split("\n")
-    .filter((l) => l.trim().startsWith("|"))
-    .map((l) => l.trim().replace(/^\||\|$/g, "").split("|").map((z) => z.trim().replace(/`/g, "")));
-  const kopf = zellen[0] ?? [];
-  const idx = ["Stufe", "Rolle", "Alias", "Effort", "Ziel"].map((n) => kopf.indexOf(n));
-  if (idx.some((i) => i < 0)) return [];
-  const [iS, iR, iA, iE, iZ] = idx as [number, number, number, number, number];
-  return zellen
-    .slice(1)
-    .filter((z) => !/^:?-+:?$/.test(z[0] ?? ""))
-    .map((z) => ({ stufe: z[iS] ?? "", rolle: z[iR] ?? "", alias: z[iA] ?? "", effort: z[iE] ?? "", ziel: z[iZ] ?? "" }));
+  return tabelleUnterAbschnitt(md, STUFEN_ABSCHNITT, ["Stufe", "Rolle", "Alias", "Effort", "Ziel"]).map(([stufe = "", rolle = "", alias = "", effort = "", ziel = ""]) => ({ stufe, rolle, alias, effort, ziel }));
 }
 
 /** Befunde der Stufen-Matrix: Alias und Effort je Zeile gegen das Frontmatter des Ziels, Rollen je Stufe gegen die Konstante, Stufe 0 ohne Planer, Lens und Holdout. */
@@ -1214,5 +1208,6 @@ describe("Phasenmatrix je Risikostufe (factory#528)", () => {
     assert.match(pruefeStufenMatrix(mit({ ziel: "gibt-es-nicht" }, 0), ag, konst).join("\n"), /kein Agent/);
     assert.match(pruefeStufenMatrix([], ag, konst).join("\n"), /fehlt/);
     assert.deepEqual(stufenZeilenAusDoku("# nichts"), []);
+    assert.deepEqual(stufenZeilenAusDoku(`\n${STUFEN_ABSCHNITT}\n| Stufe | Rolle |\n|---|---|\n| 0 | umsetzer |`), [], "fehlende Spalten: leer");
   });
 });
