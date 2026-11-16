@@ -13,7 +13,7 @@ import { FREMD, FREMD_OWNER } from "./support/fremd-config";
 
 type Offen = { number: number; titel: string; assignees: string[]; createdAt: string };
 type Entscheidung = { aktion: string; nr?: number; grund: string; warnungen: string[]; anlass?: string };
-type Eingabe = { offene: Offen[]; mergesSeit: number; ticketMerges?: number; ausloeser?: string; stundenSeitAbschluss?: number | null; jetzt?: string; wochenbericht?: Record<string, number>; anlass?: string };
+type Eingabe = { offene: Offen[]; mergesSeit: number; ticketMerges?: number; ausloeser?: string; stundenSeitAbschluss?: number | null; jetzt?: string; wochenbericht?: Record<string, number | string>; anlass?: string };
 const S = rawStatus as unknown as {
   STATUS_TITEL: string;
   entscheideTakt: (a: Eingabe) => Entscheidung;
@@ -91,6 +91,46 @@ describe("entscheideTakt mit Wochenbericht", () => {
   });
   test("Push ruht Fr–So auch mit Schlüssel", () => {
     expect(e({ ausloeser: "push", ticketMerges: 60, offene: [offen(7)], jetzt: "2026-10-09T12:00:00Z", wochenbericht: W }).aktion).toBe("nichts");
+  });
+});
+
+describe("statusTicket nur-anlass (factory#579)", () => {
+  const N = { erfassungLueckenMax: 0, statusTicket: "nur-anlass" };
+  test("Montags-Cron legt auch nach 10 Wochen nicht an und warnt nicht über wochenOhneLaufMax", () => {
+    const r = e({ ausloeser: "schedule", stundenSeitAbschluss: 10 * STUNDEN, wochenbericht: N });
+    expect(r.aktion).toBe("nichts");
+    expect(r.warnungen).toEqual([]);
+  });
+  test("ein Anlass legt an; bei 2 h seit dem Abschluss greift der Mindestabstand", () => {
+    expect(e({ ausloeser: "workflow_dispatch", anlass: "x", wochenbericht: N })).toMatchObject({ aktion: "anlegen", anlass: "x" });
+    expect(e({ ausloeser: "workflow_dispatch", anlass: "x", stundenSeitAbschluss: 2, wochenbericht: N }).aktion).toBe("nichts");
+  });
+  test("Push mit 60 Ticket-Merges und ohne offenes Ticket: nichts; mit offenem ungeclaimtem Ticket und Anlass: nach-oben", () => {
+    expect(e({ ausloeser: "push", ticketMerges: 60, mergesSeit: 60, wochenbericht: N }).aktion).toBe("nichts");
+    expect(e({ ausloeser: "workflow_dispatch", anlass: "x", offene: [offen(7)], wochenbericht: N })).toMatchObject({ aktion: "nach-oben", nr: 7 });
+  });
+  test("Gegenprobe ohne statusTicket (und mit takt): der Cron legt nach 4 Wochen an", () => {
+    expect(e({ ausloeser: "schedule", stundenSeitAbschluss: 4 * STUNDEN, wochenbericht: W }).aktion).toBe("anlegen");
+    expect(e({ ausloeser: "schedule", stundenSeitAbschluss: 4 * STUNDEN, wochenbericht: { ...W, statusTicket: "takt" } }).aktion).toBe("anlegen");
+  });
+  const basis = { vorgaenger: { number: 12, closedAt: "2026-10-01T10:00:00Z", createdAt: "2026-09-21T10:00:00Z" }, jetzt: "2026-10-08T12:00:00Z", repo: "own/repo", wurzel: process.cwd(), anlass: "Datenverlust" };
+  test("statusBody: Umfang-Zeile, keine Kennzahlen-Zeilen, kein PR mit Verdichtungszeile; ohne das Feld unverändert", () => {
+    const b = S.statusBody({ ...basis, wochenbericht: N });
+    expect(b).toContain("- **Umfang:** nur der Anlass");
+    expect(b).toContain("Ticket schließen");
+    expect(b).not.toContain("PR mit Verdichtungszeile");
+    expect(b).not.toContain("Factory-Kennzahlen");
+    expect(b).not.toContain("Laufzeiten-Upstream");
+    expect(b).not.toContain("Wochenbudget");
+    expect(b).toContain("- **Anlass:**");
+    const alt = S.statusBody({ ...basis, wochenbericht: W });
+    expect(alt).not.toContain("Umfang");
+    const reihe = ["Zeitraum:", "Wochenbudget:", "Datenbasis:", "Factory-Kennzahlen:", "Laufzeiten-Upstream:", "Checkliste:", "Mechanik:", "Abschluss:"].map((k) => alt.indexOf(`**${k}**`));
+    expect(reihe.every((x) => x > 0)).toBe(true);
+    expect([...reihe].sort((x, y) => x - y)).toEqual(reihe);
+    expect(alt.indexOf("**Wochenbudget:**")).toBeGreaterThan(0);
+    expect(alt).toContain("PR mit Verdichtungszeile");
+    expect(S.statusBody({ ...basis, wochenbericht: { ...W, statusTicket: "takt" } })).toBe(alt);
   });
 });
 

@@ -97,6 +97,26 @@ const hatInventar = (modelRouting: string): boolean => {
   return zellen.length > 0 && zellen.every(zeileOk) && INVENTAR_PUNKTE.every((p) => punkte.has(p));
 };
 
+const ENTSCHEIDUNG_KOPF = "| Punkt | Entscheidung | Ort | Begründung |";
+const ENTSCHEIDUNGEN = ["geht in factory#518 auf", "bleibt als Skript im Wochenbericht-Lauf ohne Ticket", "entfällt"];
+const ANLASS_ENTSCHEIDUNG = "Anlass-Ticket (Rest)";
+
+/** Die Entscheidungstabelle (factory#579): genau eine Tabelle mit festem Kopf im Checklisten-Abschnitt und in der Datei; je Punkt der CHECKLISTE (ohne Vorbedingung) genau eine Zeile mit einer der drei Entscheidungen und nicht leerer Ort- und Begründungszelle, dazu genau eine Zeile „Anlass“. */
+const hatEntscheidungstabelle = (modelRouting: string): boolean => {
+  const a = abschnitt(modelRouting, /^### Langfuse-Status überprüfen \(#1293\)/);
+  const zeilen = a.split("\n");
+  const kopf = zeilen.indexOf(ENTSCHEIDUNG_KOPF);
+  if (kopf < 0 || zeilen.lastIndexOf(ENTSCHEIDUNG_KOPF) !== kopf || modelRouting.split(ENTSCHEIDUNG_KOPF).length !== 2) return false;
+  const zellen: string[][] = [];
+  for (const z of zeilen.slice(kopf + 2)) {
+    if (!z.startsWith("|")) break;
+    zellen.push(z.split("|").slice(1, -1).map((c) => c.trim()));
+  }
+  const punkte = CHECKLISTE.filter((p) => p !== "Vorbedingung");
+  const zeileOk = (c: string[]): boolean => c.length === 4 && c.every((x) => x !== "") && (c[0] === "Anlass" ? c[1] === ANLASS_ENTSCHEIDUNG : ENTSCHEIDUNGEN.includes(c[1]));
+  return zellen.length === punkte.length + 1 && zellen.every(zeileOk) && [...punkte, "Anlass"].every((p) => zellen.filter((c) => c[0] === p).length === 1);
+};
+
 /** Der Beleg-Ablauf steht in model-routing.md. */
 const hatBelegAblauf = (modelRouting: string): boolean => {
   const a = abschnitt(modelRouting, /^### Langfuse-Erfassung belegen \(#1293\)/);
@@ -263,6 +283,18 @@ describe("Langfuse-Status und Erfassungsschutz (#1293)", () => {
     assert.ok(!hatInventar(mr.replace("| Verdichtungszeile | Datenvollständigkeit |", "| Verdichtung | Datenvollständigkeit |").replaceAll("| Verdichtungszeile |", "| Verdichtung |")), "Verdichtungszeile fehlt");
     assert.ok(!hatInventar(mr.replace("| 3 Tokenfresser | Bewertung | Urteil | nein | Bericht |", "| 3 Tokenfresser | Bewertung | Urteil | nein |")), "Zellzahl");
     assert.ok(!hatInventar(""));
+  });
+
+  test("model-routing.md: die Entscheidungstabelle (factory#579) entscheidet jeden Punkt und den Anlass", () => {
+    assert.ok(hatEntscheidungstabelle(mr));
+    assert.ok(!hatEntscheidungstabelle(mr.replace(/^\| Selbst-Audit \|.*\n/m, "")), "Zeile entfernt");
+    assert.ok(!hatEntscheidungstabelle(mr.replace(/^(\| Wirkung \| )geht in factory#518 auf( \|)/m, "$1$2")), "Entscheidung leer");
+    assert.ok(!hatEntscheidungstabelle(mr.replace(/^(\| Wirkung \| )geht in factory#518 auf/m, "$1erledigt")), "Entscheidung unbekannt");
+    assert.ok(!hatEntscheidungstabelle(mr.replace(/^(\| Wirkung \|[^|]*\|[^|]*\|)[^|]*\|/m, "$1 |")), "Begründung leer");
+    assert.ok(!hatEntscheidungstabelle(mr + "\n" + ENTSCHEIDUNG_KOPF + "\n"), "zweite Tabelle");
+    assert.ok(!hatEntscheidungstabelle(mr.replace("| Anlass | Anlass-Ticket (Rest) |", "| Anlass | entfällt |")), "Anlass ohne Rest-Entscheidung");
+    assert.ok(!hatEntscheidungstabelle(mr.replace(/^(\| Wirkung \| geht in factory#518 auf \| Teil 0 \|[^|]*)\|/m, "$1")), "Zellzahl");
+    assert.ok(!hatEntscheidungstabelle(""));
   });
 
   test("model-routing.md: die Checkliste hat genau so viele nummerierte Punkte wie CHECKLISTE", () => {
