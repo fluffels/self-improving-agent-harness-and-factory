@@ -30,6 +30,33 @@
       }
     },
     {
+      "id": "status-ticket-nur-anlass-579",
+      "datum": "2026-11-16",
+      "aenderung": "Das Status-Ticket Langfuse-Status überprüfen entsteht in der Fabrik nur noch bei einem Anlass des Wochenbericht-Laufs (statusTicket nur-anlass); Montags-Cron und Höchstabstand legen es nicht mehr an, die periodische Auswertung liegt in der Token-Analyse.",
+      "wirkung": "Die Kosten je Ticket sinken, weil der wöchentliche Agenten-Lauf der Checkliste entfällt, ohne dass Befunde später oder gar nicht auffallen (Nacharbeit steigt nicht).",
+      "messgroesse": "kosten-je-ticket",
+      "basis": {
+        "fenster": "4 Wochen vor Merge",
+        "wert": null
+      },
+      "toleranz": {
+        "qualitaetsmass": "nacharbeit-quote",
+        "richtung": "steigt",
+        "schwelle": 5,
+        "einheit": "prozentpunkte"
+      },
+      "rueckfall": "Revert des Merge-Commits von factory#579 per PR (statusTicket in .factory/projekt.json auf takt setzen oder entfernen, wochenOhneLaufMax wieder eintragen).",
+      "pruefTermin": "2026-12-14",
+      "mindestdaten": {
+        "n": 10,
+        "einheit": "tickets"
+      },
+      "adr": {
+        "datum": "2026-11-16",
+        "pr": "factory#579"
+      }
+    },
+    {
       "id": "holdout-omitclaudemd-551",
       "datum": "2026-11-16",
       "aenderung": "omitClaudeMd: true für holdout-szenario und holdout-abnahme; der Body der Abnahme trägt Fremdtext-Regel, Secret-Key-Verbot und Anonymität selbst.",

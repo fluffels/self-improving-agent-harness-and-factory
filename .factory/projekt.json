@@ -57,7 +57,7 @@
   "langfuseWochenbericht": {
     "erfassungLueckenMax": 0,
     "kostenAnstiegProzent": 50,
-    "wochenOhneLaufMax": 4
+    "statusTicket": "nur-anlass"
   },
   "bereiche": {
     "aliase": {}

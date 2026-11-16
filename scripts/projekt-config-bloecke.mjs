@@ -202,17 +202,21 @@ const WOCHENBERICHT_FELDER = {
   kostenAnstiegProzent: [(v) => Number.isFinite(v) && v >= 0, "eine Zahl ab 0"],
   unzugeordnetProzent: [(v) => Number.isFinite(v) && v >= 0, "eine Zahl ab 0"],
   wochenOhneLaufMax: [(v) => Number.isInteger(v) && v >= 1, "eine Ganzzahl ab 1"],
+  statusTicket: [(v) => v === "takt" || v === "nur-anlass", "\"takt\" (Standard) oder \"nur-anlass\""],
 };
 
 /** Pur: prüft den optionalen Block `langfuseWochenbericht` (Schwellen des Wochenberichts, factory#313; fehlt er, ist nichts zu prüfen). */
 export function pruefeLangfuseWochenbericht(b) {
   if (b === undefined) return [];
   if (!istObjekt(b)) return ["langfuseWochenbericht muss ein Objekt mit den Schwellen " + Object.keys(WOCHENBERICHT_FELDER).join(", ") + " sein"];
-  return Object.keys(b).flatMap((k) => {
+  const fehler = Object.keys(b).flatMap((k) => {
     const feld = WOCHENBERICHT_FELDER[k];
     if (!feld) return [`langfuseWochenbericht.${k} ist kein bekannter Schlüssel (erlaubt: ${Object.keys(WOCHENBERICHT_FELDER).join(", ")})`];
     return feld[0](b[k]) ? [] : [`langfuseWochenbericht.${k} muss ${feld[1]} sein`];
   });
+  // factory#579: ohne Montags-Höchstabstand (nur-anlass) wäre wochenOhneLaufMax ohne Wirkung.
+  if (b.statusTicket === "nur-anlass" && b.wochenOhneLaufMax !== undefined) fehler.push("langfuseWochenbericht.wochenOhneLaufMax ist mit statusTicket \"nur-anlass\" ohne Wirkung (entfernen)");
+  return fehler;
 }
 
 /** Pur: prüft den optionalen Block `risiko` (factory#333): `hoch` ist eine nicht-leere Liste von Pfadmustern (POSIX, Syntax der Schutzliste); fehlt der Block, gilt die Standardliste. */
