@@ -142,7 +142,7 @@ export function holeQuotenCommits({ quellen, lies }) {
  * Der Sammelticket-Stand aus einer Issue-Liste `[{ number, title, state, closedAt, assignees }]` (state ohne Groß/Klein, assignees eine Liste
  * oder fehlend): `abschluss` = jüngstes geschlossenes Harness-Sammelticket mit gültigem `closedAt` (`{ number, closedAt }` oder null),
  * `sammelIssues` = Nummern aller Sammeltickets aller Titel aus `SAMMELTICKET_TITEL_LISTE` (offen wie geschlossen), `inArbeit` = Nummer eines offenen Harness-Sammeltickets
- * mit Assignee oder null. Das Langfuse- und das Codequalität-Sammelticket zählen nur zu `sammelIssues`. Wirft, wenn `issues` keine Liste ist. Pur.
+ * mit Assignee oder null. Das Langfuse- und das Refactoring-Sammelticket zählen nur zu `sammelIssues`. Wirft, wenn `issues` keine Liste ist. Pur.
  */
 export function sammelStand(issues) {
   if (!Array.isArray(issues)) throw new Error("issues muss eine Liste sein.");

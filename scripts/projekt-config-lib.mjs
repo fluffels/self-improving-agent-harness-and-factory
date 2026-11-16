@@ -287,7 +287,7 @@ function pruefeInboxZiel(wert) {
   return [`labels.dependabotInbox "${label}" führt auf das Board von ${ziel}, nicht auf das eigene Repo ${wert.repo}\nFix: für labels.dependabotInbox ein Label setzen, das nicht auf ein fremdes Board führt (nicht labels.harness gleichsetzen, wenn das Factory-Board ein fremdes repo führt)`];
 }
 
-/** Pur (factory#156): optionales `labels.codequalitaet` (Opt-in Sammelticket „Codequalität (gesammelt)“) muss, wenn gesetzt, auf ein Produkt-Board führen (eigenes Repo, nicht Factory). */
+/** Pur (factory#156): optionales `labels.codequalitaet` (Opt-in Refactoring-Sammelticket „Refactoring (gesammelt)“) muss, wenn gesetzt, auf ein Produkt-Board führen (eigenes Repo, nicht Factory). */
 function pruefeCodequalitaetZiel(wert) {
   const label = wert.labels?.codequalitaet;
   const rolle = label === undefined ? "produkt" : boardRolleFuer([label], wert);

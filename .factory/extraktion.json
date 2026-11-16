@@ -1237,6 +1237,11 @@
       "grund": "Fabrik-eigen (factory#518), nicht im Besitz"
     },
     {
+      "muster": "test/token-analyse-tickets.test.ts",
+      "art": "projekt-test",
+      "grund": "Fabrik-eigen (factory#518), nicht im Besitz"
+    },
+    {
       "muster": "test/harness/token-analyse-skill.test.ts",
       "art": "projekt-test",
       "grund": "Fabrik-eigen (factory#518), nicht im Besitz"

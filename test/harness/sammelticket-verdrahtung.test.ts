@@ -12,6 +12,7 @@
  */
 import { readFileSync } from "node:fs";
 import { describe, expect, test } from "vitest";
+import { getrackteTextdateien } from "../support/entfernte-pfade";
 
 const QUELLE = readFileSync(new URL("../../scripts/sammelticket-anlegen.mjs", import.meta.url), "utf8");
 const PFLICHT = ["items", "nr", "position"];
@@ -44,7 +45,7 @@ describe("korrekturFuer ist in main verdrahtet", () => {
   });
 });
 
-describe("Codequalität-Sammelticket ist in main verdrahtet (factory#156)", () => {
+describe("Refactoring-Sammelticket ist in main verdrahtet (factory#156)", () => {
   /** Rumpf von `main` bzw. `setzeErstePosition`: ab der Definition bis zur nächsten Top-Level-Funktion. */
   const rumpf = (kopf: string): string => {
     const ab = QUELLE.slice(QUELLE.indexOf(kopf));
@@ -67,5 +68,29 @@ describe("Codequalität-Sammelticket ist in main verdrahtet (factory#156)", () =
     const main = rumpf("export async function main(") + rumpf("async function legeNeuAn(");
     expect(main).toMatch(/\} else setzeErstePosition\(\{ art: args\.art,/); // bedingungslos: codequalitaet braucht kein --top
     expect(main).not.toMatch(/if \(args\.top\)\s*setzeErstePosition/);
+  });
+});
+
+/* Scan-Wächter (factory#593): der Titel „Codequalität (gesammelt)“ ist umbenannt (Refactoring 1/5), der Alt-Titel wird im Übergang nur noch
+ * erkannt, nie genannt oder angelegt. Dieser Test scannt alle getrackten Textdateien auf die geschlossene Musterliste (Konstantenname, wörtlicher
+ * Alt-Titel, „Codequalität-Sammelticket“, alter Anker). Ausnahmen mit Grund: ADRs sind Historie, `scripts/sammelticket-titel.mjs` hält den Alt-Titel in
+ * `REFACTORING_TITEL_AKZEPTIERT`, `docs/ticket-reihenfolge.md` und `docs/harness-glossar.md` führen ihn im Übergangssatz bzw. in der Verweiszeile, `test/` trägt Fixtures.
+ * Bewusste Grenze: freie Umschreibungen und die Befundart „Codequalität“ als Wort werden nicht gescannt. */
+describe("Alt-Titel des Refactoring-Sammeltickets nur im Übergang (factory#593)", () => {
+  const MUSTER = ["CODEQUALITAET_SAMMELTICKET_TITEL", "Codequalität (gesammelt)", "Codequalität-Sammelticket", "#codequalität-gesammelt"];
+  const ausgenommen = (pfad: string): boolean =>
+    pfad.startsWith("docs/adr/") || pfad.startsWith("test/") || ["scripts/sammelticket-titel.mjs", "docs/ticket-reihenfolge.md", "docs/harness-glossar.md"].includes(pfad);
+  const funde = (dateien: { pfad: string; inhalt: string }[]): string[] =>
+    dateien.filter((d) => !ausgenommen(d.pfad)).flatMap((d) => MUSTER.filter((m) => d.inhalt.includes(m)).map((m) => `${d.pfad}: ${m}`));
+
+  test("Negativfall: der Scan erkennt den Alt-Titel in einer Kern-Datei und lässt Ausnahmen durch", () => {
+    expect(funde([{ pfad: "AGENTS.md", inhalt: "Sammelticket „Codequalität (gesammelt)“" }])).toEqual(["AGENTS.md: Codequalität (gesammelt)"]);
+    expect(funde([{ pfad: "docs/adr/0026-x.md", inhalt: "Codequalität (gesammelt)" }, { pfad: "docs/ticket-reihenfolge.md", inhalt: "Codequalität (gesammelt)" }])).toEqual([]);
+  });
+
+  test("keine getrackte Textdatei außerhalb der Ausnahmen nennt den Alt-Titel", () => {
+    const alle = getrackteTextdateien();
+    expect(alle.length).toBeGreaterThan(100);
+    expect(funde(alle)).toEqual([]);
   });
 });

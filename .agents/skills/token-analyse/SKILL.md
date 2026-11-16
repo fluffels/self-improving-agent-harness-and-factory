@@ -1,6 +1,6 @@
 ---
 name: token-analyse
-description: Fabrik-eigene Token-Analyse (factory#518): Teil 0 per Skript, danach sechs Teile in Subagenten, Zusammenfassung im Hauptchat, datierter Schnappschuss mit Vorher/Nachher-Tabelle. Nur auf ausdrücklichen Auftrag der Maintainerin, nur unter Claude Code, nie in einem Bezieher.
+description: Fabrik-eigene Token-Analyse (factory#518): Teil 0 per Skript, danach sechs Teile in Subagenten, Zusammenfassung, Plan mit unabhängigem Review, fail-closed Ticket-Anlage, Schnappschuss. Nur auf ausdrücklichen Auftrag der Maintainerin, nur unter Claude Code, nie in einem Bezieher.
 ---
 
 # Token-Analyse (Fabrik-eigen)
@@ -28,8 +28,12 @@ Vor jedem Teil: Zwischenstand der eigenen Session aus dem Transkript (`node scri
    - Teil 6: subagent_type "Explore", model "sonnet", effort "medium" ([teil-6.md](teil-6.md)); der Auftrag trägt nur `Bezieher <k>` aus der Ausgabe von `pruefen`, nie einen Pfad; nur wenn `node scripts/token-analyse-freigabe.mjs pruefen` Exit 0 meldet und Freigaben vorhanden sind
 4. **Zusammenfassung im Hauptchat:** Kennzahlen, Lücken je Teil, Empfehlungen nur aus Teilen ohne Lücke.
 5. **Schnappschuss:** Kennzahlen-JSON im Scratchpad, dann `node scripts/token-analyse-freigabe.mjs ablegen --eingabe <kennzahlen.json>`; die Vorher/Nachher-Tabelle entsteht dabei aus dem letzten Schnappschuss.
-6. **Eigene Kosten** nennen (Langfuse, Summe der Session samt Subagenten).
-7. **Takt fortschreiben:** `node scripts/token-analyse-ausloesen.mjs --fortschreiben` löscht den Monatseintrag in `.github/wiedervorlagen.json` und schreibt den nächsten (Lauf plus ein Monat); Commit über das Analyse-Ticket.
+6. **Plan** nach der Vorlage in [plan-review.md](plan-review.md); in diesem Schritt wird noch nichts angelegt.
+7. **Review:** je Planteil ein frischer, unabhängiger Reviewer (nie der Hauptchat), Modell und Effort nach Tragweite laut Tabelle „Token-Analyse: Plan-Review“ in `docs/model-routing.md` §1; die Kosten zählen ins Lauf-Budget.
+8. **Anlegen:** `node scripts/token-analyse-tickets.mjs --review <datei>` legt nur bestätigte Planteile an (fail-closed) und genau ein Folge-Ticket je Lauf ([folge-ticket.md](folge-ticket.md)); Abgelehntes steht mit Grund im Schnappschuss.
+9. **Umsetzung** der angelegten Tickets und Zeilen läuft in den normalen Ticketläufen, nicht in diesem Skill.
+10. **Eigene Kosten** nennen (Langfuse, Summe der Session samt Subagenten).
+11. **Takt fortschreiben:** `node scripts/token-analyse-ausloesen.mjs --fortschreiben` löscht den Monatseintrag in `.github/wiedervorlagen.json` und schreibt den nächsten (Lauf plus ein Monat); Commit über das Analyse-Ticket.
 
 ## Lücken und Grenzen
 
