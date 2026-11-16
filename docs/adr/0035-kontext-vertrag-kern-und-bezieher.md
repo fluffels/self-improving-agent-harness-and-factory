@@ -129,7 +129,7 @@ Entscheidung: A, weil die A/B-Regel entschieden ist und nichts Besseres belegt.
 
 ## Weitere Fortschreibungen (als Dateien)
 
-Neue Fortschreibungen dieses ADR stehen je als Datei unter [`fortschreibungen/`](fortschreibungen/0035-237-raum-vertrag-ratchet.md) (Konvention: [README](README.md#format)); dort die erste: [factory#237](fortschreibungen/0035-237-raum-vertrag-ratchet.md) setzt die Entscheidung als Raum-Vertrag-Wächter und Budget-Ratchet um.
+Neue Fortschreibungen dieses ADR stehen je als Datei unter [`fortschreibungen/`](fortschreibungen/0035-237-raum-vertrag-ratchet.md) (Konvention: [README](README.md#format)); dort die erste: [factory#237](fortschreibungen/0035-237-raum-vertrag-ratchet.md) setzt die Entscheidung als Raum-Vertrag-Wächter und Budget-Ratchet um. [factory#552](fortschreibungen/0035-552-planer-omitclaudemd.md): der Planer läuft auf Beschluss der Maintainerin im Betrieb mit `omitClaudeMd` (Variante D nur für diese Rolle, ohne A/B, Prüfung über den Ledger von ADR 0027).
 
 ## Re-Evaluierung
 
