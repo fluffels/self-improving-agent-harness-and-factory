@@ -20,7 +20,7 @@ import { fixture } from "../support/tmp-fixture";
 const WURZEL = join(__dirname, "..", "..");
 const { wirdVerteilt } = besitzModul as unknown as { wirdVerteilt: (e: { ring: string }) => boolean };
 
-/** `skript`: sperrt auch nach dem Arbeitsverzeichnis (Lauf im Bezieher-Fixture bricht ab); `skript-wurzel`: sperrt nach dem Repo des Skripts (nur statisch belegt: `istBezieher(`); `lib`, `daten`: kein Einstieg. */
+/** `skript`: sperrt auch nach dem Arbeitsverzeichnis (Lauf im Bezieher-Fixture bricht ab); `skript-wurzel`: sperrt nach dem Repo des Skripts (in-process mit Bezieher-Wurzel und statisch über `istBezieher(` belegt); `lib`, `daten`: kein Einstieg. */
 type Art = "skript" | "skript-wurzel" | "lib" | "daten";
 const FABRIK_EIGEN: { pfad: string; art: Art }[] = [
   { pfad: "scripts/aenderungsregister.mjs", art: "skript" },
