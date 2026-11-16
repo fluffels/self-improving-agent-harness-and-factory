@@ -40,7 +40,7 @@ export function realMitVorfahr(pfad) {
   const abs = resolve(pfad);
   const rest = [];
   for (let cur = abs; ; cur = dirname(cur)) {
-    if (existsSync(cur)) return join(realpathSync(cur), ...rest.reverse());
+    if (existsSync(cur)) return join(realpathSync.native(cur), ...rest.reverse());
     if (dirname(cur) === cur) return abs;
     rest.push(basename(cur));
   }
@@ -173,6 +173,7 @@ function vorherAus(ordner, dateien) {
 /** Legt den Analyse-Schnappschuss (`.json` und `.md`) in der Ablage ab; prüft zuerst Ablage und Namensleck. */
 export function ablegen(env, eingabePfad, deps) {
   const liste = ladeListe(env);
+  if (liste.fehler) return { code: 1, zeilen: [`${liste.fehler}: abgebrochen, nichts geschrieben`] };
   const pfade = liste.pfade ?? [];
   const d = abhaengigkeiten(deps);
   const ablage = ablageFehler(env, d, pfade.map(realMitVorfahr));

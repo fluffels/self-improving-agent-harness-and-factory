@@ -1,5 +1,6 @@
 /* Token-Analyse Teil 5/9 (factory#518): Freigabeliste, Allowlist, Ablage, Analyse-Schnappschuss. Alle Fixtures im Temp-Ordner, kein gh, kein echter Lauf. */
 import { describe, expect, test } from "vitest";
+import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, symlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { fixture } from "./support/tmp-fixture";
@@ -101,6 +102,13 @@ describe("Allowlist lesender Befehle", () => {
     ["log --output", ["git", "-C", wurzel, "log", "--output=x"]],
     ["log -o", ["git", "-C", wurzel, "log", "-o"]],
     ["-c nach Unterbefehl", ["git", "-C", wurzel, "log", "-c", "core.pager=x"]],
+    ["--exec", ["git", "-C", wurzel, "log", "--exec=x"]],
+    ["--upload-pack", ["git", "-C", wurzel, "log", "--upload-pack=x"]],
+    ["--config", ["git", "-C", wurzel, "log", "--config-env=a=b"]],
+    ["--open-files-in-pager", ["git", "-C", wurzel, "log", "--open-files-in-pager"]],
+    ["--git-dir nach Unterbefehl", ["git", "-C", wurzel, "log", "--git-dir=/x"]],
+    ["--work-tree nach Unterbefehl", ["git", "-C", wurzel, "log", "--work-tree=/x"]],
+    ["--git-dir statt -C", ["git", "--git-dir", wurzel, "log"]],
     ["--ext-diff", ["git", "-C", wurzel, "show", "--ext-diff"]],
     ["--textconv", ["git", "-C", wurzel, "show", "--textconv"]],
     ["-O Orderfile", ["git", "-C", wurzel, "log", "-p", "-O/etc/passwd"]],
@@ -123,6 +131,15 @@ describe("Allowlist lesender Befehle", () => {
     const { s, wurzel, pr } = aufbau();
     symlinkSync(join(s.w.beta, ".git", "config"), join(wurzel, "flucht"));
     expect(pr(["wc", "-l", "flucht"]).ok).toBe(false);
+  });
+  test("fuehreFreigegebenAus löst Symlinks auf: wc über einen Link nach draußen startet keinen Prozess", () => {
+    const { s, wurzel } = aufbau();
+    symlinkSync(join(s.w.beta, ".git", "config"), join(wurzel, "flucht"));
+    const aufrufe: string[][] = [];
+    const runner = (argv: string[]) => (aufrufe.push(argv), { status: 0, stdout: "", stderr: "" });
+    const r = cli.fuehreFreigegebenAus(1, ["wc", "-l", "flucht"], [{ k: 1, wurzel }], { runner });
+    expect(r.abgelehnt).toMatch(/außerhalb/);
+    expect(aufrufe).toEqual([]);
   });
   test("befehlMitSchutz setzt das feste Präfix, bei ls-files ohne Diff-Optionen", () => {
     expect(lib.befehlMitSchutz(["git", "-C", "/w", "log", "-1"])).toEqual(["git", "--no-pager", "-c", "core.fsmonitor=false", "-c", "core.hooksPath=/dev/null", "-C", "/w", "log", "--no-ext-diff", "--no-textconv", "-1"]);
@@ -162,7 +179,13 @@ describe("Ausführung nur für Freigegebene", () => {
     expect(aufrufe[0].argv.slice(0, 6)).toEqual(["git", "--no-pager", "-c", "core.fsmonitor=false", "-c", "core.hooksPath=/dev/null"]);
     expect(aufrufe[0].cwd).toBe(s.w.alpha);
   });
-  test("der Standard-Runner startet ohne Shell mit Schutz-Umgebung (wc auf eine Fixture-Datei)", () => {
+  test("der Standard-Runner setzt die Schutz-Umgebung und startet ohne Shell", () => {
+    const run = rawCli.standardRunner as (a: string[], o?: { cwd?: string }) => { status: number; stdout: string };
+    const r = run(["node", "-e", "process.stdout.write([process.env.GIT_OPTIONAL_LOCKS, process.env.GIT_CONFIG_NOSYSTEM, process.env.GIT_TERMINAL_PROMPT].join())"]);
+    expect(r.stdout).toBe("0,1,0");
+    expect(run(["node", "-e", "process.stdout.write(process.argv[1])", "a b;c"]).stdout).toBe("a b;c");
+  });
+  test("wc über den Standard-Runner auf eine Fixture-Datei", () => {
     const s = welt((w) => `${w.alpha}\n`);
     const p = cli.pruefen(s.env, s.deps);
     const r = cli.fuehreFreigegebenAus(1, ["wc", "-l", "a.txt"], p.freigegeben!, {}) as { status: number; stdout: string };
@@ -197,7 +220,7 @@ describe("pruefen (CLI-Logik)", () => {
   test("ohne angemeldetes Konto entfällt Teil 6 mit Hinweis (kein Rückfall auf den Eigentümer)", () => {
     const s = welt((w) => `${w.alpha}\n`);
     const r = cli.pruefen(s.env, { ...s.deps, login: null });
-    expect(r.zeilen[0]).toMatch(/Konto nicht ermittelbar/);
+    expect(r.zeilen).toEqual(["Hinweis: Teil 6 entfällt (angemeldetes Konto nicht ermittelbar: gh api user)"]);
     expect(r.freigegeben).toEqual([]);
   });
   test("kaputte Liste und Ablage-Fehler: Exit 1", () => {
@@ -213,6 +236,16 @@ describe("pruefen (CLI-Logik)", () => {
     const r = cli.pruefen({ ...s.env, FACTORY_ANALYSE_FREIGABE: imRepo }, s.deps);
     expect(r.code).toBe(1);
     expect(r.zeilen[0]).toMatch(/Freigabeliste liegt im Repo/);
+  });
+  test("eine Freigabeliste in einem Worktree oder einem Bezieher wird abgelehnt", () => {
+    const s = welt((w) => `${w.alpha}\n`);
+    const imBezieher = join(s.w.alpha, "liste.txt");
+    writeFileSync(imBezieher, `${s.w.alpha}\n`);
+    expect(cli.pruefen({ ...s.env, FACTORY_ANALYSE_FREIGABE: imBezieher }, s.deps).zeilen[0]).toMatch(/Freigabeliste liegt in einem Bezieher/);
+    mkdirSync(join(s.root, "wt-y"), { recursive: true });
+    const imWorktree = join(s.root, "wt-y", "liste.txt");
+    writeFileSync(imWorktree, `${s.w.alpha}\n`);
+    expect(cli.pruefen({ ...s.env, FACTORY_ANALYSE_FREIGABE: imWorktree }, { ...s.deps, worktrees: [join(s.root, "wt-y")] }).zeilen[0]).toMatch(/Freigabeliste liegt im Repo oder in einem Worktree/);
   });
   test("Worktree-Datei als .git: der Eigentümer kommt aus der gemeinsamen Konfiguration", () => {
     const s = welt((w) => `${join(w.root, "wt")}\n`, { "haupt/.git/config": checkout("ich"), "haupt/.git/worktrees/wt/commondir": "../..\n", "wt/.git": "gitdir: ../haupt/.git/worktrees/wt\n" });
@@ -269,12 +302,45 @@ describe("Ablage", () => {
     expect(r.zeilen.join()).not.toMatch(/geheim/);
     expect(existsSync(join(s.root, "privat", "ablage", "analyse-2026-11-16.json"))).toBe(false);
   });
+  test("kaputte Freigabeliste: ablegen bricht ab, auch wenn die Kennzahlen einen Namen enthalten", () => {
+    const s = welt((w) => `${w.alpha}\nrelativ/pfad\n`);
+    const r = cli.cli(["ablegen", "--eingabe", eingabe(s.root, { "geheim-alpha: Dateien": 3 })], s.env, s.deps);
+    expect(r.code).toBe(1);
+    expect(r.zeilen.join()).not.toMatch(/geheim/);
+    expect(existsSync(join(s.root, "privat", "ablage"))).toBe(false);
+  });
+  test("echte Worktree-Erkennung ohne eingespritzte Liste: Ablage in einem git-Worktree des Repos wird abgelehnt", () => {
+    const s = welt(() => "");
+    const git = (...a: string[]) => execFileSync("git", ["-c", "user.name=t", "-c", "user.email=t@t", "-C", s.w.repo, ...a], { stdio: "pipe" });
+    git("init", "-q");
+    git("add", "-A");
+    git("commit", "-q", "-m", "x");
+    const wt = join(s.root, "wt-echt");
+    git("worktree", "add", "-q", wt);
+    const r = cli.cli(["ablegen", "--eingabe", eingabe(s.root)], { ...s.env, FACTORY_ANALYSE_ABLAGE: join(wt, "ablage") }, { repoWurzel: s.w.repo, login: "ich" });
+    expect(r.code).toBe(1);
+    expect(r.zeilen[0]).toMatch(/Repo oder in einem Worktree/);
+    expect(existsSync(join(wt, "ablage"))).toBe(false);
+  });
+  test("abgelegte JSON: Version, Datum, Anzahl und Kennzahlen; ein kaputter Vorgänger gilt als erster Schnappschuss", () => {
+    const s = welt((w) => `${w.alpha}\n`);
+    mkdirSync(join(s.root, "privat", "ablage"), { recursive: true });
+    writeFileSync(join(s.root, "privat", "ablage", "analyse-2026-11-15.json"), "{kaputt");
+    expect(cli.cli(["ablegen", "--eingabe", eingabe(s.root)], s.env, s.deps).code).toBe(0);
+    const ablage = join(s.root, "privat", "ablage");
+    expect(JSON.parse(readFileSync(join(ablage, "analyse-2026-11-16.json"), "utf8"))).toEqual({ version: 1, datum: "2026-11-16", anzahlBezieher: 1, kennzahlen: { "Bezieher 1: Dateien": 3, Gesamtkosten: 10 } });
+    expect(readFileSync(join(ablage, "analyse-2026-11-16.md"), "utf8")).toContain("erster Schnappschuss");
+  });
   test("ungültige Eingabe: Exit 2", () => {
     const s = welt((w) => `${w.alpha}\n`);
     const p = join(s.root, "kaputt.json");
     writeFileSync(p, "{");
     expect(cli.cli(["ablegen", "--eingabe", p], s.env, s.deps).code).toBe(2);
     writeFileSync(p, JSON.stringify({ kennzahlen: [] }));
+    expect(cli.cli(["ablegen", "--eingabe", p], s.env, s.deps).code).toBe(2);
+    writeFileSync(p, JSON.stringify({ kennzahlen: "x" }));
+    expect(cli.cli(["ablegen", "--eingabe", p], s.env, s.deps).code).toBe(2);
+    writeFileSync(p, "null");
     expect(cli.cli(["ablegen", "--eingabe", p], s.env, s.deps).code).toBe(2);
   });
 });
@@ -288,7 +354,10 @@ describe("Aufruf und Bezieher-Sperre", () => {
   });
   test("falscher Aufruf: Exit 2 mit Usage", () => {
     const s = welt((w) => `${w.alpha}\n`);
-    for (const argv of [[], ["pruefen", "x"], ["ablegen"], ["ablegen", "--eingabe"], ["ablegen", "x", "y"]]) expect(cli.cli(argv, s.env, s.deps).code).toBe(2);
+    for (const argv of [[], ["pruefen", "x"], ["ablegen"], ["ablegen", "--eingabe"], ["ablegen", "x", "y"], ["ablegen", "--eingabe", "a", "b"]]) {
+      const r = cli.cli(argv, s.env, s.deps);
+      expect([argv, r.code, r.zeilen]).toEqual([argv, 2, ["Aufruf: node scripts/token-analyse-freigabe.mjs (pruefen | ablegen --eingabe <datei>)"]]);
+    }
   });
 });
 
@@ -315,7 +384,7 @@ describe("Analyse-Schnappschuss (Format)", () => {
     expect(md({ A: 1 }, null)).toContain("| A | erster Schnappschuss | 1 | – |");
   });
   test("letzterSchnappschuss und schnappschussName: Datum, Laufnummer, fremde Dateien ignoriert", () => {
-    const n = ["analyse-2026-11-15.json", "analyse-2026-11-16.json", "analyse-2026-11-16-2.json", "analyse-2026-11-16-10.json", "analyse-2026-11-16.md", "notiz.json"];
+    const n = ["analyse-2026-11-16-10.json", "analyse-2026-11-16.json", "analyse-2026-11-15.json", "analyse-2026-11-16-2.json", "analyse-2026-11-16.md", "notiz.json"];
     expect(lib.letzterSchnappschuss(n)).toBe("analyse-2026-11-16-10.json");
     expect(lib.letzterSchnappschuss(["x.json"])).toBeNull();
     expect(lib.schnappschussName("2026-11-17", n)).toBe("analyse-2026-11-17");
