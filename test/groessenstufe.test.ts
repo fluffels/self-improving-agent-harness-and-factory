@@ -321,7 +321,7 @@ describe("check-abnahme-nachweis: die entfernte Klein-Form ist bei jeder Stufe r
   const SCHREIBWEISEN = ["entfaellt — klein: kein Verhalten", "entfaellt — Klein: x", "entfaellt - klein: x", "entfaellt – KLEIN: x", "entfaellt —— klein: x", "entfaellt — klein"];
   const KEINE_KRITERIEN = "kein Kriterium hier";
   test.each(SCHREIBWEISEN)("Einstiegspfad: %s ist ohne Kriterien rot mit Hinweis auf die Stufen-Form", (zeile) => {
-    for (const aenderung of [KLEIN, { "src/a.ts": "x\n" }, { "scripts/check-x.mjs": "x\n" }, { "package.json": "{}\n" }]) {
+    for (const aenderung of [KLEIN, { "src/a.ts": "x\n" }, { "scripts/check-x.mjs": "x\n" }, { "package.json": "{}\n" }] as Record<string, string>[]) {
       const r = pruefe(aenderung, zeile, KEINE_KRITERIEN);
       expect(r.ok, JSON.stringify(aenderung)).toBe(false);
       expect(r.fehler.join(), JSON.stringify(aenderung)).toMatch(/Klein-Form ist entfernt.*entfaellt — stufe <0\|1>/);
