@@ -229,7 +229,7 @@ describe("Fundstelle, Zusammenfassen, Sortierung (Review-Runde 1)", () => {
     expect(e.fixliste).toHaveLength(1);
   });
   test("Zeilenform: Klammerinhalt mit anderem Wort, Einrückung, fehlende Leerzeichen, Groß-/Kleinschreibung des Kopfs", () => {
-    expect(L.parseBerichte(B("Doku", "- [nicht blockierend] x — `a.md:1`"))[0].funde).toEqual([]);
+    expect(() => L.parseBerichte(B("Doku", "- [nicht blockierend] x — `a.md:1`"))).toThrow(/Schwere-Marke/);
     expect(L.parseBerichte(B("Doku", "  - [❌blockierend]x — `a.md:1` — b"))[0].funde).toHaveLength(1);
     expect(L.parseBerichte(B("Doku", "Text - [❌ blockierend] x — `a.md:1`"))[0].funde).toEqual([]);
     expect(L.parseBerichte("## lens: doku\n- [⚠️ Hinweis] x — `a.md:1` — b\n")[0].funde).toHaveLength(1);

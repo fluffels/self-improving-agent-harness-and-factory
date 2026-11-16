@@ -111,15 +111,11 @@ describe("ghSperrePfad: vorbelegter Ordner (Missbrauch im geteilten Temp)", () =
     expect(() => ghSperrePfad({ PATH: "/bin" }, tmp, "linux", uid)).toThrow(/anderen Nutzer/);
   });
 
-  it.skipIf(process.getuid === undefined)("eigene uid injiziert: Ordner endet auf -<uid>, ohne uid auf -u", () => {
+  it.skipIf(process.getuid === undefined)("eigene uid injiziert: Ordner endet auf -<uid> (ohne getuid wäre es -u, nicht erreichbar, da der Default die uid füllt)", () => {
     const uid = process.getuid!();
     const tmp = frisch();
-    const mit = ghSperrePfad({ PATH: "/bin" }, tmp, "linux", uid);
-    expect(mit).not.toBeNull();
-    expect(readdirSync(tmp)).toContain(`factory-gh-attrappe-${uid}`);
-    const tmp2 = frisch();
-    ghSperrePfad({ PATH: "/bin" }, tmp2, "linux", undefined);
-    expect(readdirSync(tmp2)).toContain("factory-gh-attrappe-u");
+    expect(ghSperrePfad({ PATH: "/bin" }, tmp, "linux", uid)).not.toBeNull();
+    expect(readdirSync(tmp)).toEqual([`factory-gh-attrappe-${uid}`]);
   });
 
   it("ein Symlink als gh-Datei mit gleichem Inhalt wird trotzdem durch eine echte Datei ersetzt", () => {
