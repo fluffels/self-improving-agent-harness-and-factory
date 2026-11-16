@@ -16,6 +16,7 @@ import { fehlerText } from "./gh-cli.mjs";
 import { pruefeDateien } from "./harness-doctor-dateien.mjs";
 import { gut, luecke, nichtPruefbar } from "./harness-doctor-ergebnis.mjs";
 import { mitMeldestelle } from "./harness-doctor-meldestelle.mjs";
+import { mitRefactoring } from "./harness-doctor-refactoring.mjs";
 import { istBezieher } from "./sync-stand-lib.mjs";
 
 const PUNKT = "Factory-Update";
@@ -244,5 +245,5 @@ export const mitDependabotAusschluss = (dateien, { existiert, lies, bezieher }) 
 /** Die Dateipunkte `dateien` samt Punkt `Factory-Update` (Config aus dem Aufruf, `lesen` vom Rand): dieselbe Form `dateien({ rootDir, config, … })`. */
 export const mitFactoryUpdate = (dateien, { lesen, existiert, bezieher }) => (a) => [...dateien(a), ...factoryUpdatePunkt({ rootDir: a.rootDir, config: a.config, vorAbbruch: a.vorAbbruch === true, lesen, existiert, bezieher })];
 
-/** Die Standard-Dateipunkte von `--pruefen`: `pruefeDateien`, dann `Meldestelle` (nur bei fremder Stelle), dann `Factory-Update` und `Dependabot-Ausschluss` (nur im Bezieher); `lesen(args, token)` ist die `gh`-Naht von Meldestelle und Factory-Update (`Dependabot-Ausschluss` liest nur Dateien). */
-export const dateienStandard = ({ env, lesen, pruefe = pruefeDateien }) => mitDependabotAusschluss(mitFactoryUpdate(mitMeldestelle(pruefe, { env, lesen }), { lesen }), {});
+/** Die Standard-Dateipunkte von `--pruefen`: `pruefeDateien`, dann `Meldestelle` (nur bei fremder Stelle), dann `Factory-Update`, `Dependabot-Ausschluss` und `Refactoring-Sammelticket` (nur im Bezieher); `lesen(args, token)` ist die `gh`-Naht von Meldestelle und Factory-Update (`Dependabot-Ausschluss` liest nur Dateien). */
+export const dateienStandard = ({ env, lesen, pruefe = pruefeDateien }) => mitRefactoring(mitDependabotAusschluss(mitFactoryUpdate(mitMeldestelle(pruefe, { env, lesen }), { lesen }), {}), { lesen });
