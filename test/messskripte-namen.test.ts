@@ -32,7 +32,6 @@ import * as kontingentRoh from "../scripts/kontingent-lib.mjs";
 
 type Row = Record<string, unknown>;
 const WT = FREMD.praefixe.worktree;
-const BRANCH = FREMD.praefixe.branch;
 const { planer: PLANER, umsetzer: UMSETZER, lens: LENS } = FREMD.agenten;
 type Lauf = { meta: { agentType?: string }; zeilen: Row[] };
 type Namen = { agenten: Record<string, string>; praefixe: { worktree: string } };
@@ -63,7 +62,7 @@ const B = baselineRoh as unknown as {
   summarize: (run: object, bounds?: object, prFiles?: unknown, namen?: object) => { pflegeFehlt?: boolean };
   renderMarkdown: (s: unknown, loop?: object, namen?: object) => string;
 };
-const G = kernRoh as unknown as { ticketAusBranch: (b: unknown, w?: unknown) => string | null; sollEintraege: (s: object, o?: object) => { ticket: string | null }[] };
+const G = kernRoh as unknown as { sollEintraege: (s: object, o?: object) => { ticket: string | null }[] };
 type Attribut = { key: string; value: { stringValue?: string; arrayValue?: { values: { stringValue: string }[] } } };
 type Span = { attributes: Attribut[] };
 type Payload = { resourceSpans: { resource: { attributes: Attribut[] }; scopeSpans: { scope: { name: string }; spans: Span[] }[] }[] };
@@ -385,26 +384,14 @@ describe("token-baseline: Umsetzer und Plan-Zeile aus der Config", () => {
 });
 
 describe("Langfuse-Abgleich: Worktree-Präfix und Repo-Name aus der Config", () => {
-  test("ticketAusBranch: das Präfix der Config trifft, das alte nicht; Wortgrenze davor", () => {
-    expect(G.ticketAusBranch("feature/ab-7-x", "ab-")).toBe("ab-7");
-    expect(G.ticketAusBranch(`${BRANCH}7`, "ab-")).toBeNull();
-    expect(G.ticketAusBranch("feature/xab-7", "ab-")).toBeNull();
-    expect(G.ticketAusBranch("ab-7", "ab-")).toBe("ab-7");
-    expect(G.ticketAusBranch("feature/ab-7x", "ab-")).toBeNull();
-    expect(G.ticketAusBranch(undefined, "ab-")).toBeNull();
-    // Regex-Zeichen im Präfix sind wörtlich: der Punkt trifft nur den Punkt.
-    expect(G.ticketAusBranch("feature/ab-7", "a.-")).toBeNull();
-    expect(G.ticketAusBranch("feature/a.-7", "a.-")).toBe("a.-7");
-  });
-  test("Negativfall: ohne Präfix wirft ticketAusBranch und sollEintraege", () => {
-    expect(() => G.ticketAusBranch("feature/ab-7")).toThrow(/Worktree-Präfix/);
-    expect(() => G.ticketAusBranch("feature/ab-7", "")).toThrow(/Worktree-Präfix/);
+  test("Negativfall: ohne Präfix wirft sollEintraege", () => {
     expect(() => G.sollEintraege({ id: "s1", main: [], subagents: [] })).toThrow(/Worktree-Präfix/);
+    expect(() => G.sollEintraege({ id: "s1", main: [], subagents: [] }, { worktree: "" })).toThrow(/Worktree-Präfix/);
   });
-  const sitzung = { id: "s1", main: [call(0, { branch: "feature/ab-7-x" })], subagents: [] };
-  test("sollEintraege setzt das Ticket aus dem Branch mit dem übergebenen Präfix", () => {
-    expect(G.sollEintraege(sitzung, { worktree: "ab-" })[0].ticket).toBe("ab-7");
-    expect(G.sollEintraege(sitzung, { worktree: WT })[0].ticket).toBeNull();
+  const sitzung = { id: "s1", main: [call(0, { tool: "Bash", input: { command: "gh issue edit 7 --add-assignee @me" } }), call(1)], subagents: [] };
+  test("sollEintraege setzt das Ticket aus dem Claim-Fenster mit dem übergebenen Präfix (der Claim-Call selbst ist vor-claim)", () => {
+    expect(G.sollEintraege(sitzung, { worktree: "ab-" }).map((e) => e.ticket)).toEqual([null, "ab-7"]);
+    expect(G.sollEintraege(sitzung, { worktree: WT })[1].ticket).toBe(`${WT}7`);
   });
   test("scopeName und bauePayloads: Scope, Service und erstes Tag tragen den Repo-Namen", () => {
     expect(O.scopeName("acme")).toBe("acme-abgleich");
@@ -414,7 +401,9 @@ describe("Langfuse-Abgleich: Worktree-Präfix und Repo-Name aus der Config", () 
     expect(rs.scopeSpans[0].scope.name).toBe("acme-abgleich");
     expect(rs.resource.attributes.find((a) => a.key === "service.name")?.value.stringValue).toBe("acme-abgleich");
     const tags = rs.scopeSpans[0].spans[0].attributes.find((a) => a.key === "langfuse.trace.tags")?.value.arrayValue?.values.map((v) => v.stringValue);
-    expect(tags).toEqual(["acme", "abgleich", "ab-7"]);
+    expect(tags).toEqual(["acme", "abgleich", "ohne-ticket"]); // erster Span: der Claim-Call, Trace ohne Ticket
+    const tags2 = rs.scopeSpans[0].spans[1].attributes.find((a) => a.key === "langfuse.trace.tags")?.value.arrayValue?.values.map((v) => v.stringValue);
+    expect(tags2).toEqual(["acme", "abgleich", "ab-7"]);
   });
   test("Negativfall: bauePayloads ohne repoName wirft", () => {
     const soll = G.sollEintraege(sitzung, { worktree: "ab-" });

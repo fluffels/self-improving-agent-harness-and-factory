@@ -65,6 +65,7 @@ const O = { ...rawOtlp, bauePayloads: (s: string, e: unknown, o: object) => otlp
   nanos: (ts: string) => string;
   attr: (k: string, v: string | string[]) => Attr;
   costDetails: (e: Eintrag) => Record<string, number> | null;
+  traceIdJeTicket: (s: string, t: string | null) => string;
   bauePayloads: (s: string, e: Eintrag[], o: { soll?: Eintrag[]; ledgerSpans?: string[]; env?: Record<string, string>; project: string; maxSpans?: number }) => { chunks: Chunk[] };
 };
 const A = { ...rawAbgleich, ...rawOtlp } as unknown as {
@@ -204,10 +205,10 @@ describe("IDs", () => {
 });
 
 describe("Import-Hülle", () => {
-  test("nachliefern zieht genau preise, transkript, transkript-calls, langfuse-api, langfuse-zugang (nur Builtins), langfuse-abgleich-kern, langfuse-otlp, langfuse-lock, langfuse-auftrag-lib (nur Builtins), flag-lib, arbeitsplatz-lib, internalrefs-lib (importfrei), projekt-config-lib, projekt-config-bloecke (Form-Prüfer, nur Blatt-Importe), modul-wahl-lib (importfrei), relativ-pfad und repo-form (importfrei), pfad-glob (nur relativ-pfad), skill-pfade (importfrei), spezifikation-lib (zieht markdown, nur Builtins), design-lib (nur relativ-pfad), quellwurzeln-lib (nur node:fs, node:path, pfad-glob, relativ-pfad), gate-befehl-lib (nur flag-lib), ticket-namen (nur Builtins), regex-lib (importfrei), factory-seite und sync-stand-lib (Factory-Seiten-Verweis der Meldung, factory#157), direktaufruf (nur Builtins) nach", () => {
+  test("nachliefern zieht genau preise, transkript, transkript-calls, langfuse-api, langfuse-zugang (nur Builtins), langfuse-abgleich-kern, langfuse-otlp, langfuse-lock, langfuse-auftrag-lib (nur Builtins), flag-lib, arbeitsplatz-lib, internalrefs-lib (importfrei), projekt-config-lib, projekt-config-bloecke (Form-Prüfer, nur Blatt-Importe), modul-wahl-lib (importfrei), relativ-pfad und repo-form (importfrei), pfad-glob (nur relativ-pfad), skill-pfade (importfrei), spezifikation-lib (zieht markdown, nur Builtins), design-lib (nur relativ-pfad), quellwurzeln-lib (nur node:fs, node:path, pfad-glob, relativ-pfad), gate-befehl-lib (nur flag-lib), ticket-namen (nur Builtins), regex-lib (importfrei), factory-seite und sync-stand-lib (Factory-Seiten-Verweis der Meldung, factory#157), direktaufruf (nur Builtins), claim-fenster (factory#524: nur transkript und mess-lib) und mess-lib (nur arbeitsplatz-lib, regex-lib) nach", () => {
     const lies = (rel: string) => readFileSync(join(__dirname, "../..", rel), "utf8");
     const kette = lokaleImporteTransitiv(["scripts/langfuse-nachliefern.mjs"], lies).map((k) => posix.basename(k, ".mjs"));
-    expect(new Set(kette)).toEqual(new Set(["langfuse-nachliefern", "factory-seite", "sync-stand-lib", "preise", "transkript", "transkript-calls", "langfuse-api", "langfuse-zugang", "langfuse-abgleich-kern", "langfuse-otlp", "langfuse-lock", "langfuse-auftrag-lib", "flag-lib", "arbeitsplatz-lib", "internalrefs-lib", "projekt-config-lib", "projekt-config-bloecke", "modul-wahl-lib", "relativ-pfad", "pfad-glob", "repo-form", "skill-pfade", "spezifikation-lib", "design-lib", "quellwurzeln-lib", "gate-befehl-lib", "markdown", "ticket-namen", "regex-lib", "direktaufruf"]));
+    expect(new Set(kette)).toEqual(new Set(["langfuse-nachliefern", "factory-seite", "sync-stand-lib", "preise", "transkript", "transkript-calls", "langfuse-api", "langfuse-zugang", "langfuse-abgleich-kern", "langfuse-otlp", "langfuse-lock", "langfuse-auftrag-lib", "flag-lib", "arbeitsplatz-lib", "internalrefs-lib", "projekt-config-lib", "projekt-config-bloecke", "modul-wahl-lib", "relativ-pfad", "pfad-glob", "repo-form", "skill-pfade", "spezifikation-lib", "design-lib", "quellwurzeln-lib", "gate-befehl-lib", "markdown", "ticket-namen", "regex-lib", "direktaufruf", "claim-fenster", "mess-lib"]));
   });
 });
 
@@ -219,7 +220,7 @@ describe("Payload (Golden)", () => {
   test("Generation: alle Attributschlüssel, Usage mit fünf Schlüsseln, Kosten samt total, Nanosekunden als String", () => {
     const e = eintrag(1);
     const [s] = spansVon(baue([e]).chunks[0].payload);
-    expect(s).toMatchObject({ traceId: "t".repeat(32), spanId: e.id, kind: 1, startTimeUnixNano: O.nanos(e.ts), endTimeUnixNano: O.nanos(e.ts) });
+    expect(s).toMatchObject({ traceId: O.traceIdJeTicket("s1", T1577), spanId: e.id, kind: 1, startTimeUnixNano: O.nanos(e.ts), endTimeUnixNano: O.nanos(e.ts) });
     expect(s.startTimeUnixNano).toBe(String(BigInt(Date.parse(e.ts)) * 1_000_000n));
     expect(s.parentSpanId).toBeUndefined();
     const a = attrs(s);
@@ -231,6 +232,8 @@ describe("Payload (Golden)", () => {
     expect(kosten.total).toBeCloseTo(kosten.input + kosten.output + kosten.cache_read_input_tokens + kosten.input_cache_creation_5m + kosten.input_cache_creation_1h, 12);
     expect(a["langfuse.observation.metadata.message_id"]).toBe("m1");
     expect(a["langfuse.observation.metadata.quelle"]).toBe("abgleich");
+    expect(a["langfuse.observation.metadata.ticket"]).toBe(T1577);
+    expect(a).not.toHaveProperty("langfuse.observation.metadata.ticket_grund");
   });
 
   test("Zuordnungs-Metadaten (factory#287): agent_type, effort, thinking aus der Zuordnung, repo aus dem Repo-Namen; der Subagent-Span bleibt unverändert", () => {
@@ -269,7 +272,8 @@ describe("Payload (Golden)", () => {
     for (const s of spansVon(p)) {
       const a = attrs(s);
       expect(a["langfuse.session.id"]).toBe("s1");
-      expect(a["langfuse.trace.tags"]).toEqual([REPO_NAME, "abgleich", T1577, T9]);
+      // ein Trace je Ticket (factory#524): jeder Span trägt nur das Ticket seines Traces
+      expect(a["langfuse.trace.tags"]).toEqual([REPO_NAME, "abgleich", s.traceId === O.traceIdJeTicket("s1", T9) ? T9 : T1577]);
       expect(a["langfuse.trace.name"]).toBe("Abgleich");
       expect(a["langfuse.trace.metadata.project"]).toBe("repo");
     }
@@ -595,11 +599,19 @@ describe("Idempotenz (Ist zuerst, Ledger als Brücke)", () => {
 
   test("Fremd-Config (#1745): Worktree-Präfix und Repo-Name der Config bestimmen Ticket, Scope und erstes Tag der gesendeten Spans", async () => {
     const cfg = { repo: "o/acme", praefixe: { commitZeile: "AB-", branch: "feature/ab-", worktree: "ab-" } };
-    const a = aufbau([msg("a", 1, { gitBranch: "feature/ab-9-x" })]);
+    const claim = JSON.stringify({
+      type: "assistant",
+      sessionId: "s1",
+      timestamp: new Date(HEUTE - 5000).toISOString(),
+      uuid: "u-claim",
+      message: { id: "claim", role: "assistant", model: "claude-opus-5-5", usage: { input_tokens: 2, output_tokens: 1, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 }, content: [{ type: "tool_use", id: "tc", name: "Bash", input: { command: "gh issue edit 9 --add-assignee @me" } }] },
+    });
+    const a = aufbau([claim, msg("a", 1)]);
     const m = mock({ ist: 0, obs: [] });
     await N.nachliefern(argsVon(), { env: ZUGANG, now: SPAET(), fetchImpl: m.fetchImpl, projectsRoot: a.root, repoRoot: REPO, stateDir: a.state, config: cfg });
     expect(m.otlp).toHaveLength(1);
-    expect(attrs(spansVon(m.otlp[0])[0])["langfuse.trace.tags"]).toEqual(["acme", "abgleich", "ab-9"]);
+    const tags = spansVon(m.otlp[0]).map((sp) => attrs(sp)["langfuse.trace.tags"]);
+    expect(tags).toEqual([["acme", "abgleich", "ohne-ticket"], ["acme", "abgleich", "ab-9"]]); // der Claim-Call selbst ist vor-claim
     expect(m.otlp[0].resourceSpans[0].scopeSpans[0].scope.name).toBe("acme-abgleich");
   });
   test("Negativfall: eine Config ohne Worktree-Präfix oder ohne repo bricht ab, bevor ein Request oder eine Ledger-Datei entsteht", async () => {
@@ -822,7 +834,7 @@ describe("Auswahl", () => {
 describe("--session: ID oder eindeutiger Präfix (factory#354)", () => {
   const VOLL = "abcd1234-0000-4000-8000-000000000001";
   const ANDERE = "abcd9999-0000-4000-8000-000000000002";
-  const traceIdVon = (rawOtlp as unknown as { traceIdVon: (s: string) => string }).traceIdVon;
+  const traceIdVon = (s: string) => (rawOtlp as unknown as { traceIdJeTicket: (s: string, t: string | null) => string }).traceIdJeTicket(s, null);
   const aufbauSession = (dateien: Record<string, string>) => aufbau([msg("a", 1)], dateien);
 
   test("eindeutiger Präfix sendet für die volle ID", async () => {
