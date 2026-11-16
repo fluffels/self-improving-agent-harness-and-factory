@@ -29,7 +29,6 @@ import {
 } from "./token-analyse-freigabe-lib.mjs";
 
 const REPO_WURZEL = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-
 /** Realpath, auch für einen Pfad, den es noch nicht gibt (nächster vorhandener Vorfahr plus Rest). */
 export function realMitVorfahr(pfad) {
   const abs = resolve(pfad);
