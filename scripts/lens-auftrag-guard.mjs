@@ -118,7 +118,7 @@ function zusatzpassGrund(text, namen) {
   const ks = [...lensSegmente(text, namen)].map(([segment]) => /-lens-r(\d+)(?!\d)/.exec(segment)?.[1]).filter((k) => k !== undefined).map(Number);
   const k = Math.max(0, ...ks);
   if (k <= MAX_REVIEW_PAESSE || zusatzpassKopfAus(text)) return null;
-  return `Lens-Auftrag ohne Zusatzpass-Entscheidung: der Lens-Worktree trägt Runde ${k}, das Cap liegt bei ${MAX_REVIEW_PAESSE} Pässen. Ein Pass darüber braucht im Kopf das Feld „Zusatzpass: <Brille>:<Prüfpunkt> · Entscheidung: <X>, weil <Y>“ (alle Teile ausgefüllt, Brille aus ${BEKANNTE_LENSES.join(", ")}) und einen Vorpass-Fund der Schwere blockierend (Skill review-lenses, Datei ablauf-zusatzpass.md). ${HINWEIS}`;
+  return `Lens-Auftrag ohne Zusatzpass-Entscheidung: der Lens-Worktree trägt Runde ${k}, das Cap liegt bei ${MAX_REVIEW_PAESSE} Pässen. Ein Pass darüber braucht im Kopf das Feld „Zusatzpass: <Brille>:<Prüfpunkt> · Entscheidung: <X>, weil <Y>“ (alle Teile ausgefüllt, Brille als Schlüssel oder Anzeigename aus ${BEKANNTE_LENSES.join(", ")}) und einen Vorpass-Fund der Schwere blockierend (Skill review-lenses, Datei ablauf-zusatzpass.md). ${HINWEIS}`;
 }
 
 /** Grund für ein Deny oder `null` (durchlassen). Pure. */
