@@ -40,7 +40,7 @@ describe("Vertrauensgrenzen sind Risikoklasse hoch (factory#622 L8)", () => {
   const skripte = tabellenSkripte();
 
   test("die Tabelle nennt die Schlüsselskripte", () => {
-    for (const s of ["scripts/fremdtext.mjs", "scripts/melden.mjs", "scripts/spezifikation.mjs", "scripts/sammelticket-anlegen.mjs"]) expect(skripte).toContain(s);
+    for (const s of ["scripts/fremdtext.mjs", "scripts/melden.mjs", "scripts/spezifikation.mjs", "scripts/sammelticket-anlegen.mjs", "scripts/cockpit/lauf.mjs", "scripts/fremdtext-lib.mjs", "scripts/meldung-lib.mjs", "scripts/spezifikation-lib.mjs", "scripts/sammelticket-titel.mjs"]) expect(skripte).toContain(s); // cockpit/lauf.mjs: Pfade mit Unterordner dürfen dem Scan nicht verloren gehen
   });
   test.each(tabellenSkripte())("%s ist Risikoklasse hoch", (pfad) => {
     expect(lib.bestimmeRisikoklasse([pfad], risiko).klasse).toBe("hoch");

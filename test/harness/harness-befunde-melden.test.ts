@@ -110,6 +110,7 @@ describe("Harness-Befunde nur per melden.mjs (factory#221)", () => {
     for (const z of [
       "Refactoring-Befunde per `node scripts/melden.mjs --ziel refactoring`.",
       "Ein Kommentar per `gh issue comment` im Ticket.",
+      "Refactoring (gesammelt) per `gh issue view` lesen.",
       "Refactoring (gesammelt) bekommt Zeilen. Dann `gh issue comment` für Rückfragen.",
       "Codequalität per `gh issue comment` melden",
     ]) expect(rollenFunde("x.md", z).filter((m) => m.includes("Refactoring-Befunde nur per")), z).toEqual([]);

@@ -36,7 +36,7 @@ export function basisUrlLokal(url) {
 }
 
 /** Datenschutz-Hinweis für ein nicht lokales Ziel (nur Host, nie Pfad, Query oder Keys). Pur. */
-const datenschutzHinweis = (url) => `Datenschutz: LANGFUSE_BASE_URL zeigt auf ${hostVon(url) ?? "unbekanntem Ziel"} (nicht lokal, ADR 0019)`;
+const datenschutzHinweis = (url) => `Datenschutz: LANGFUSE_BASE_URL zeigt auf ${hostVon(url) ?? "ein unbekanntes Ziel"} (nicht lokal, ADR 0019)`;
 
 const MCP_FENSTER_MS = 24 * 3600 * 1000;
 

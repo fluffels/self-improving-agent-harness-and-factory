@@ -169,7 +169,7 @@ describe("main", () => {
     };
     test("basisUrlLokal: Loopback-Hosts ja, Fremdhosts und Unparsebares nein", () => {
       for (const u of ["http://localhost:3000", "http://127.0.0.1:3000", "http://[::1]:3000", "http://x.localhost"]) expect(v.basisUrlLokal(u), u).toBe(true);
-      for (const u of ["https://cloud.langfuse.com", "http://192.168.1.5:3000", "kein url", ""]) expect(v.basisUrlLokal(u), u).toBe(false);
+      for (const u of ["https://cloud.langfuse.com", "http://192.168.1.5:3000", "http://evillocalhost", "kein url", ""]) expect(v.basisUrlLokal(u), u).toBe(false);
     });
     test("nicht lokal: Hinweis mit nur dem Host auf stderr, Exit bleibt 0", async () => {
       const r = await mit([], fern, antwort(200));
@@ -186,6 +186,25 @@ describe("main", () => {
       expect(r.code).toBe(0);
       expect((JSON.parse(r.out[0]) as { basisLokal: boolean }).basisLokal).toBe(false);
       expect(r.err).toEqual([]);
+    });
+    test("Ausfall und nicht lokal (Standardmodus): beide Aussagen auf stderr, Exit 1", async () => {
+      const r = await mit([], fern, antwort(500));
+      expect(r.code).toBe(1);
+      const text = r.err.join("\n");
+      expect(text).toContain("Langfuse antwortet mit HTTP 500");
+      expect(text).toContain("Datenschutz: LANGFUSE_BASE_URL zeigt auf cloud.langfuse.com");
+    });
+    test("--json bei Ausfall und nicht lokal: basisLokal false, Exit 1, stderr leer", async () => {
+      const r = await mit(["--json"], fern, antwort(500));
+      expect(r.code).toBe(1);
+      expect(JSON.parse(r.out[0]) as unknown).toEqual({ erreichbar: false, grund: "Langfuse antwortet mit HTTP 500", basisLokal: false });
+      expect(r.err).toEqual([]);
+    });
+    test("unparsebare Basis-URL: Hinweis nennt ein unbekanntes Ziel, nie die Eingabe", async () => {
+      const r = await mit([], { LANGFUSE_BASE_URL: "kein url" }, antwort(500));
+      const text = r.err.join("\n");
+      expect(text).toContain("zeigt auf ein unbekanntes Ziel (nicht lokal, ADR 0019)");
+      expect(text).not.toContain("kein url");
     });
     test("--sessionstart: erreichbar, aber nicht lokal steht der Hinweis in systemMessage", async () => {
       const r = await mit(["--sessionstart"], fern, antwort(200));
