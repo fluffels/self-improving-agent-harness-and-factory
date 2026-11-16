@@ -367,3 +367,29 @@ describe("Risikostufe: Ausnahme-Formen (factory#526)", () => {
     expect(L.risikostufeZeile(r(1))).toBe("• Risikostufe: 1");
   });
 });
+
+describe("rundenZeilenAus (factory#535)", () => {
+  type Zahlen = { lens: string; n: number }[] | null;
+  type RZ = { n: number; blocker: Zahlen; sollte: Zahlen; hinweis: Zahlen };
+  const rz = (raw as unknown as { rundenZeilenAus: (t: string) => RZ[] }).rundenZeilenAus;
+  it("liest Zeilen mit und ohne Squash-Präfix, Prosa mitten in der Zeile zählt nicht", () => {
+    const t = [
+      "fix: a",
+      "Runde 1: lenses=architektur,doku blocker=architektur:0,doku:0 sollte=architektur:2,doku:0 hinweis=architektur:1,doku:0",
+      "* fix: b",
+      "* Runde 2: lenses=architektur blocker=architektur:1 sollte=architektur:0 hinweis=architektur:0",
+      "siehe Runde 3: lenses=x blocker=x:9",
+    ].join("\n");
+    const r = rz(t);
+    expect(r.map((z) => z.n)).toEqual([1, 2]);
+    expect(r[0].sollte).toEqual([{ lens: "architektur", n: 2 }, { lens: "doku", n: 0 }]);
+    expect(r[1].blocker).toEqual([{ lens: "architektur", n: 1 }]);
+  });
+  it("ein fehlendes Feld ist null, leerer Text ergibt []; bei doppelter Nummer gewinnt die letzte Zeile", () => {
+    expect(rz("Runde 1: lenses=doku blocker=doku:1")[0].sollte).toBeNull();
+    expect(rz("")).toEqual([]);
+    const d = rz("Runde 1: lenses=doku blocker=doku:1\nRunde 1: lenses=doku blocker=doku:0");
+    expect(d).toHaveLength(1);
+    expect(d[0].blocker).toEqual([{ lens: "doku", n: 0 }]);
+  });
+});
