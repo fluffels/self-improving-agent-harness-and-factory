@@ -57,6 +57,33 @@
       }
     },
     {
+      "id": "refactoring-sammelticket-597",
+      "datum": "2026-11-16",
+      "aenderung": "Das Refactoring-Sammelticket ist im Bezieher standardmäßig an; Code-Befunde außerhalb des Slices und die monatliche Analyse gehen dorthin. Der Doctor-Punkt Refactoring-Sammelticket weist ein fehlendes oder abgeschaltetes Ticket als Lücke aus.",
+      "wirkung": "Code-Befunde werden planmäßig abgearbeitet, ohne dass die Nacharbeit steigt.",
+      "messgroesse": "nacharbeit-quote",
+      "basis": {
+        "fenster": "4 Wochen vor Merge",
+        "wert": null
+      },
+      "toleranz": {
+        "qualitaetsmass": "nacharbeit-quote",
+        "richtung": "steigt",
+        "schwelle": 0,
+        "einheit": "absolut"
+      },
+      "rueckfall": "Ein Bezieher mit Standard-an meldet im Wochenlauf LÜCKE Refactoring-Sammelticket, ohne dass der Punkt sie vorher gemeldet hätte, oder eine Zeile Gate-Lücke dazu erscheint im Harness-Sammelticket: Revert per PR.",
+      "pruefTermin": "2026-12-14",
+      "mindestdaten": {
+        "n": 10,
+        "einheit": "prs"
+      },
+      "adr": {
+        "datum": "2026-11-16",
+        "pr": "factory#636"
+      }
+    },
+    {
       "id": "holdout-omitclaudemd-551",
       "datum": "2026-11-16",
       "aenderung": "omitClaudeMd: true für holdout-szenario und holdout-abnahme; der Body der Abnahme trägt Fremdtext-Regel, Secret-Key-Verbot und Anonymität selbst.",

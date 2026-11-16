@@ -396,7 +396,7 @@ describe("dateienStandard (Verdrahtung von harness-doctor.mjs)", () => {
     const f = doctor.dateienStandard({ env: {}, lesen, pruefe: () => [{ punkt: "Eins", ok: true }] });
     expect(f({ rootDir: fabrik, config }).map((p) => p.punkt)).toEqual(["Eins"]);
     const e = f({ rootDir: bezieher, config });
-    expect(e.map((p) => p.punkt)).toEqual(["Eins", "Factory-Update", "Dependabot-Ausschluss"]);
+    expect(e.map((p) => p.punkt)).toEqual(["Eins", "Factory-Update", "Dependabot-Ausschluss", "Refactoring-Sammelticket"]);
     expect(e[1]).toMatchObject({ ok: false });
   });
 });
