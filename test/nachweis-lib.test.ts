@@ -326,6 +326,7 @@ describe("stufeZeile (factory#402 L26)", () => {
     expect(stufeZeile("S")).toBe("• Kombi-Lens-Grenze: eingehalten");
     expect(stufeZeile("voll")).toBe("• Kombi-Lens-Grenze: überschritten");
     expect(stufeZeile(null)).toBe("• Kombi-Lens-Grenze: (nicht berechenbar)");
+    expect(stufeZeile(undefined as unknown as null)).toBe("• Kombi-Lens-Grenze: (nicht berechenbar)");
   });
 });
 

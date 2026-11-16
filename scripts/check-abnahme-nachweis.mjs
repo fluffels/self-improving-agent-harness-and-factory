@@ -243,7 +243,7 @@ function pruefe({ git, gh, env, config, zeilen, base, reviewOverride, stufe, ris
     marker = vertrauterMarker(kommentare, owner, zeilen);
     szenarioDurchgaenge = zaehleSzenarioDurchgaenge(vertrauteAbnahmeMarker(kommentare, owner, zeilen));
   }
-  return bewerteAbnahme({ nachweis, ticket, marker, abnahmeHead, zeilen, reviewOverride, szenarioDurchgaenge, stufe, risikostufe });
+  return bewerteAbnahme({ nachweis, ticket, marker, abnahmeHead, zeilen, reviewOverride, szenarioDurchgaenge, risikostufe });
 }
 
 // ── CLI ──────────────────────────────────────────────────────────────────────

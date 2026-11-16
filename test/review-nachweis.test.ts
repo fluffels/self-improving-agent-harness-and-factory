@@ -1406,7 +1406,7 @@ describe("Risikostufe: die Wächter rechnen nach (factory#526)", () => {
     const sicher = `${DREI},sicherheit`;
     rot(bew(text(`${PL} — skizze`, voll(2, sicher), true), R2, { stufe: "S" }), /Skizzen-Form ist entfernt/);
     rot(bew(text("ohne — klein: Tippfehler", voll(2, sicher), true), R2, { stufe: "S" }), /Klein-Form ist entfernt/);
-    rot(bew(text(PL, `${kombi.replace("lenses=kombiniert", "lenses=kombiniert,sicherheit")}`, true), R2, { stufe: "S" }), /lenses fehlt/);
+    rot(bew(text(PL, `${kombi.replace("lenses=kombiniert", "lenses=kombiniert,sicherheit")}`, true), R2, { stufe: "S" }), /berechnet aus dem Diff: KOMBI: ja, Risikostufe 2/);
   });
   test("Stufe-2-Pflicht über bewerteKlasseHoch: Risikostufe 2 allein genügt, Stufe 1 verlangt nichts", () => {
     const n = parseNachweis(text(PL, voll(2)));

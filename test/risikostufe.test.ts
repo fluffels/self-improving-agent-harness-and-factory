@@ -298,7 +298,7 @@ describe("RISIKO-, SWEEP- und KOMBI-Zeile (factory#529, vorher ein eigenes Skrip
     expect(zeilen(unter(["src/auth/x.ts"]).ausgabe).slice(1)).toEqual([
       "RISIKO: hoch — src/auth/x.ts trifft *auth* (Standardliste)",
       "SWEEP: voll — src/auth/x.ts trifft *auth* (Standardliste)",
-      "KOMBI: nein — Risikoklasse hoch: src/auth/x.ts trifft *auth* (Standardliste)",
+      "KOMBI: nein — Risikostufe 2; Risikoklasse hoch: src/auth/x.ts trifft *auth* (Standardliste)",
     ]);
   });
   test("über der Grenze (vier Dateien) und im Grundschutz: Kombi nein, auch bei Stufe 1", () => {
@@ -307,11 +307,18 @@ describe("RISIKO-, SWEEP- und KOMBI-Zeile (factory#529, vorher ein eigenes Skrip
     expect(zeilen(vier)[3]).toMatch(/^KOMBI: nein — 4 Dateien \(höchstens 3\)/);
     expect(zeilen(unter(["scripts/y.mjs"]).ausgabe)[3]).toMatch(/^KOMBI: nein — scripts\/y\.mjs liegt in einem geschützten Pfad/);
   });
+  test("Stufe 2 ohne Grundschutz-Pfad (Lockfile der Basis): KOMBI nein mit Grund Risikostufe 2", () => {
+    for (const p of ["Cargo.lock", "go.mod", "requirements.txt"]) {
+      const z = zeilen(unter([p]).ausgabe);
+      expect(z[0], p).toMatch(/^RISIKOSTUFE: 2/);
+      expect(z[3], p).toMatch(/^KOMBI: nein — Risikostufe 2/);
+    }
+  });
   test("--json trägt risiko mit allen Treffern, sweep und kombi", () => {
     const j = JSON.parse(unter(["src/auth/x.ts", "--json"]).ausgabe) as { risiko: unknown; sweep: unknown; kombi: unknown };
     expect(j.risiko).toMatchObject({ klasse: "hoch", quelle: "Standardliste", treffer: [{ pfad: "src/auth/x.ts", muster: "*auth*" }] });
     expect(j.sweep).toMatchObject({ tiefe: "voll" });
-    expect(j.kombi).toMatchObject({ zulaessig: false, gruende: [expect.stringMatching(/Risikoklasse hoch/)] });
+    expect(j.kombi).toMatchObject({ zulaessig: false, gruende: ["Risikostufe 2", expect.stringMatching(/Risikoklasse hoch/)] });
     const klein = JSON.parse(unter(["docs/x.md", "--json"]).ausgabe) as { kombi: unknown };
     expect(klein.kombi).toEqual({ zulaessig: true, gruende: [] });
   });

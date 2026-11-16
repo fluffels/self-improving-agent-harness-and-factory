@@ -34,7 +34,7 @@
  * das bloße Wort in Messberichten (`docs/` außer Glossar) bleibt erlaubt.
  *
  * Dazu (factory#529): die Größenstufe S ist zurückgebaut (aufgegangen in Risikostufe 0/1, Fortschreibung zu ADR 0027): `RESTE_GROESSENSTUFE_S` scannt das entfernte Skript, die Zeile `STUFE: S` und die Altformen der Nachweis-Zeilen.
- * Bewusste Grenze: `groessenstufe-lib.mjs` und `GROESSENSTUFE_S` behalten ihren Namen (Kombi-Lens- und Trivial-Grenze); Wächter-Tests mit Altform-Fixtures stehen in `AUSNAHMEN_GROESSENSTUFE_S`.
+ * Bewusste Grenze: der Scan der Skizzen-Form trifft nur den Geviertstrich (die Nachweis-Wächter weisen auch `-` und `–` ab); `groessenstufe-lib.mjs` und `GROESSENSTUFE_S` behalten ihren Namen (Kombi-Lens- und Trivial-Grenze); Wächter-Tests mit Altform-Fixtures stehen in `AUSNAHMEN_GROESSENSTUFE_S`.
  *
  * Ein künftiger harmloser Gebrauch eines dieser Wörter braucht einen Eintrag in `REGEL_AUSNAHMEN`.
  *
@@ -642,13 +642,16 @@ describe("Keine Reste der Größenstufe S (factory#529)", () => {
     ["Plan-Form skizze", "Plan: x —— skizze"],
     ["Plan-Form klein", "Plan: ohne — klein: Tippfehler"],
     ["Plan-Form klein", "Plan: ohne —klein : Tippfehler"],
+    ["Plan-Form klein", "Plan: ohne —— klein: x"],
     ["Abnahme-Form klein", "Abnahme: entfaellt — klein: Doku"],
+    ["Abnahme-Form klein", "Abnahme: entfaellt —klein : x"],
+    ["Abnahme-Form klein", "Abnahme: entfaellt —— klein: x"],
   ])("Negativfall: %s wird gefunden (%s)", (name, text) => {
     assert.deepEqual(stufeS(`a\n${text}\nb`), [`docs/x.md:2: ${name}`]);
   });
 
   test("Negativfall: harmlose Nachbarn lösen nicht aus", () => {
-    const nachbarn = ["scripts/groessenstufe-lib.mjs", "RISIKOSTUFE: 2", "Plan: ohne — stufe 1", "Abnahme: entfaellt — stufe 0", "eine Skizze des Plans", "STUFE: voll", "RISIKOSTUFE: S", "Plan: ohne — klein"];
+    const nachbarn = ["scripts/groessenstufe-lib.mjs", "RISIKOSTUFE: 2", "Plan: ohne — stufe 1", "Abnahme: entfaellt — stufe 0", "eine Skizze des Plans", "STUFE: voll", "RISIKOSTUFE: S", "Plan: ohne — klein", "xgroessenstufe.mjs", "groessenstufe_mjs", "STUFE: Stichprobe", "Plan: x — skizzenhaft"];
     assert.deepEqual(stufeS(nachbarn.join("\n")), []);
   });
 

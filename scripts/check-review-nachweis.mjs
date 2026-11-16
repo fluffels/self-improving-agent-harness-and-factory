@@ -303,7 +303,7 @@ function bewertePlan(plan, zeilen, risikostufe) {
   if (sg) return stufenAusnahmeFehler(P, `ohne — ${plan.grund}`, sg.stufe, risikostufe);
   const groesse = bewerteGroessenForm(plan, zeilen);
   if (groesse.length > 0 || risikostufe.stufe < 2 || plan.art === "planer") return groesse;
-  return [`${P}: bei Risikostufe 2 ist nur der Planer-Plan gültig (${plan.art === "skizze" ? "die entfernte Skizzen-Form" : `ohne — ${plan.grund}`} ist rot); berechnet: ${risikostufe.gruende[0] ?? "-"} (Pfad ${risikoPfad(risikostufe)}).`];
+  return [`${P}: bei Risikostufe 2 ist nur der Planer-Plan gültig (ohne — ${plan.grund} ist rot); berechnet: ${risikostufe.gruende[0] ?? "-"} (Pfad ${risikoPfad(risikostufe)}).`];
 }
 
 /** Die entfernten Formen der Plan-Zeile (Skizze, Klein; factory#529) sind bei jeder Stufe rot, mit Hinweis auf die Stufen-Form. Wird weiter erkannt, damit die Meldung hilft. Pure. */

@@ -131,7 +131,7 @@ function ausloeserPfad(pfade, geschuetzt) {
   return geschuetzt[0]?.pfad ?? code ?? pfade[0];
 }
 
-/** Die Zusatzfelder jeder Antwort (factory#529): `risiko` (Risikoklasse), `sweep` (Sweep-Tiefe der Test-Lens), `kombi` (`{zulaessig, gruende}`: unter der Kombi-Lens-Grenze). Fail-closed: hoch, voll, nein mit demselben Grund. Pur. */
+/** Die Zusatzfelder jeder Antwort (factory#529): `risiko` (Risikoklasse), `sweep` (Sweep-Tiefe der Test-Lens), `kombi` (`{zulaessig, gruende}`: unter der Kombi-Lens-Grenze und Risikostufe ≤ 1). Fail-closed: hoch, voll, nein mit demselben Grund. Pur. */
 function zusatzFelder(grund, groesse) {
   if (grund !== null || groesse === null) return { risiko: { klasse: "hoch", quelle: "Projekt-Config", treffer: [], gruende: [grund] }, sweep: { tiefe: "voll", gruende: [grund] }, kombi: { zulaessig: false, gruende: [grund] } };
   return { risiko: groesse.risiko, sweep: groesse.sweep, kombi: { zulaessig: groesse.stufe === "S", gruende: groesse.gruende } };
@@ -148,7 +148,7 @@ export function bestimmeRisikostufe({ eintraege, basis, leitplanken, risiko, pro
   const zusatz = zusatzFelder(null, groesse);
   const pfade = eintraege.map((e) => e.pfad);
   const t2 = stufe2Treffer(pfade, { basis, leitplanken, risiko, prognose });
-  if (t2.length > 0) return { stufe: 2, gruende: t2.map((t) => `${t.pfad} trifft ${t.muster} (${t.liste})`), treffer: t2, pfade, ...zusatz };
+  if (t2.length > 0) return { stufe: 2, gruende: t2.map((t) => `${t.pfad} trifft ${t.muster} (${t.liste})`), treffer: t2, pfade, ...zusatz, kombi: { zulaessig: false, gruende: ["Risikostufe 2", ...zusatz.kombi.gruende] } };
   const geschuetzt = treffer(pfade, [...leitplanken.alle, ...GRUNDSCHUTZ], "schutz", { prognose });
   if (istDokuDiff(pfade) && geschuetzt.length === 0) return { stufe: 0, gruende: ["nur *.md ohne Leitplanken- oder Grundschutz-Pfad"], treffer: [], pfade, ...zusatz };
   if (zusatz.kombi.zulaessig && groesse.sweep.tiefe === "stichprobe") return { stufe: 0, gruende: ["Trivial-Grenze, nur Doku und Testdateien außerhalb von test/harness/"], treffer: [], pfade, ...zusatz };
