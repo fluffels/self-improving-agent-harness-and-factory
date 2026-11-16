@@ -7,7 +7,7 @@
 import { describe, test } from "vitest";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { FREMD } from "../support/fremd-config";
@@ -15,9 +15,12 @@ import { FREMD } from "../support/fremd-config";
 import * as hookRaw from "../../scripts/pretooluse-hook.mjs";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as libRaw from "../../scripts/nachweis-lib.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Hook-Skript.
+import * as guardRaw from "../../scripts/lens-auftrag-guard.mjs";
 
 const hook = hookRaw as unknown as { dispatch: (t: string, w: string, a?: unknown, b?: unknown, d?: unknown) => { hookSpecificOutput: { permissionDecision: string; permissionDecisionReason: string } } | null };
 const { zusatzpassKopfAus, MAX_REVIEW_PAESSE } = libRaw as unknown as { zusatzpassKopfAus: (p: string) => { brille: string; pruefpunkt: string; entscheidung: string; weil: string } | null; MAX_REVIEW_PAESSE: number };
+const guard = guardRaw as unknown as { worktreePfadeAus: (t: string) => string[]; registrierteWorktrees: (c: unknown, wurzel: string) => string[] };
 const WT = FREMD.praefixe.worktree;
 const agent = (prompt: string) => JSON.stringify({ hook_event_name: "PreToolUse", tool_name: "Agent", cwd: "/w", tool_input: { subagent_type: FREMD.agenten.lens, description: "Lens", prompt } });
 const deny = (prompt: string, liste?: string[]) => hook.dispatch(agent(prompt), "/w", undefined, undefined, { config: FREMD, ...(liste ? { worktreeListe: () => liste } : {}) });
@@ -208,9 +211,39 @@ describe("R6: der Kindprozess startet nur in einem bei Git registrierten Worktre
   test("Schreibweise: Backslash, abschließender Separator und Backticks gleichen die Liste ab", () => {
     for (const a of [ARBEIT + "/", ARBEIT.replaceAll("/", "\\"), "`" + ARBEIT + "`"]) assert.equal(lauf(a, () => [ARBEIT]).aufrufe.length, 1, a);
     assert.equal(lauf(ARBEIT, () => [ARBEIT + "/"]).aufrufe.length, 1, "Listeneintrag mit Separator");
-    assert.equal(lauf(ARBEIT.replace("/repo/", "/REPO/"), () => [ARBEIT]).aufrufe.length, 0, "unter POSIX zählt die Schreibweise");
+    assert.equal(lauf(ARBEIT.replace("/repo/", "/REPO/"), () => [ARBEIT], "linux").aufrufe.length, 0, "unter POSIX zählt die Schreibweise");
   });
   test("unter win32 ist die Groß-/Kleinschreibung egal", () => {
     assert.equal(lauf(ARBEIT.replace("/repo/", "/REPO/"), () => [ARBEIT], "win32").aufrufe.length, 1);
+  });
+});
+
+describe("R6: die Liste der registrierten Worktrees (L6)", () => {
+  test("worktreePfadeAus nimmt nur die worktree-Zeilen der Porcelain-Ausgabe, auch mit CRLF", () => {
+    const aus = "worktree /r\nHEAD abc\nbranch refs/heads/main\n\nworktree /r/.claude/worktrees/a b\r\nHEAD def\r\nprunable gitdir weg\r\n";
+    assert.deepEqual(guard.worktreePfadeAus(aus), ["/r", "/r/.claude/worktrees/a b"]);
+    assert.deepEqual(guard.worktreePfadeAus(""), []);
+  });
+  test("registrierteWorktrees fragt das echte git: ein angelegter Worktree steht in der Liste, ein bloßer Ordner nicht", () => {
+    const wurzel = mkdtempSync(join(tmpdir(), "lens-wt-"));
+    try {
+      const haupt = join(wurzel, "haupt");
+      mkdirSync(haupt);
+      const git = (...a: string[]) => execFileSync("git", ["-C", haupt, ...a], { stdio: "ignore" });
+      git("init", "-q", "-b", "main");
+      git("config", "user.email", "t@example.invalid");
+      git("config", "user.name", "t");
+      git("commit", "-q", "--allow-empty", "-m", "basis");
+      const wt = join(wurzel, "wt");
+      git("worktree", "add", "-q", "--detach", wt);
+      mkdirSync(join(wurzel, "bloss"));
+      const liste = guard.registrierteWorktrees({}, haupt).map((p) => p.replace(/\\/g, "/").toLowerCase());
+      const norm = (p: string) => realpathSync(p).replace(/\\/g, "/").toLowerCase();
+      assert.ok(liste.includes(norm(wt)), liste.join(","));
+      assert.ok(liste.includes(norm(haupt)));
+      assert.ok(!liste.includes(norm(join(wurzel, "bloss"))));
+    } finally {
+      rmSync(wurzel, { recursive: true, force: true });
+    }
   });
 });

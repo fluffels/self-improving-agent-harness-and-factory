@@ -126,19 +126,21 @@ function stufeImWorktree(pfad) {
 
 const REPO_WURZEL = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
-/** Pfad zum Vergleich: Schrägstriche, ohne Backticks und abschließenden Separator; unter win32 ohne Groß-/Kleinschreibung. Pur. */
+/** Pfad zum Vergleich: Schrägstriche, ohne abschließenden Separator (Backticks streift `arbeitsPfad` vorher ab); unter win32 ohne Groß-/Kleinschreibung. Pur. */
 function pfadSchluessel(pfad, plattform) {
-  const roh = String(pfad).replace(/^`+|`+$/g, "").replace(/\\/g, "/").replace(/\/+$/, "");
+  const roh = String(pfad).replace(/\\/g, "/").replace(/\/+$/, "");
   return plattform === "win32" ? roh.toLowerCase() : roh;
 }
 
-/** Bei Git registrierte Worktrees (`git worktree list --porcelain`) des Repos oder, im Arbeitsplatz, jedes Repos der Config; wirft bei jedem Fehler (Seiteneffekt: Kindprozess `git`). */
-function registrierteWorktrees(config) {
-  const repos = arbeitsplatzAus(config, REPO_WURZEL).repos.map((r) => r.pfad);
-  return repos.flatMap((repo) => {
-    const aus = execFileSync("git", ["-C", repo, "worktree", "list", "--porcelain"], { encoding: "utf8", timeout: 10000, stdio: ["ignore", "pipe", "ignore"], windowsHide: true });
-    return aus.split(/\r?\n/).filter((z) => z.startsWith("worktree ")).map((z) => z.slice("worktree ".length));
-  });
+/** Pfade der `worktree <pfad>`-Zeilen aus der Ausgabe von `git worktree list --porcelain`. Pur. */
+export function worktreePfadeAus(text) {
+  return text.split(/\r?\n/).filter((z) => z.startsWith("worktree ")).map((z) => z.slice("worktree ".length));
+}
+
+/** Bei Git registrierte Worktrees (`git worktree list --porcelain`) des Repos `wurzel` oder, im Arbeitsplatz, jedes Repos der Config; wirft bei jedem Fehler (Seiteneffekt: Kindprozess `git`). */
+export function registrierteWorktrees(config, wurzel = REPO_WURZEL) {
+  const repos = arbeitsplatzAus(config, wurzel).repos.map((r) => r.pfad);
+  return repos.flatMap((repo) => worktreePfadeAus(execFileSync("git", ["-C", repo, "worktree", "list", "--porcelain"], { encoding: "utf8", timeout: 10000, stdio: ["ignore", "pipe", "ignore"], windowsHide: true })));
 }
 
 /** Wert von `Arbeitsverzeichnis:` als Pfad, nur absolut und `<…>/.claude/worktrees/<name>` oder im Arbeitsplatz `…/worktrees/<repo>/<name>` (kein `..`); sonst `null`. Der Feature-Worktree existiert beim Spawn und steht auf demselben HEAD wie der spätere Lens-Worktree. Pur. */
