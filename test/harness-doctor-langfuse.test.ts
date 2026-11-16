@@ -2,7 +2,7 @@
  * "Langfuse nicht erreichbar" (starten) von "MCP-Verbindung der Session getrennt" (neu verbinden). */
 import { describe, expect, test } from "vitest";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
-import { langfusePunkt as raw, repoTagPunkt as rawRepoTag } from "../scripts/harness-doctor-langfuse.mjs";
+import { langfusePunkt as raw, repoTagPunkt as rawRepoTag, pluginScopePunkt as rawPluginScope } from "../scripts/harness-doctor-langfuse.mjs";
 
 interface Ergebnis { punkt: string; ok: boolean; nichtPruefbar?: boolean; befund?: string; fix?: string }
 const punkt = raw as (lf: { status?: number | null; stdout?: string; stderr?: string }) => Ergebnis;
@@ -109,6 +109,34 @@ describe("Repo-Tag-Punkt (repoTagPunkt, factory#523)", () => {
     for (const settingsText of [null, undefined, "kein json", "42", "[]", "null"]) {
       const x = tag({ settingsText, repoName: "mein-repo" });
       expect(x.nichtPruefbar).toBe(true);
+      expect(x.fix).toContain(".claude/settings.json");
+    }
+  });
+});
+
+describe("Plugin-Scope-Punkt (pluginScopePunkt, Sammelzeile L4)", () => {
+  const scope = rawPluginScope as (a: { settingsText?: string | null }) => Ergebnis & { hinweis?: string };
+  const mit = (enabledPlugins: unknown) => scope({ settingsText: JSON.stringify({ enabledPlugins }) });
+  const PLUGIN = "langfuse-observability@langfuse-observability";
+  test("Plugin im Projekt-Scope aus: OK ohne Hinweis", () => {
+    const x = mit({ [PLUGIN]: false });
+    expect(x.ok).toBe(true);
+    expect(x.hinweis).toBeUndefined();
+  });
+  test("Plugin an oder ohne Eintrag: OK mit Hinweis (kein Ticket-Tag an Live-Generations, keine Doppelsendung)", () => {
+    for (const wert of [{ [PLUGIN]: true }, {}, { anderes: false }]) {
+      const x = mit(wert);
+      expect(x.ok, JSON.stringify(wert)).toBe(true);
+      expect(x.hinweis).toContain("enabledPlugins");
+      expect(x.hinweis).toContain(PLUGIN);
+      expect(x.hinweis).toContain("Ticket-Tag");
+    }
+    expect(scope({ settingsText: JSON.stringify({}) }).hinweis).toContain("Ticket-Tag");
+  });
+  test("Settings fehlen oder kein JSON-Objekt, enabledPlugins kein Objekt: nicht prüfbar mit Fix", () => {
+    for (const settingsText of [null, undefined, "kein json", "42", "[]", "null", JSON.stringify({ enabledPlugins: "x" }), JSON.stringify({ enabledPlugins: [] })]) {
+      const x = scope({ settingsText });
+      expect(x.nichtPruefbar, String(settingsText)).toBe(true);
       expect(x.fix).toContain(".claude/settings.json");
     }
   });
