@@ -25,7 +25,7 @@ Der Höchstabstand-Teil der Fortschreibung 0016-314 entfällt in der Fabrik; sei
 - Ein Kosten-Anlass geht an die Analyse (`node scripts/token-analyse-ausloesen.mjs --anlass kosten`), nicht in dieses Ticket.
 
 - `"nur-anlass"` ist für die Fabrik gedacht: die Token-Analyse ist fabrik-eigen. Ein Bezieher, der ihn setzt, verliert die periodische Auswertung ohne Ersatz; der Validator verbietet es nicht (er kennt den Bezieher nicht), der Standard `"takt"` bleibt.
-- Punkt 2: Erreichbarkeit und Hook-/Plugin-Ausfall meldet der Wochenbericht; MCP-Verbindung und lokale Basis-URL prüft kein periodischer Lauf mehr, sie werden beim Probe-Lauf der Erfassung und über die Vorbedingung vor jedem Ticketlauf belegt.
+- Punkt 2: Erreichbarkeit und Hook-/Plugin-Ausfall meldet der Wochenbericht; die MCP-Verbindung belegt die Vorbedingung vor jedem Ticketlauf, Hook-Patch und Plugins der Probe-Lauf der Erfassung; `pending_agent_turns` und die Lokalität der Basis-URL prüft in der Fabrik kein Lauf mehr (bewusst hingenommene Lücke).
 
 ## Folgen
 
