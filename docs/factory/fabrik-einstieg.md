@@ -24,6 +24,8 @@ Alle Variablen der Factory tragen das Präfix `FACTORY_`. Sie sind **optional**:
 | --- | --- | --- | --- |
 | `FACTORY_ABO_KONTINGENT_VERLAUF` | Nutzer | Pfad der Verlaufsdatei des Abo-Kontingents (Standard im Home unter `.claude/state`) | [Modell-Routing](../model-routing.md) |
 | `FACTORY_ABSCHLUSS_SKILL` | Nutzer | privater Abschluss-Skill am Sitzungsende; `aus` schaltet ihn ab, nie in der Projekt-Config | [Harness-Transfer](../harness-transfer.md) |
+| `FACTORY_ANALYSE_ABLAGE` | Nutzer | Ordner der Analyse-Schnappschüsse außerhalb von Repo, Worktrees und Bezieher-Checkouts (nie committet; nur Fabrik) | [Sicherheit der Agenten](../sicherheit-agenten.md) |
+| `FACTORY_ANALYSE_FREIGABE` | Nutzer | Datei außerhalb des Repos mit den Pfaden freigegebener Bezieher-Checkouts für die Token-Analyse (nie committet; nur Fabrik) | [Sicherheit der Agenten](../sicherheit-agenten.md) |
 | `FACTORY_BASIS_REF` | CI | Basis-Branch der Pull-Request-CI für die Basis-Nachlauf-Prüfung | [Erstbezug](../erstbezug.md) |
 | `FACTORY_COVERAGE` | CI | schaltet die Coverage-Instrumentierung ein (lokal bleibt `verify` uninstrumentiert) | [FAQ](../agent-harness-faq.md) |
 | `FACTORY_DIFF_BASE` | Nutzer | Basis für Diff-Gates, sonst Merge-Base mit `origin/main` | [Harness-Transfer](../harness-transfer.md) |
