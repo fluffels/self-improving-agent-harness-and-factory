@@ -58,6 +58,14 @@ describe("zusatzpassKopfAus", () => {
     assert.equal(zusatzpassKopfAus(`Zusatzpass: doku:P · Entscheidung: A, weil ${" ".repeat(3000)}`), null); // 3000 statt 50000: ein Rückfall auf kubische Laufzeit wird rot statt zu hängen
     assert.ok(Date.now() - start < 1000);
   });
+  test("Brille als Schlüssel oder Anzeigename (Groß-/Kleinschreibung, Umlaut-Umschrift tolerant)", () => {
+    for (const b of ["test-adaequanz", "Test-Adäquanz", "TEST-ADAEQUANZ", "Architektur", "Requirement-Treue", "Doku"]) {
+      assert.ok(zusatzpassKopfAus(`Zusatzpass: ${b}:P1 · Entscheidung: A, weil B`), b);
+      assert.equal(deny(kopf("r4-architektur", ` · Zusatzpass: ${b}:P1 · Entscheidung: A, weil B`)), null, b);
+    }
+    assert.equal(zusatzpassKopfAus("Zusatzpass: Test-Adäquanz:P1 · Entscheidung: A, weil B")?.brille, "test-adaequanz");
+    assert.equal(zusatzpassKopfAus("Zusatzpass: Unbekannt:P1 · Entscheidung: A, weil B"), null);
+  });
   test("Trenner: `·` ohne Leerzeichen gilt, „weil“ ohne Leerzeichen dahinter nicht", () => {
     assert.equal(zusatzpassKopfAus("Zusatzpass: doku:P·Entscheidung: A, weil B")?.weil, "B");
     assert.equal(zusatzpassKopfAus("Zusatzpass: doku:P · Entscheidung: A, weilB"), null);

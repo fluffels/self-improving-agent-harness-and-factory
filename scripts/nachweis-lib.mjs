@@ -83,8 +83,9 @@ export function zusatzpassKopfAus(prompt) {
   const treffer = [...String(prompt ?? "").matchAll(/(?<![\w-])Zusatzpass:[ \t]*([^\r\n]*)/g)];
   const wert = treffer.length > 0 ? treffer[treffer.length - 1][1] : "";
   const t = /^([^\s:·]+):([^·]*)·[ \t]*Entscheidung:[ \t]*(.+?),[ \t]*weil[ \t]+(.*)$/.exec(wert);
-  if (!t || !BEKANNTE_LENSES.includes(t[1]) || [t[2], t[3], t[4]].some(istLeererWert)) return null; // Werte getrimmt; kein überlappender Quantor (linear, auch bei langen Leerzeichen-Läufen)
-  return { brille: t[1], pruefpunkt: t[2].trim(), entscheidung: t[3].trim(), weil: t[4].trim() };
+  const brille = t ? normalisiereLens(t[1]) : ""; // Schlüssel oder Anzeigename (`Test-Adäquanz` ≙ `test-adaequanz`)
+  if (!t || !BEKANNTE_LENSES.includes(brille) || [t[2], t[3], t[4]].some(istLeererWert)) return null; // Werte getrimmt; kein überlappender Quantor (linear, auch bei langen Leerzeichen-Läufen)
+  return { brille, pruefpunkt: t[2].trim(), entscheidung: t[3].trim(), weil: t[4].trim() };
 }
 
 function lastLine(text, key) {
