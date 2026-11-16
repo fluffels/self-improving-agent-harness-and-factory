@@ -56,6 +56,7 @@
   },
   {
     "id": "token-analyse-budget-576",
+    "art": "frist",
     "faellig": "2026-12-16",
     "titel": "Budget der Token-Analyse nach dem ersten echten Lauf setzen (factory#518, factory#576)",
     "text": "Das Budget `BUDGET_USD` in `.agents/skills/token-analyse/SKILL.md` ist ein konservativer Startwert (Lücke: Basis fehlt: die Analyse vom 2026-11-15 war in Langfuse nicht eindeutig auffindbar). Nach dem ersten echten Lauf aus dessen Langfuse-Kosten setzen (Summe der Session samt Subagenten mal 1,25, auf ganze 5 Dollar aufgerundet), Quellzeile ergänzen und diese Wiedervorlage löschen. Gab es bis dahin keinen Lauf: faellig verschieben."
