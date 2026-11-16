@@ -45,6 +45,10 @@ describe("istAnalyseTicket", () => {
     expect(lib.istAnalyseTicket({ title: "Token-Analyse 8/9: Auslöser (factory#518)", body: "der Titelmarker `💸 Token-Analyse` und `<!-- token-analyse -->` im Text" })).toBe(false);
   });
   it("ohne Daten false", () => expect(lib.istAnalyseTicket({})).toBe(false));
+  it("Marker am Zeilenende oder mit Folgetext zählt nicht (beide Anker)", () => {
+    expect(lib.istAnalyseTicket({ title: "x", body: `text ${lib.BODY_MARKER}` })).toBe(false);
+    expect(lib.istAnalyseTicket({ title: "x", body: `${lib.BODY_MARKER} text` })).toBe(false);
+  });
 });
 
 describe("planeAusloesung", () => {
@@ -120,6 +124,13 @@ describe("Monatstakt", () => {
     expect(lib.anstehenderTakt(e)?.id).toBe("token-analyse-2026-12");
     expect(lib.anstehenderTakt([{ id: "token-analyse-budget-576", art: "analyse-takt" }])).toBeNull();
   });
+  it("nur art analyse-takt mit exakter id zählt als Takt", () => {
+    const fremdeArt = { ...TAKT, id: "token-analyse-2026-11", art: "frist" };
+    const langeId = { ...TAKT, id: "token-analyse-2026-12-x" };
+    const vorneId = { ...TAKT, id: "x-token-analyse-2026-10" };
+    expect(lib.anstehenderTakt([fremdeArt, langeId, vorneId])).toBeNull();
+    expect(lib.fortschreiben([fremdeArt, langeId, vorneId], "2026-12-15").map((e) => e.id)).toEqual(["token-analyse-2026-11", "token-analyse-2026-12-x", "x-token-analyse-2026-10", "token-analyse-2027-01"]);
+  });
   it("plusEinMonat kürzt auf Monatsende und wechselt das Jahr", () => {
     expect(lib.plusEinMonat("2026-12-15")).toBe("2027-01-15");
     expect(lib.plusEinMonat("2027-01-31")).toBe("2027-02-28");
@@ -160,6 +171,8 @@ describe("parseArgs", () => {
     expect(cli.parseArgs(["--fortschreiben", "--heute", "2026-13-01"]).fehler).toContain("Datum");
     expect(cli.parseArgs(["--anlass", "manuell", "--heute", "2026-12-15"]).fehler).toContain("--fortschreiben");
     expect(cli.parseArgs(["--anlass", "manuell", "--bogus"]).fehler).toBeTruthy();
+    expect(cli.parseArgs(["--fortschreiben", "--grund", "g"]).fehler).toBeTruthy();
+    expect(cli.parseArgs(["--fortschreiben", "--dry-run"]).fehler).toBeTruthy();
   });
 });
 
@@ -222,7 +235,21 @@ describe("Einstieg über Nähte", () => {
     expect(cli.main(["--anlass", "kosten", "--grund", "#516"], n.deps)).toBe(0);
     expect(n.aufrufe.map((a) => a.slice(0, 2).join(" "))).toEqual(["issue comment"]);
     expect(n.aufrufe[0].join(" ")).toContain("kosten");
+    expect(n.aufrufe[0].join(" ")).toContain("#516");
+    expect(n.aufrufe[0].join(" ")).not.toContain("Weitere offene");
     expect(n.platziert).toEqual([]);
+  });
+  it("ohne Takt-Eintrag legt der Lauf trotzdem an und warnt", () => {
+    const n = naehte([], []);
+    expect(cli.main(["--anlass", "manuell"], n.deps)).toBe(0);
+    expect(n.log.join("\n")).toContain("::warning::");
+    expect(n.aufrufe[0].slice(0, 2)).toEqual(["issue", "create"]);
+  });
+  it("--fortschreiben --heute rechnet ab dem übergebenen Tag", () => {
+    const n = naehte([]);
+    expect(cli.main(["--fortschreiben", "--heute", "2027-01-31"], n.deps)).toBe(0);
+    const takt = n.gespeichert()?.find((e) => e.id.startsWith("token-analyse-"));
+    expect(takt).toMatchObject({ id: "token-analyse-2027-02", faellig: "2027-02-28" });
   });
   it("offenes Ticket ohne Titelmarker: erst Titel setzen, dann kommentieren", () => {
     const n = naehte([{ number: 9, title: "Analyse jetzt", body: "<!-- token-analyse -->" }]);
