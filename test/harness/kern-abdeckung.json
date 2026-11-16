@@ -91,6 +91,14 @@
     "art": "projekt",
     "grund": "Fabrik-eigene Wirkungsprüfung des Änderungsregisters (factory#572), nicht im Besitz-Manifest"
   },
+  "scripts/regel-verfall.mjs": {
+    "art": "projekt",
+    "grund": "Fabrik-eigener Regel-Verfall (Kandidaten und Generator, factory#608), nicht im Besitz-Manifest"
+  },
+  "scripts/regel-verfall-lib.mjs": {
+    "art": "projekt",
+    "grund": "Fabrik-eigene Regel-Verfall-Logik und Sicherheits-Ausnahmeliste (factory#608), nicht im Besitz-Manifest"
+  },
   ".agents/skills/token-analyse/SKILL.md": {
     "art": "projekt",
     "grund": "Fabrik-eigene Token-Analyse (factory#518), nicht im Besitz-Manifest"

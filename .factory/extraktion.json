@@ -1267,6 +1267,11 @@
       "grund": "Prüft das Änderungsregister der Fabrik (.github/aenderungsregister.json, nicht im Besitz)"
     },
     {
+      "muster": "test/harness/regel-verfall.test.ts",
+      "art": "projekt-test",
+      "grund": "Prüft Verfall-Manifest und Sicherheits-Ausnahmeliste der Fabrik (factory#608, nicht im Besitz)"
+    },
+    {
       "muster": "test/aenderungsregister.test.ts",
       "art": "projekt-test",
       "grund": "Prüft die Wirkungsprüfung der Fabrik (scripts/aenderungsregister.mjs, nicht im Besitz, factory#572)"

@@ -464,6 +464,1510 @@
       "durch": [
         "verfall-token-budget-regel"
       ]
+    },
+    {
+      "id": "verfall-adr-fortschreibung",
+      "art": "verfall",
+      "ziel": "test/harness/adr-fortschreibung.test.ts",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2026-12-16",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-aenderungsregister",
+      "art": "verfall",
+      "ziel": "test/harness/aenderungsregister.test.ts",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2026-12-16",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-agents-bloecke",
+      "art": "verfall",
+      "ziel": "test/harness/agents-bloecke.test.ts",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2026-12-16",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-agents-md-native",
+      "art": "verfall",
+      "ziel": "test/harness/agents-md-native.test.ts",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2026-12-16",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-arbeitsplatz-aufraeumen",
+      "art": "verfall",
+      "ziel": "test/harness/arbeitsplatz-aufraeumen.test.ts",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2026-12-16",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-arbeitsplatz-guards",
+      "art": "verfall",
+      "ziel": "test/harness/arbeitsplatz-guards.test.ts",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2026-12-16",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-arbeitsplatz",
+      "art": "verfall",
+      "ziel": "test/harness/arbeitsplatz.test.ts",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2026-12-16",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-bash-parser",
+      "art": "verfall",
+      "ziel": "test/harness/bash-parser.test.ts",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2026-12-16",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-befund-zeile",
+      "art": "verfall",
+      "ziel": "test/harness/befund-zeile.test.ts",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2026-12-16",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-berechtigungen-kern",
+      "art": "verfall",
+      "ziel": "test/harness/berechtigungen-kern.test.ts",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2026-12-16",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-besitz-abschnittsverweise",
+      "art": "verfall",
+      "ziel": "test/harness/besitz-abschnittsverweise.test.ts",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2026-12-16",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-besitz-anker",
+      "art": "verfall",
+      "ziel": "test/harness/besitz-anker.test.ts",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2026-12-16",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-besitz-verweise",
+      "art": "verfall",
+      "ziel": "test/harness/besitz-verweise.test.ts",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2026-12-16",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-blatt-importe",
+      "art": "verfall",
+      "ziel": "test/harness/blatt-importe.test.ts",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2026-12-16",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-check-doku-pflicht",
+      "art": "verfall",
+      "ziel": "test/harness/check-doku-pflicht.test.ts",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2026-12-16",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-claims-pruefen",
+      "art": "verfall",
+      "ziel": "test/harness/claims-pruefen.test.ts",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2026-12-16",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-cleanup-worktrees",
+      "art": "verfall",
+      "ziel": "test/harness/cleanup-worktrees.test.ts",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2026-12-16",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-cockpit-lesend",
+      "art": "verfall",
+      "ziel": "test/harness/cockpit-lesend.test.ts",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2026-12-16",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-codex-belege",
+      "art": "verfall",
+      "ziel": "test/harness/codex-belege.test.ts",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2026-12-16",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-codex-freigaben",
+      "art": "verfall",
+      "ziel": "test/harness/codex-freigaben.test.ts",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2026-12-16",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-codex-hook",
+      "art": "verfall",
+      "ziel": "test/harness/codex-hook.test.ts",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2026-12-16",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-codex-probe-auswertung",
+      "art": "verfall",
+      "ziel": "test/harness/codex-probe-auswertung.test.ts",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2026-12-16",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-codex-probe",
+      "art": "verfall",
+      "ziel": "test/harness/codex-probe.test.ts",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2026-12-16",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-codex-setup",
+      "art": "verfall",
+      "ziel": "test/harness/codex-setup.test.ts",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2026-12-16",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-codex-vorpruefung",
+      "art": "verfall",
+      "ziel": "test/harness/codex-vorpruefung.test.ts",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2026-12-16",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-complexity-gate",
+      "art": "verfall",
+      "ziel": "test/harness/complexity-gate.test.ts",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2026-12-16",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-conditional-expect-gate",
+      "art": "verfall",
+      "ziel": "test/harness/conditional-expect-gate.test.ts",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2026-12-16",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-dependabot-inbox-board-prio",
+      "art": "verfall",
+      "ziel": "test/harness/dependabot-inbox-board-prio.test.ts",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2026-12-16",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-dependabot-oekosysteme",
+      "art": "verfall",
+      "ziel": "test/harness/dependabot-oekosysteme.test.ts",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2026-12-16",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-diffbasis",
+      "art": "verfall",
+      "ziel": "test/harness/diffbasis.test.ts",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2026-12-16",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-direktaufruf",
+      "art": "verfall",
+      "ziel": "test/harness/direktaufruf.test.ts",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2026-12-16",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-einstieg-importe",
+      "art": "verfall",
+      "ziel": "test/harness/einstieg-importe.test.ts",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2026-12-16",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-entfernte-pfade",
+      "art": "verfall",
+      "ziel": "test/harness/entfernte-pfade.test.ts",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2026-12-16",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-eslint-worktrees-ignore",
+      "art": "verfall",
+      "ziel": "test/harness/eslint-worktrees-ignore.test.ts",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2026-12-16",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-extraktion-einordnung",
+      "art": "verfall",
+      "ziel": "test/harness/extraktion-einordnung.test.ts",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2026-12-16",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-fabrik-eigen-analyse",
+      "art": "verfall",
+      "ziel": "test/harness/fabrik-eigen-analyse.test.ts",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2026-12-16",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-fabrik-einstieg",
+      "art": "verfall",
+      "ziel": "test/harness/fabrik-einstieg.test.ts",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2026-12-16",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-factory-links",
+      "art": "verfall",
+      "ziel": "test/harness/factory-links.test.ts",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2026-12-16",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-factory-seite",
+      "art": "verfall",
+      "ziel": "test/harness/factory-seite.test.ts",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2026-12-16",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-factory-seiten",
+      "art": "verfall",
+      "ziel": "test/harness/factory-seiten.test.ts",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2026-12-16",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-factory-update-board-prio",
+      "art": "verfall",
+      "ziel": "test/harness/factory-update-board-prio.test.ts",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2026-12-16",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-fence-ssot",
+      "art": "verfall",
+      "ziel": "test/harness/fence-ssot.test.ts",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2026-12-16",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-flag-parser",
+      "art": "verfall",
+      "ziel": "test/harness/flag-parser.test.ts",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2026-12-16",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-fremd-config-probe",
+      "art": "verfall",
+      "ziel": "test/harness/fremd-config-probe.test.ts",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2026-12-16",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-fremdtext-gate",
+      "art": "verfall",
+      "ziel": "test/harness/fremdtext-gate.test.ts",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2026-12-16",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-gate-befehle-texte",
+      "art": "verfall",
+      "ziel": "test/harness/gate-befehle-texte.test.ts",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2026-12-16",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-gh-cli",
+      "art": "verfall",
+      "ziel": "test/harness/gh-cli.test.ts",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2026-12-16",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-gh-guard-anlege-sperre",
+      "art": "verfall",
+      "ziel": "test/harness/gh-guard-anlege-sperre.test.ts",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2026-12-16",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-gh-guard-dialekt",
+      "art": "verfall",
+      "ziel": "test/harness/gh-guard-dialekt.test.ts",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2026-12-16",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-gh-guard-grenzen",
+      "art": "verfall",
+      "ziel": "test/harness/gh-guard-grenzen.test.ts",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2026-12-16",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-gh-guard-heredoc",
+      "art": "verfall",
+      "ziel": "test/harness/gh-guard-heredoc.test.ts",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2026-12-16",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-gh-guard-praefixe",
+      "art": "verfall",
+      "ziel": "test/harness/gh-guard-praefixe.test.ts",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2026-12-16",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-gh-guard-stellen",
+      "art": "verfall",
+      "ziel": "test/harness/gh-guard-stellen.test.ts",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2026-12-16",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-gh-guard-umwege",
+      "art": "verfall",
+      "ziel": "test/harness/gh-guard-umwege.test.ts",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2026-12-16",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-gh-guard-unterbefehle",
+      "art": "verfall",
+      "ziel": "test/harness/gh-guard-unterbefehle.test.ts",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2026-12-16",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-gh-guard",
+      "art": "verfall",
+      "ziel": "test/harness/gh-guard.test.ts",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2026-12-16",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-gh-list-limit",
+      "art": "verfall",
+      "ziel": "test/harness/gh-list-limit.test.ts",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2026-12-16",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-git-host-liste",
+      "art": "verfall",
+      "ziel": "test/harness/git-host-liste.test.ts",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2026-12-16",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-glossar-abgleich",
+      "art": "verfall",
+      "ziel": "test/harness/glossar-abgleich.test.ts",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2026-12-16",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-gruppen-stopp",
+      "art": "verfall",
+      "ziel": "test/harness/gruppen-stopp.test.ts",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2026-12-16",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-harness-approval",
+      "art": "verfall",
+      "ziel": "test/harness/harness-approval.test.ts",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2026-12-16",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-harness-befunde-melden",
+      "art": "verfall",
+      "ziel": "test/harness/harness-befunde-melden.test.ts",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2026-12-16",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-harness-doctor-voraussetzungen",
+      "art": "verfall",
+      "ziel": "test/harness/harness-doctor-voraussetzungen.test.ts",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2026-12-16",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-harness-inventar",
+      "art": "verfall",
+      "ziel": "test/harness/harness-inventar.test.ts",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2026-12-16",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-haupt-sync",
+      "art": "verfall",
+      "ziel": "test/harness/haupt-sync.test.ts",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2026-12-16",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-holdout-guard",
+      "art": "verfall",
+      "ziel": "test/harness/holdout-guard.test.ts",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2026-12-16",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-holdout",
+      "art": "verfall",
+      "ziel": "test/harness/holdout.test.ts",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2026-12-16",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-kern-links",
+      "art": "verfall",
+      "ziel": "test/harness/kern-links.test.ts",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2026-12-16",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-kern-reinheit",
+      "art": "verfall",
+      "ziel": "test/harness/kern-reinheit.test.ts",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2026-12-16",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-komplexitaet-ausmass",
+      "art": "verfall",
+      "ziel": "test/harness/komplexitaet-ausmass.test.ts",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2026-12-16",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-kontext-sockel",
+      "art": "verfall",
+      "ziel": "test/harness/kontext-sockel.test.ts",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2026-12-16",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-kopf-items-doku",
+      "art": "verfall",
+      "ziel": "test/harness/kopf-items-doku.test.ts",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2026-12-16",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-label-config",
+      "art": "verfall",
+      "ziel": "test/harness/label-config.test.ts",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2026-12-16",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-langfuse-abgleich-hook",
+      "art": "verfall",
+      "ziel": "test/harness/langfuse-abgleich-hook.test.ts",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2026-12-16",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-langfuse-abgleich",
+      "art": "verfall",
+      "ziel": "test/harness/langfuse-abgleich.test.ts",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2026-12-16",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-langfuse-auftrag",
+      "art": "verfall",
+      "ziel": "test/harness/langfuse-auftrag.test.ts",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2026-12-16",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-langfuse-erfassung",
+      "art": "verfall",
+      "ziel": "test/harness/langfuse-erfassung.test.ts",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2026-12-16",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-langfuse-nachliefer-entscheidung",
+      "art": "verfall",
+      "ziel": "test/harness/langfuse-nachliefer-entscheidung.test.ts",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2026-12-16",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-langfuse-nachliefern",
+      "art": "verfall",
+      "ziel": "test/harness/langfuse-nachliefern.test.ts",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2026-12-16",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-langfuse-vorbedingung",
+      "art": "verfall",
+      "ziel": "test/harness/langfuse-vorbedingung.test.ts",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2026-12-16",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-langfuse-zugang",
+      "art": "verfall",
+      "ziel": "test/harness/langfuse-zugang.test.ts",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2026-12-16",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-laufzeit-vertraege",
+      "art": "verfall",
+      "ziel": "test/harness/laufzeit-vertraege.test.ts",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2026-12-16",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-lebenszyklus-namen",
+      "art": "verfall",
+      "ziel": "test/harness/lebenszyklus-namen.test.ts",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2026-12-16",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-lens-abgleich",
+      "art": "verfall",
+      "ziel": "test/harness/lens-abgleich.test.ts",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2026-12-16",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-lens-edit-guard",
+      "art": "verfall",
+      "ziel": "test/harness/lens-edit-guard.test.ts",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2026-12-16",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-line-endings",
+      "art": "verfall",
+      "ziel": "test/harness/line-endings.test.ts",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2026-12-16",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-lint-leerraum",
+      "art": "verfall",
+      "ziel": "test/harness/lint-leerraum.test.ts",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2026-12-16",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-mcp-ausfall",
+      "art": "verfall",
+      "ziel": "test/harness/mcp-ausfall.test.ts",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2026-12-16",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-mcp-log-lib",
+      "art": "verfall",
+      "ziel": "test/harness/mcp-log-lib.test.ts",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2026-12-16",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-model-routing",
+      "art": "verfall",
+      "ziel": "test/harness/model-routing.test.ts",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2026-12-16",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-nach-merge-kriterium",
+      "art": "verfall",
+      "ziel": "test/harness/nach-merge-kriterium.test.ts",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2026-12-16",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-platzhalter-regel",
+      "art": "verfall",
+      "ziel": "test/harness/platzhalter-regel.test.ts",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2026-12-16",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-prepush-hook",
+      "art": "verfall",
+      "ziel": "test/harness/prepush-hook.test.ts",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2026-12-16",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-pretooluse-hook",
+      "art": "verfall",
+      "ziel": "test/harness/pretooluse-hook.test.ts",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2026-12-16",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-projekt-config-workflows",
+      "art": "verfall",
+      "ziel": "test/harness/projekt-config-workflows.test.ts",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2026-12-16",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-projektwert-stellen",
+      "art": "verfall",
+      "ziel": "test/harness/projektwert-stellen.test.ts",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2026-12-16",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-quote-folge",
+      "art": "verfall",
+      "ziel": "test/harness/quote-folge.test.ts",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2026-12-16",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-regex-escape",
+      "art": "verfall",
+      "ziel": "test/harness/regex-escape.test.ts",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2026-12-16",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-regex-helfer",
+      "art": "verfall",
+      "ziel": "test/harness/regex-helfer.test.ts",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2026-12-16",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-repo-tag-fabrik",
+      "art": "verfall",
+      "ziel": "test/harness/repo-tag-fabrik.test.ts",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2026-12-16",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-repo-texte",
+      "art": "verfall",
+      "ziel": "test/harness/repo-texte.test.ts",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2026-12-16",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-required-check-shadowing",
+      "art": "verfall",
+      "ziel": "test/harness/required-check-shadowing.test.ts",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2026-12-16",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-review-context",
+      "art": "verfall",
+      "ziel": "test/harness/review-context.test.ts",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2026-12-16",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-review-runden-abgleich",
+      "art": "verfall",
+      "ziel": "test/harness/review-runden-abgleich.test.ts",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2026-12-16",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-review-staffel",
+      "art": "verfall",
+      "ziel": "test/harness/review-staffel.test.ts",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2026-12-16",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-risiko-fabrik",
+      "art": "verfall",
+      "ziel": "test/harness/risiko-fabrik.test.ts",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2026-12-16",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-rollen-schalter",
+      "art": "verfall",
+      "ziel": "test/harness/rollen-schalter.test.ts",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2026-12-16",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-sammelticket-deckel",
+      "art": "verfall",
+      "ziel": "test/harness/sammelticket-deckel.test.ts",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2026-12-16",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-sammelticket-verdrahtung",
+      "art": "verfall",
+      "ziel": "test/harness/sammelticket-verdrahtung.test.ts",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2026-12-16",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-sammelticket",
+      "art": "verfall",
+      "ziel": "test/harness/sammelticket.test.ts",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2026-12-16",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-sandbox-settings",
+      "art": "verfall",
+      "ziel": "test/harness/sandbox-settings.test.ts",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2026-12-16",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-selbstbeschreibung",
+      "art": "verfall",
+      "ziel": "test/harness/selbstbeschreibung.test.ts",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2026-12-16",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-settings-permissions",
+      "art": "verfall",
+      "ziel": "test/harness/settings-permissions.test.ts",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2026-12-16",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-settings-powershell-zwilling",
+      "art": "verfall",
+      "ziel": "test/harness/settings-powershell-zwilling.test.ts",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2026-12-16",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-sitzungsabschluss",
+      "art": "verfall",
+      "ziel": "test/harness/sitzungsabschluss.test.ts",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2026-12-16",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-skill-pfade",
+      "art": "verfall",
+      "ziel": "test/harness/skill-pfade.test.ts",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2026-12-16",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-skills-sync",
+      "art": "verfall",
+      "ziel": "test/harness/skills-sync.test.ts",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2026-12-16",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-skript-laufzeiten",
+      "art": "verfall",
+      "ziel": "test/harness/skript-laufzeiten.test.ts",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2026-12-16",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-stdin-skript-guard",
+      "art": "verfall",
+      "ziel": "test/harness/stdin-skript-guard.test.ts",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2026-12-16",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-stop-verify-hook",
+      "art": "verfall",
+      "ziel": "test/harness/stop-verify-hook.test.ts",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2026-12-16",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-test-umgebung",
+      "art": "verfall",
+      "ziel": "test/harness/test-umgebung.test.ts",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2026-12-16",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-ticket-ablauf",
+      "art": "verfall",
+      "ziel": "test/harness/ticket-ablauf.test.ts",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2026-12-16",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-ticket-lock-lebenszeichen",
+      "art": "verfall",
+      "ziel": "test/harness/ticket-lock-lebenszeichen.test.ts",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2026-12-16",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-ticket-lock",
+      "art": "verfall",
+      "ziel": "test/harness/ticket-lock.test.ts",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2026-12-16",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-ticket-namen",
+      "art": "verfall",
+      "ziel": "test/harness/ticket-namen.test.ts",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2026-12-16",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-token-analyse-notfall",
+      "art": "verfall",
+      "ziel": "test/harness/token-analyse-notfall.test.ts",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2026-12-16",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-token-analyse-skill",
+      "art": "verfall",
+      "ziel": "test/harness/token-analyse-skill.test.ts",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2026-12-16",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-token-baseline",
+      "art": "verfall",
+      "ziel": "test/harness/token-baseline.test.ts",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2026-12-16",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-umgebungsvariablen-inventar",
+      "art": "verfall",
+      "ziel": "test/harness/umgebungsvariablen-inventar.test.ts",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2026-12-16",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-umlaut-regel",
+      "art": "verfall",
+      "ziel": "test/harness/umlaut-regel.test.ts",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2026-12-16",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-umsetzer-abschluss",
+      "art": "verfall",
+      "ziel": "test/harness/umsetzer-abschluss.test.ts",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2026-12-16",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-verify-script",
+      "art": "verfall",
+      "ziel": "test/harness/verify-script.test.ts",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2026-12-16",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-werkzeug-vorpruefung",
+      "art": "verfall",
+      "ziel": "test/harness/werkzeug-vorpruefung.test.ts",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2026-12-16",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-wiedervorlagen-art",
+      "art": "verfall",
+      "ziel": "test/harness/wiedervorlagen-art.test.ts",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2026-12-16",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-worktree-guard-alias",
+      "art": "verfall",
+      "ziel": "test/harness/worktree-guard-alias.test.ts",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2026-12-16",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-worktree-guard-grenzen",
+      "art": "verfall",
+      "ziel": "test/harness/worktree-guard-grenzen.test.ts",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2026-12-16",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-worktree-guard-powershell",
+      "art": "verfall",
+      "ziel": "test/harness/worktree-guard-powershell.test.ts",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2026-12-16",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-worktree-guard",
+      "art": "verfall",
+      "ziel": "test/harness/worktree-guard.test.ts",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2026-12-16",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-worktree-npmci",
+      "art": "verfall",
+      "ziel": "test/harness/worktree-npmci.test.ts",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2026-12-16",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-agents-eine-root-kontextdatei",
+      "art": "verfall",
+      "ziel": "AGENTS.md#eine-root-kontextdatei",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2026-12-16",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-agents-wiederkehrende-ablaufe",
+      "art": "verfall",
+      "ziel": "AGENTS.md#wiederkehrende-abläufe",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2026-12-16",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-agents-codex-einstieg-factory79",
+      "art": "verfall",
+      "ziel": "AGENTS.md#codex-einstieg-factory79",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2026-12-16",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-agents-human-in-the-loop-checkpoints-die-entsch",
+      "art": "verfall",
+      "ziel": "AGENTS.md#human-in-the-loop-checkpoints--die-entscheidung-gaten-nicht-den-ganzen-lauf",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2026-12-16",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-agents-mehr-perspektiven-review-vor-dem-merge-q",
+      "art": "verfall",
+      "ziel": "AGENTS.md#mehr-perspektiven-review-vor-dem-merge-quellprojekt1012--kein-self-grading",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2026-12-16",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-agents-festgefahren-protokoll-begrenzte-fix-ver",
+      "art": "verfall",
+      "ziel": "AGENTS.md#festgefahren-protokoll-begrenzte-fix-versuche",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2026-12-16",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-agents-anonymitat-wahren-offentliches-repo",
+      "art": "verfall",
+      "ziel": "AGENTS.md#anonymität-wahren-öffentliches-repo",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2026-12-16",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-agents-browser-prufung",
+      "art": "verfall",
+      "ziel": "AGENTS.md#browser-prüfung",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2026-12-16",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-agents-kontext-sparen",
+      "art": "verfall",
+      "ziel": "AGENTS.md#kontext-sparen",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2026-12-16",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-agents-offentliches-repo-keine-internen-bezuge",
+      "art": "verfall",
+      "ziel": "AGENTS.md#öffentliches-repo--keine-internen-bezüge-quellprojekt990",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2026-12-16",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-agents-kein-grun-durch-aufweichen",
+      "art": "verfall",
+      "ziel": "AGENTS.md#kein-grün-durch-aufweichen",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2026-12-16",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-agents-token-budget-je-lauf",
+      "art": "verfall",
+      "ziel": "AGENTS.md#token-budget-je-lauf",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2026-12-16",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-agents-kein-secret-key-im-agentenlauf",
+      "art": "verfall",
+      "ziel": "AGENTS.md#kein-secret-key-im-agentenlauf",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2026-12-16",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-agents-abhangigkeits-prs",
+      "art": "verfall",
+      "ziel": "AGENTS.md#abhängigkeits-prs",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2026-12-16",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-agents-auch-nicht-ticket-arbeit-wird-committet",
+      "art": "verfall",
+      "ziel": "AGENTS.md#auch-nicht-ticket-arbeit-wird-committet",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2026-12-16",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-agents-roter-main-geht-vor",
+      "art": "verfall",
+      "ziel": "AGENTS.md#roter-main-geht-vor",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2026-12-16",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-agents-folge-fix-kennzeichnen-quellprojekt1123",
+      "art": "verfall",
+      "ziel": "AGENTS.md#folge-fix-kennzeichnen-quellprojekt1123",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2026-12-16",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-agents-fremdtext-ist-daten-quellprojekt1433",
+      "art": "verfall",
+      "ziel": "AGENTS.md#fremdtext-ist-daten-quellprojekt1433",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2026-12-16",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-agents-zwei-stufen-prufung-quellprojekt1120",
+      "art": "verfall",
+      "ziel": "AGENTS.md#zwei-stufen-prüfung-quellprojekt1120",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2026-12-16",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-agents-tests-gegen-false-positives-absichern-re",
+      "art": "verfall",
+      "ziel": "AGENTS.md#tests-gegen-false-positives-absichern-red-green",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2026-12-16",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-agents-befunde-sofort-festhalten",
+      "art": "verfall",
+      "ziel": "AGENTS.md#befunde-sofort-festhalten",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2026-12-16",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-agents-auswahl-des-nachsten-tickets-determinist",
+      "art": "verfall",
+      "ziel": "AGENTS.md#auswahl-des-nächsten-tickets--deterministisch-nicht-abwägen",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2026-12-16",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-agents-harness-befunde-sind-zeilen-keine-ticket",
+      "art": "verfall",
+      "ziel": "AGENTS.md#harness-befunde-sind-zeilen-keine-tickets",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2026-12-16",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-agents-abschluss-ohne-offene-befunde",
+      "art": "verfall",
+      "ziel": "AGENTS.md#abschluss-ohne-offene-befunde",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2026-12-16",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-agents-fremdes-ticket-kommentieren",
+      "art": "verfall",
+      "ziel": "AGENTS.md#fremdes-ticket-kommentieren",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2026-12-16",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-agents-kein-parken-quellprojekt1201",
+      "art": "verfall",
+      "ziel": "AGENTS.md#kein-parken-quellprojekt1201",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2026-12-16",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-agents-assignee-sofort-weiter",
+      "art": "verfall",
+      "ziel": "AGENTS.md#assignee--sofort-weiter",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2026-12-16",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-agents-beim-start-erst-node-scriptsticket-lockm",
+      "art": "verfall",
+      "ziel": "AGENTS.md#beim-start-erst-node-scriptsticket-lockmjs-claim-nr-exit-4-nächstes-item-dann-sofort-self-assignen",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2026-12-16",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-agents-eigener-worktree-von-frisch-geholtem-ori",
+      "art": "verfall",
+      "ziel": "AGENTS.md#eigener-worktree-von-frisch-geholtem-originmain",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2026-12-16",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-agents-assignee-ist-kein-atomares-lock",
+      "art": "verfall",
+      "ziel": "AGENTS.md#assignee-ist-kein-atomares-lock",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2026-12-16",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-agents-worktree-entfernen-auf-windows-drei-punk",
+      "art": "verfall",
+      "ziel": "AGENTS.md#worktree-entfernen-auf-windows--drei-punkte",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2026-12-16",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-agents-pr-gegated-ein-pr-pro-ticket",
+      "art": "verfall",
+      "ziel": "AGENTS.md#pr-gegated-ein-pr-pro-ticket",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2026-12-16",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-agents-projekt-stopps",
+      "art": "verfall",
+      "ziel": "AGENTS.md#projekt-stopps",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2026-12-16",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-agents-fabrik-ohne-zugriff-auf-bezieher-factory",
+      "art": "verfall",
+      "ziel": "AGENTS.md#fabrik-ohne-zugriff-auf-bezieher-factory162-adr-0031",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2026-12-16",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-agents-harness-sammelticket-anlegen-factory221",
+      "art": "verfall",
+      "ziel": "AGENTS.md#harness-sammelticket-anlegen-factory221",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2026-12-16",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-agents-kern-text-ohne-bezieher-fremde-npm-skrip",
+      "art": "verfall",
+      "ziel": "AGENTS.md#kern-text-ohne-bezieher-fremde-npm-skripte-factory177",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2026-12-16",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-agents-ticketnummern-mit-herkunft-factory95",
+      "art": "verfall",
+      "ziel": "AGENTS.md#ticketnummern-mit-herkunft-factory95",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2026-12-16",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-agents-lint-muss-grun-bleiben",
+      "art": "verfall",
+      "ziel": "AGENTS.md#lint-muss-grün-bleiben",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2026-12-16",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-agents-komplexitat-je-funktion",
+      "art": "verfall",
+      "ziel": "AGENTS.md#komplexität-je-funktion",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2026-12-16",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-agents-slice-grosse",
+      "art": "verfall",
+      "ziel": "AGENTS.md#slice-größe",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2026-12-16",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-agents-doku-pflicht-factory604",
+      "art": "verfall",
+      "ziel": "AGENTS.md#doku-pflicht-factory604",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2026-12-16",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-agents-abhangigkeiten",
+      "art": "verfall",
+      "ziel": "AGENTS.md#abhängigkeiten",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2026-12-16",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-agents-besitz-verweise-nur-in-strenger-form-ode",
+      "art": "verfall",
+      "ziel": "AGENTS.md#besitz-verweise-nur-in-strenger-form-oder-als-fabrik-verweis-factory177",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2026-12-16",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-agents-umstellung-oder-neue-regel-registerzeile",
+      "art": "verfall",
+      "ziel": "AGENTS.md#umstellung-oder-neue-regel--registerzeile-keine-wiedervorlage-factory518",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2026-12-16",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-agents-langfuse-erfassung-erhalten-quellprojekt",
+      "art": "verfall",
+      "ziel": "AGENTS.md#langfuse-erfassung-erhalten-quellprojekt1293",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2026-12-16",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-agents-im-browser-verifizieren",
+      "art": "verfall",
+      "ziel": "AGENTS.md#im-browser-verifizieren",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2026-12-16",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-agents-doku-aktuell-halten-ist-teil-von-fertig",
+      "art": "verfall",
+      "ziel": "AGENTS.md#doku-aktuell-halten-ist-teil-von-fertig",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2026-12-16",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-agents-projekt-brain-pflegen-repo-abschluss",
+      "art": "verfall",
+      "ziel": "AGENTS.md#projekt-brain-pflegen-repo-abschluss",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2026-12-16",
+      "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-regel-verfall",
+      "art": "verfall",
+      "ziel": "test/harness/regel-verfall.test.ts",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2026-12-16",
+      "messgroesse": "fangquote"
     }
   ]
 }
