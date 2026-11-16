@@ -226,8 +226,10 @@ F14 ist umgesetzt: `scripts/factory-kennzahlen.mjs` erzeugt den Block für den B
 - **Ticket → Session** über die Claim-Zeile `gh issue edit <nr> --add-assignee` im lokalen Transkript, bis #1266 Tickets an Traces hängt; Fenster je Ticket: Claim bis Merge, Kosten wie aufgezeichnet.
 - **Nacharbeit** über die im Zeitraum fälligen Fenster `[von − 14 T, bis − 14 T]`: nur abgelaufene Fristen gehen in die Quote.
 - **Lücken statt 0:** kein Zugang, keine Session, keine Calls oder Calls ohne Preis machen die Kosten eines Tickets zur Lücke (keine Teilsumme); sie gehen weder in den Median noch in eine Summe, „n von N gemessen“ nennt die Abdeckung.
-- **Keine Schwellen:** erst nach mindestens 4 Wochen Baseline; die Wiedervorlage `factory-kennzahlen-schwellen` erinnerte daran (entschieden in [factory#626](fortschreibungen/0022-626-factory-kennzahlen-schwellen.md)). Die Abnahme-Quote ist eine feste Lücke bis F13.
+- **Keine Schwellen:** erst nach mindestens 4 Wochen Baseline; die Wiedervorlage `factory-kennzahlen-schwellen` erinnert daran. Die Abnahme-Quote ist eine feste Lücke bis F13.
 - **Ring:** `kern-nach-entkopplung` wie die übrigen Messen-Skripte, deren Bibliotheken (`transkript.mjs`, `mess-lib.mjs`, `brain-metrics.mjs`) schon im Manifest stehen.
+
+Präzisiert durch factory#626: die Schwellen sind entschieden ([Fortschreibung](fortschreibungen/0022-626-factory-kennzahlen-schwellen.md)).
 
 Präzisiert durch #1756: die Abnahme-Quote ist keine feste Lücke mehr, sie wird aus dem Lauf-Ergebnis gemessen (Fortschreibung #1713, Umsetzungsentscheidungen in #1756).
 
