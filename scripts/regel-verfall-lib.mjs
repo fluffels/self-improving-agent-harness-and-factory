@@ -11,7 +11,7 @@
  */
 
 import { fangquote } from "./aenderungsregister-lib.mjs";
-import { collectHeadingSlugs, slugify } from "./docs-gen/markdown.mjs";
+import { collectHeadingSlugs, slugify, ueberschriftenStellen } from "./docs-gen/markdown.mjs";
 
 /** Länge des Standard-Verfalls und des Fang-Fensters in Tagen. */
 export const VERFALL_TAGE = 30;
@@ -155,7 +155,7 @@ export const kandidaten = (register, exporte, { heute, ausnahmen = SICHERHEITS_A
   const fenster = { von: plusTage(heute, -(VERFALL_TAGE - 1)), bis: heute }; // 30 Kalendertage einschließlich heute
   const punkte = exporte.flatMap((e) => e.punkte);
   const aus = { heute, fenster, kandidaten: [], nichtMessbar: [], ausgenommen: [], nichtFaellig: 0, mitFang: [] };
-  for (const z of zeilen.filter((x) => x?.art === "verfall")) {
+  for (const z of zeilen.filter((x) => x?.art === "verfall" && x.gestrichen === undefined)) {
     if (heute < z.ablauf) {
       aus.nichtFaellig += 1;
       continue;
@@ -173,6 +173,119 @@ export const kandidaten = (register, exporte, { heute, ausnahmen = SICHERHEITS_A
     (q.faenge === 0 ? aus.kandidaten : aus.mitFang).push(eintrag);
   }
   return aus;
+};
+
+// ---- Streich-PR (factory#610, Teil 3/4 von factory#517) ----
+
+/** Label der Streich-PRs, Label des Widerspruchs und Länge der Widerspruchsfrist in Tagen. */
+export const STREICH_LABEL = "verfall-streich-pr";
+export const WIDERSPRUCH_LABEL = "status:widerspruch";
+export const FRIST_TAGE = 14;
+
+/** Pur: Marker im PR-Body (eine Registerzeile hat höchstens einen offenen Streich-PR) und Branch-Name je Registerzeile. */
+export const streichMarker = (id) => `<!-- verfall-streich:${id} -->`;
+export const streichBranch = (id) => `verfall/streich-${id}`;
+
+const ZEILEN = (text) => String(text).split("\n");
+const EINZUG = (zeile) => zeile.length - zeile.trimStart().length;
+const FETT_ZEILE = /^\s*- \*\*(.+?)\*\*/;
+
+/** Pur: Zeilenbereich `[von, bis)` der Regel mit dem Anker in `AGENTS.md` (Listenpunkt samt tiefer eingerückter Folgezeilen) oder `{ grund }`. */
+const regelBereich = (zeilen, anker) => {
+  const treffer = zeilen.flatMap((z, i) => {
+    const m = FETT_ZEILE.exec(z);
+    return m && ankerVon(m[1].trim().replace(/[:.]+$/, "")) === anker ? [i] : [];
+  });
+  if (treffer.length !== 1) return { grund: treffer.length === 0 ? `Regel ${anker} nicht gefunden` : `Regel ${anker} mehrdeutig (${treffer.length} Treffer)` };
+  const von = treffer[0];
+  let bis = von + 1;
+  while (bis < zeilen.length && zeilen[bis].trim() !== "" && EINZUG(zeilen[bis]) > EINZUG(zeilen[von]) && !FETT_ZEILE.test(zeilen[bis])) bis += 1;
+  return { von, bis };
+};
+
+/** Pur: Zeilenbereich `[von, bis)` des Abschnitts mit dem Anker (Überschrift bis zur nächsten gleich- oder höherrangigen) oder `{ grund }`. */
+const abschnittBereich = (text, zeilen, anker) => {
+  const stellen = ueberschriftenStellen(text);
+  const i = stellen.findIndex((s) => s.slug === anker);
+  if (i < 0) return { grund: `Überschrift ${anker} nicht gefunden` };
+  const ende = stellen.slice(i + 1).find((s) => s.ebene <= stellen[i].ebene);
+  return { von: stellen[i].zeile, bis: ende ? ende.zeile : zeilen.length };
+};
+
+/**
+ * Pur: mechanischer Streich-Plan eines Ziels. Ohne `#` (Wächter-Datei): `{ aktion: "loeschen", pfad }`. Mit Anker: die exakten Zeilen der Regel (in `AGENTS.md` der
+ * Listenpunkt samt Folgezeilen) bzw. der Abschnitt der Überschrift entfallen: `{ aktion: "entfernen", pfad, neuerText, zeilen }`. Nicht eindeutig oder nicht
+ * gefunden: `{ aktion: "keine", pfad, grund }` (kein PR, nie geraten). `text` ist der Dateiinhalt (nur bei Anker nötig).
+ */
+export const streichPlan = (ziel, text) => {
+  const [pfad, anker] = String(ziel).split("#");
+  if (anker === undefined) return { aktion: "loeschen", pfad };
+  if (typeof text !== "string") return { aktion: "keine", pfad, grund: "Datei nicht lesbar" };
+  const zeilen = ZEILEN(text);
+  const b = pfad === "AGENTS.md" ? regelBereich(zeilen, anker) : abschnittBereich(text, zeilen, anker);
+  if (b.grund !== undefined) return { aktion: "keine", pfad, grund: b.grund };
+  const rest = [...zeilen.slice(0, b.von), ...zeilen.slice(b.bis)];
+  if (b.von > 0 && rest[b.von - 1]?.trim() === "" && rest[b.von]?.trim() === "") rest.splice(b.von, 1);
+  return { aktion: "entfernen", pfad, neuerText: rest.join("\n"), zeilen: zeilen.slice(b.von, b.bis) };
+};
+
+/** Pur: Register mit der Zeile `id` auf `gestrichen` (Datum) gesetzt; wirft bei unbekannter Id. */
+export const registerGestrichen = (register, id, heute) => {
+  if (!register.zeilen.some((z) => z?.art === "verfall" && z.id === id)) throw new Error(`Registerzeile ${id} nicht gefunden`);
+  return { ...register, zeilen: register.zeilen.map((z) => (z?.art === "verfall" && z.id === id ? { ...z, gestrichen: heute } : z)) };
+};
+
+/**
+ * Pur: Welche Kandidaten bekommen einen Streich-PR? `offene` sind die offenen Streich-PRs `{ headRefName, body }`. Sicherheits-Ausnahmen entstehen nie
+ * (auch wenn der Aufrufer sie fälschlich als Kandidat liefert), eine Registerzeile mit offenem Streich-PR bekommt keinen zweiten.
+ * Ergebnis `{ neu, uebersprungen: [{ id, grund }] }`.
+ */
+export const planeStreichPRs = (kandidatenListe, offene, { ausnahmen = SICHERHEITS_AUSNAHMEN } = {}) => {
+  const aus = { neu: [], uebersprungen: [] };
+  for (const k of kandidatenListe) {
+    if (istSicherheitsAusnahme(k.ziel, ausnahmen)) aus.uebersprungen.push({ id: k.id, grund: "Sicherheits-Ausnahme" });
+    else if (offene.some((p) => p.headRefName === streichBranch(k.id) || String(p.body ?? "").includes(streichMarker(k.id)))) aus.uebersprungen.push({ id: k.id, grund: "Streich-PR schon offen" });
+    else aus.neu.push(k);
+  }
+  return aus;
+};
+
+/** Pur: Titel, Commit-Nachricht und Body des Streich-PRs (Fangquote, Fenster, Rohwerte, Widerspruch, Umkehr). */
+export const streichText = (k, { fenster, heute, plan }) => {
+  const frist = plusTage(heute, FRIST_TAGE);
+  const was = plan.aktion === "loeschen" ? `Datei \`${plan.pfad}\` löschen` : `${plan.zeilen.length} Zeile(n) in \`${plan.pfad}\` entfernen`;
+  const body = [
+    streichMarker(k.id),
+    `Regel-Verfall (factory#610, Standard-Verfall nach ADR 0027 Fortschreibung factory#517): \`${k.ziel}\` ist seit ${k.ablauf} fällig und hat im Fenster keinen Fang.`,
+    "",
+    `- **Fangquote:** ${k.faenge} Fänge in ${k.laeufe} Läufen (Fenster ${fenster.von} bis ${fenster.bis}, ${VERFALL_TAGE} Tage)`,
+    `- **Rohwerte:** id \`${k.id}\`, ziel \`${k.ziel}\`, ablauf ${k.ablauf}, laeufe ${k.laeufe}, faenge ${k.faenge}`,
+    `- **Änderung (mechanisch):** ${was}; Registerzeile \`${k.id}\` bekommt \`gestrichen: ${heute}\``,
+    `- **Widerspruchsfrist:** bis ${frist} (${FRIST_TAGE} Tage ab Anlage). Widerspruch: Label \`${WIDERSPRUCH_LABEL}\` oder ein Kommentar einer vertrauten Person; dann mergt \`--faellige-mergen\` nie.`,
+    "- **Umkehr:** Revert dieses PRs.",
+  ].join("\n");
+  return { titel: `Regel-Verfall: ${k.ziel} streichen`, commit: `Regel-Verfall: ${k.ziel} streichen (${k.id})`, body };
+};
+
+/** Pur: Widerspruch = Label `status:widerspruch` oder ein Beitrag einer vertrauten Person (`teile` aus `trenneFremdtext`; das erste Teil ist der PR-Body selbst und zählt nicht). */
+export const hatWiderspruch = (labels, teile) =>
+  labels.includes(WIDERSPRUCH_LABEL) || teile.slice(1).some((t) => t.vertraut === true && String(t.text ?? "").trim() !== "");
+
+/** Pur: alle Required Checks grün (`gh pr checks --required --json name,bucket`); leere oder fehlende Liste ist nie grün (fail-closed). */
+export const checksGruen = (checks) => Array.isArray(checks) && checks.length > 0 && checks.every((c) => c?.bucket === "pass" || c?.bucket === "skipping");
+
+/** Pur: Frist abgelaufen? `angelegt` ISO-Zeitpunkt, `jetzt` Date. */
+export const fristAbgelaufen = (angelegt, jetzt) => {
+  const t = Date.parse(angelegt);
+  return Number.isFinite(t) && t + FRIST_TAGE * 86_400_000 <= jetzt.getTime();
+};
+
+/** Pur: Merge-Entscheidung `{ merge, grund }`; alle drei Bedingungen (Frist, kein Widerspruch, Required Checks grün) müssen gelten, Widerspruch zuerst. */
+export const mergeEntscheidung = ({ labels, teile, checks, angelegt, jetzt }) => {
+  if (hatWiderspruch(labels, teile)) return { merge: false, grund: "Widerspruch" };
+  if (!fristAbgelaufen(angelegt, jetzt)) return { merge: false, grund: `Frist (${FRIST_TAGE} Tage) läuft noch` };
+  if (!checksGruen(checks)) return { merge: false, grund: "Required Checks nicht grün" };
+  return { merge: true, grund: "Frist abgelaufen, kein Widerspruch, Checks grün" };
 };
 
 /** Pur: Markdown-Bericht zu `kandidaten()`; Zahlen je Zeile, „nicht messbar“ getrennt. */
