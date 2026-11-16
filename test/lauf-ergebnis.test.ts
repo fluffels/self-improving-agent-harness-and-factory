@@ -464,6 +464,17 @@ describe("Stichprobenarme und Schattenrunden (factory#535)", () => {
     assert.deepEqual(arme.schatten.jePr, [{ pr: 73, ticket: 83, schattenrunden: 1, blocker: 0 }], "Runde 1 aus der Review-Zeile (0/2), Pass 2 meldet 0/0");
   });
 
+  test("Der letzte Pass braucht kein sollte=; ein Vollablauf-PR ohne gültiges runden= steht nie als null in Median und Verteilung", () => {
+    const { arme } = rechne([
+      { felder: VOLL("", 2), runden: [R1, "Runde 2: lenses=architektur blocker=architektur:0"] },
+      { felder: "runden=x arm=vollablauf lenses=architektur" },
+    ]);
+    assert.deepEqual(arme.schatten.jePr, [{ pr: 70, ticket: 80, schattenrunden: 1, blocker: 0 }]);
+    assert.deepEqual(arme.schatten.fehlendeRundenZeilen, [{ pr: 71, fehlend: null }]);
+    assert.equal(arme.vollablauf.prs, 2);
+    assert.deepEqual(arme.vollablauf.runden, { median: 2, verteilung: { 2: 1 } });
+  });
+
   test("Mehrere Schattenrunden je PR zählen einzeln, nicht je PR", () => {
     const { arme } = rechne([{ felder: VOLL(), runden: [R1, "Runde 2: lenses=architektur blocker=architektur:0 sollte=architektur:1 hinweis=architektur:0"] }]);
     assert.deepEqual(arme.schatten.jePr, [{ pr: 70, ticket: 80, schattenrunden: 2, blocker: 0 }]);
