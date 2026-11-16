@@ -9,6 +9,12 @@ Ergänzt [ADR 0027](../0027-regeln-lockern.md) (Punkte 4 und 8); die Ledger-Zeil
 - **Ab 2026-11-17** nennt jede neue Ledger-Zeile `Register: \`<id>\`` (Spalte Rückfall-Trigger). Die Zuordnung älterer Zeilen steht nur im Feld `adr` des Registers: Punkt 8 verbietet Zusätze in alten Zeilen, eine Zuordnungstabelle gibt es nicht.
 - Der Bau misst nichts; die Messung folgt in den weiteren Teilen von factory#518.
 
+## Erstbefüllung (factory#573)
+
+- Nennt eine Ledger-Zeile vor 2026-11-17 eine Wiedervorlage-Id, trägt die Registerzeile mit `adr` auf diese Zeile die Prüfung, die Wiedervorlage entfällt; die Ledger-Zeile bleibt unverändert (Punkt 8).
+- Wiedervorlagen tragen ein Pflichtfeld `art` aus `frist`, `abhaengigkeit`, `sicherheit`, `upstream`, `analyse-takt`; `umstellung` und `regel` sind verboten (Wächter `test/harness/wiedervorlagen-art.test.ts`). Einzige Ausnahme ist der Sammeleintrag `regeln-verfall-2027-03` bis factory#574.
+- Eine Wiedervorlage ohne Katalog-Messgröße oder ohne Ledger-Zeile (Beispiel `sicherheits-lens-kosten-334`: Kosten je Brille und je Risikoklasse fehlen) bleibt mit `art` stehen, bis der Katalog sie trägt.
+
 ## Re-Evaluierung
 
 Prüftermin 2026-12-14: legt jede neue Ledger-Zeile eine Registerzeile an, bleibt die Regel; entsteht daneben weiter eine Einzel-Wiedervorlage je Umstellung, wird der Wächter um diese Prüfung erweitert.

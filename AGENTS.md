@@ -99,6 +99,7 @@ Alle schnellen Gates laufen gebündelt in `npm run verify`, die Required-Checks 
 - **Slice-Größe:** `npm run check:diffsize` (≤ 20 Dateien und 800 Zeilen gegen die Merge-Base); bewusst breit nur mit `SIH-Diffsize-Override: #<nr> warum`.
 - **Abhängigkeiten:** nach Hand-Änderung an `package.json` `npm install` und den Lockfile mitcommitten (`npm run check:lockfile`; Ausnahme: Dependabot oder `SIH-Lockfile-Override: #<nr> warum`).
 - **Besitz-Verweise nur in strenger Form oder als Fabrik-Verweis (factory#177).** Wächter: `test/harness/besitz-abschnittsverweise.test.ts`.
+- **Umstellung oder neue Regel → Registerzeile, keine Wiedervorlage (factory#518).** Jede Umstellung der Fabrik und jede neue Regel bekommt eine Zeile im Änderungsregister (Glossar), keinen Eintrag in `.github/wiedervorlagen.json`; dort steht nur, was ein Pflichtfeld `art` aus `frist`, `abhaengigkeit`, `sicherheit`, `upstream`, `analyse-takt` trägt (Wächter `test/harness/wiedervorlagen-art.test.ts`).
 
 ### Verifikation
 

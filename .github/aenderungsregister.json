@@ -8,12 +8,26 @@
       "wirkung": "Die Kosten des Planers je Ticket sinken (Sockel rund 9.000 Tokens weniger), ohne dass Pläne an nicht gelesenen Regeln scheitern.",
       "messgroesse": "kosten-je-ticket-rolle",
       "parameter": "planer",
-      "basis": { "fenster": "4 Wochen vor Merge", "wert": null },
-      "toleranz": { "qualitaetsmass": "nacharbeit-quote", "richtung": "steigt", "schwelle": 0, "einheit": "absolut" },
+      "basis": {
+        "fenster": "4 Wochen vor Merge",
+        "wert": null
+      },
+      "toleranz": {
+        "qualitaetsmass": "nacharbeit-quote",
+        "richtung": "steigt",
+        "schwelle": 0,
+        "einheit": "absolut"
+      },
       "rueckfall": "Revert des Merge-Commits von factory#552 per PR (omitClaudeMd im Frontmatter des Planers entfernen).",
       "pruefTermin": "2026-12-14",
-      "mindestdaten": { "n": 10, "einheit": "tickets" },
-      "adr": { "datum": "2026-11-16", "pr": "factory#552" }
+      "mindestdaten": {
+        "n": 10,
+        "einheit": "tickets"
+      },
+      "adr": {
+        "datum": "2026-11-16",
+        "pr": "factory#552"
+      }
     },
     {
       "id": "holdout-omitclaudemd-551",
@@ -22,12 +36,138 @@
       "wirkung": "Die Kosten der Holdout-Rollen sinken (Ersparnis geschätzt 15 bis 33 Prozent), ohne dass Urteile schlechter werden.",
       "messgroesse": "kosten-je-ticket-rolle",
       "parameter": "abnahme",
-      "basis": { "fenster": "4 Wochen vor Merge", "wert": null },
-      "toleranz": { "qualitaetsmass": "nacharbeit-quote", "richtung": "steigt", "schwelle": 0, "einheit": "absolut" },
+      "basis": {
+        "fenster": "4 Wochen vor Merge",
+        "wert": null
+      },
+      "toleranz": {
+        "qualitaetsmass": "nacharbeit-quote",
+        "richtung": "steigt",
+        "schwelle": 0,
+        "einheit": "absolut"
+      },
       "rueckfall": "Revert des Merge-Commits von factory#551 per PR (omitClaudeMd im Frontmatter beider Holdout-Rollen entfernen).",
       "pruefTermin": "2026-12-14",
-      "mindestdaten": { "n": 10, "einheit": "prs" },
-      "adr": { "datum": "2026-11-16", "pr": "factory#551" }
+      "mindestdaten": {
+        "n": 10,
+        "einheit": "prs"
+      },
+      "adr": {
+        "datum": "2026-11-16",
+        "pr": "factory#551"
+      }
+    },
+    {
+      "id": "planer-medium-547",
+      "datum": "2026-11-15",
+      "aenderung": "Der Planer-Effort sinkt von xhigh auf medium (Frontmatter des Planers; Codex-Planer bleibt high).",
+      "wirkung": "Die Kosten je Planer-Lauf sinken gegen das Basisfenster; Richtwert aus factory#112 ist Ø 1,38 $ (Schnitt 2026-10-28T07:09:38Z, geschätzte Basis), ohne dass Pläne schlechter werden.",
+      "messgroesse": "kosten-je-ticket-rolle",
+      "parameter": "planer",
+      "basis": {
+        "fenster": "4 Wochen vor Merge",
+        "wert": null
+      },
+      "toleranz": {
+        "qualitaetsmass": "nacharbeit-quote",
+        "richtung": "steigt",
+        "schwelle": 20,
+        "einheit": "prozentpunkte"
+      },
+      "rueckfall": "Steigt die Nacharbeit-Quote um mehr als 20 Prozentpunkte bei mindestens 5 PRs mit abgelaufenem Fenster (Ledger-Trigger: PRs mit Nacharbeit über B mal n plus 1): Revert per PR zurück auf xhigh.",
+      "pruefTermin": "2026-12-13",
+      "mindestdaten": {
+        "n": 5,
+        "einheit": "prs"
+      },
+      "adr": {
+        "datum": "2026-11-15",
+        "pr": "factory#547"
+      }
+    },
+    {
+      "id": "lens-medium-556",
+      "datum": "2026-11-15",
+      "aenderung": "Der Lens-Effort sinkt von high auf medium für alle fünf Brillen (Frontmatter der Lens; Codex-Lens bleibt high).",
+      "wirkung": "Die Review-Kosten sinken (gemessen rund 15 bis 25 Prozent je gepaartem Lauf), ohne dass Blocker unentdeckt bleiben.",
+      "messgroesse": "kosten-je-ticket-rolle",
+      "parameter": "lens",
+      "basis": {
+        "fenster": "2 Wochen vor Merge",
+        "wert": null
+      },
+      "toleranz": {
+        "qualitaetsmass": "nacharbeit-quote",
+        "richtung": "steigt",
+        "schwelle": 10,
+        "einheit": "prozentpunkte"
+      },
+      "rueckfall": "Liegt die Nacharbeit-Quote im Prüffenster mehr als 10 Prozentpunkte über der Basis bei mindestens 20 PRs mit abgelaufener Frist (darunter 14 Tage weiter): Revert per PR zurück auf high.",
+      "pruefTerminGrund": "Prüftermin laut Ledger-Zeile und factory#518 K2 (2026-12-14).",
+      "pruefTermin": "2026-12-14",
+      "mindestdaten": {
+        "n": 20,
+        "einheit": "prs"
+      },
+      "adr": {
+        "datum": "2026-11-15",
+        "pr": "factory#556"
+      }
+    },
+    {
+      "id": "risikostufe-ablauf-527",
+      "datum": "2026-11-16",
+      "aenderung": "Ablauf je Risikostufe: Stufe 0 und 1 laufen ohne Planer, Stufe 0 ohne Lens und Abnahme, Stufe 1 mit einer Review-Runde und ohne Abnahme.",
+      "wirkung": "Die Gesamtkosten je Ticket sinken (Kosten je Stufe fehlen im Katalog, factory#528), ohne dass Nacharbeit zunimmt.",
+      "messgroesse": "kosten-je-ticket",
+      "basis": {
+        "fenster": "4 Wochen vor Merge",
+        "wert": null
+      },
+      "toleranz": {
+        "qualitaetsmass": "nacharbeit-quote",
+        "richtung": "steigt",
+        "schwelle": 0,
+        "einheit": "absolut"
+      },
+      "rueckfall": "Ein Folge-#-Commit auf einem PR der Stufe 0 oder 1, den Planer, voller Satz oder Abnahme gefunden hätte: Revert per PR.",
+      "pruefTermin": "2026-12-14",
+      "mindestdaten": {
+        "n": 10,
+        "einheit": "prs"
+      },
+      "adr": {
+        "datum": "2026-11-16",
+        "pr": "factory#527"
+      }
+    },
+    {
+      "id": "lens-sweep-272",
+      "datum": "2026-11-11",
+      "aenderung": "Die Test-Lens fährt den Vollsweep nur bei SWEEP: voll; Doku und Testdateien außerhalb von test/harness bekommen die Stichprobenregel Text-Wächter.",
+      "wirkung": "Die Lens-Kosten sinken (Basis aus factory#324: Σ 202,68 $, 43 Prozent der Subagentenkosten, 233 Läufe; Runde-1-Blocker in 32 von 33 PRs), ohne dass Nacharbeit zunimmt.",
+      "messgroesse": "kosten-je-ticket-rolle",
+      "parameter": "lens",
+      "basis": {
+        "fenster": "4 Wochen vor Merge",
+        "wert": null
+      },
+      "toleranz": {
+        "qualitaetsmass": "nacharbeit-quote",
+        "richtung": "steigt",
+        "schwelle": 0,
+        "einheit": "absolut"
+      },
+      "rueckfall": "Ein Folge-#-Commit, ein späterer Lens-Fund oder ein CI-Rot wegen einer vakuösen Assertion in einem Text-Wächter eines stichprobe-PRs, die der Vollsweep gefangen hätte: Revert per PR.",
+      "pruefTermin": "2026-12-09",
+      "mindestdaten": {
+        "n": 10,
+        "einheit": "prs"
+      },
+      "adr": {
+        "datum": "2026-11-11",
+        "pr": "factory#272"
+      }
     }
   ]
 }
