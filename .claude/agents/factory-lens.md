@@ -82,6 +82,6 @@ Verdikt: ✅ ok  |  ⚠️ Hinweise  |  🔶 sollte  |  ❌ blockierend
 - [⚠️ Hinweis]     <Befund> — `datei.ts:zeile` — <warum>
 ```
 
-Fällt dir außerhalb des Ticket-Scopes etwas auf, schlage es als Liste vor: je Punkt „Produkt-/Inhalts-Befund oder Ausnahmefall der Regel → Issue, zusammengehörige Befunde gebündelt (AGENTS.md § Befunde sofort festhalten)“ oder „Harness → Zeile mit Klasse und Beleg“ (AGENTS.md § Harness-Befunde sind Zeilen, keine Tickets; ohne Beleg nur im Bericht, nie als Zeile). Nicht inline mitfixen.
+Fällt dir außerhalb des Ticket-Scopes etwas auf, schlage es als Liste vor: je Punkt „Produkt-Befund oder Regel-Ausnahme → Issue (AGENTS.md § Befunde sofort festhalten)“ oder „Code-Befund → Zeile per `node scripts/melden.mjs --ziel refactoring` (Regeln wie Harness-Zeilen)“ oder „Harness → Zeile mit Klasse und Beleg“ (AGENTS.md § Harness-Befunde sind Zeilen; ohne Beleg nur im Bericht). Nicht inline mitfixen.
 
 Lehnt die Umgebung SubagentHandback ab oder fehlt es: nicht wiederholen, der vollständige Bericht ist die letzte Nachricht als reiner Text, ohne Tool-Aufruf danach.
