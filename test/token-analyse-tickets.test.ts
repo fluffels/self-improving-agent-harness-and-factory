@@ -387,12 +387,18 @@ describe("Runde 1: Lücken der Test-Adäquanz und Sicherheit", () => {
   });
 
   test("Folge-Ticket: Quell-Fixtures je Form (http, Großschreibung, Rest-URL, Repo-Verweis, Autolink, HTML, Umbruch-Leerraum)", () => {
-    const quellen = ["http://example.org/a?b=c", "HTTPS://EXAMPLE.ORG/x", "org/repo#12 und #5", "www.boese.example/x", "[k](//boese.example/a)", "<a href=\"//boese.example\">a</a>", "&#64;opfer", "  davor  \r\n  danach  "];
+    const quellen = ["http://example.org/a?b=c", "HTTPS://EXAMPLE.ORG/x", "org/repo#12 und #5", "www.boese.example/x", "[k](//boese.example/a)", "<a href=\"//boese.example\">a</a>", "&#64;opfer", "  davor  \r\n  danach  ", "a\r# [k](//boese.example/x) GH-5", "b\r\r[k]: //boese.example", "c\u2028# [k](//boese.example)", "C# und #abc"];
     const body = lib.folgeTicketBody({ datum: "2026-11-16", unsicherheiten: quellen, recherche: [] }).body;
     expect(body).not.toMatch(/example\.org|EXAMPLE\.ORG|#\d/i);
     expect(body).toContain("Nr. 12 und Nr. 5");
+    expect(body).toContain("- `C# und #abc`");
+    expect(body).toContain("- `[Link entfernt]`");
+    expect(body).not.toMatch(/[\r\u2028\u0085]/);
+    expect(body).toContain("- `a # [k](//boese.example/x) GH-5`");
     expect(body).toContain("- `davor danach`");
-    for (const l of body.split("\n").filter((z) => z.startsWith("- `") && /boese|opfer|href/.test(z))) expect(l.endsWith("`"), l).toBe(true);
+    const heikel = body.split("\n").filter((z) => z.startsWith("- `") && /boese|opfer|href/.test(z));
+    expect(heikel).toHaveLength(7);
+    for (const l of heikel) expect(l.endsWith("`"), l).toBe(true);
   });
 
   test("teil6: Formfehler bei Nicht-Boolean, Positivfall mit lesbarer Freigabeliste legt an", () => {
