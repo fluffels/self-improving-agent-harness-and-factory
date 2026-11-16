@@ -8,7 +8,7 @@
  *
  * Mit dem Config-Schlüssel `langfuseWochenbericht` (factory#314) legt der Takt das Status-Ticket nur noch bei einem Anlass an (Dispatch mit `langfuse_anlass`, vom
  * Wochenbericht-Lauf) oder am Montags-Cron nach `wochenOhneLaufMax` Wochen ohne Status-Ticket (Höchstabstand); der Push-Auslöser legt dann nicht mehr an. Ohne den Schlüssel gilt
- * alles wie bisher (ADR 0016, Fortschreibung 0016-314).
+ * alles wie bisher (ADR 0016, Fortschreibung 0016-314). Mit `langfuseWochenbericht.statusTicket: "nur-anlass"` (factory#579, Fortschreibung 0016-518) entfällt auch der Höchstabstand: nur ein Anlass legt an, der Body nennt nur den Anlass.
  *
  * Nur Node-Builtins, board-lib.mjs, gh-cli.mjs und die pure Wochenbericht-Lib (keine Importe aus board-takt.mjs: der Import läuft in die andere Richtung).
  */
@@ -101,6 +101,7 @@ const STUNDEN_WOCHE = 168;
  */
 function hoechstabstand({ wochenbericht, ausloeser, stundenSeitAbschluss, warnungen }) {
   if (ausloeser !== "schedule") return null;
+  if (istNurAnlass(wochenbericht)) return null; // factory#579: kein periodischer Auslöser, nur ein Anlass legt an
   const max = wochenbericht.wochenOhneLaufMax;
   if (max === undefined) {
     warnungen.push("langfuseWochenbericht.wochenOhneLaufMax fehlt: kein Höchstabstand, nur ein Anlass legt das Status-Ticket an.");
@@ -157,7 +158,8 @@ export function wochenFenster(jetzt) {
   return { letzte: woche(mo - 7 * TAG_MS), davor: woche(mo - 14 * TAG_MS) };
 }
 
-function verdichtungsSchritt(wurzel) {
+function verdichtungsSchritt(wurzel, nurAnlass = false) {
+  if (nurAnlass) return "keine Verdichtungszeile (in der Fabrik ersetzt der Analyse-Schnappschuss sie), Ticket schließen";
   // Die Verdichtungstabelle liegt nur im Factory-Repo (Seite model-routing.md): dort per PR mit `Closes`, im Bezieher (Sync-Stand vorhanden) nur im Bericht-Kommentar.
   return istBezieher(wurzel)
     ? "Verdichtungszeile nur im Bericht-Kommentar (die Tabelle liegt nur im Factory-Repo), danach das Ticket schließen"
@@ -209,6 +211,15 @@ function laufzeitenZeile(upstream) {
     : [];
 }
 
+/** Pur (factory#579): ist das Status-Ticket auf „nur bei Anlass“ gestellt (`langfuseWochenbericht.statusTicket`)? */
+const istNurAnlass = (wochenbericht) => wochenbericht?.statusTicket === "nur-anlass";
+
+/** Pur: die Umfang-Zeilen des Bodys; bei „nur-anlass“ nur der Anlass, sonst Kennzahlen-Aufträge und Laufzeiten-Upstream. */
+function umfangZeilen({ nurAnlass, von, upstream }) {
+  if (nurAnlass) return ["- **Umfang:** nur der Anlass (Zeile „Anlass“ der Entscheidungstabelle der Checkliste); die übrigen Punkte laufen hier nicht, sie liegen in der Token-Analyse (factory#518)."];
+  return [...kennzahlenZeilen(von), ...laufzeitenZeile(upstream)];
+}
+
 /**
  * Body des neu angelegten Status-Tickets. `vorgaenger` = `{ number, closedAt, createdAt? }` oder null; war der Vorgänger in derselben Kalenderwoche angelegt, hat er die letzte volle Woche schon gemessen (fehlt `createdAt`, wird gemessen).
  * `start` = ISO-Datum des ersten Commits auf main oder null/fehlt (#101 L31): ohne Vorgänger beginnt der Zeitraum dort; liegt es nach dem Beginn der Woche davor (`wochenFenster(jetzt).davor.von`), fehlen zwei volle Wochen und das Wochenbudget entfällt (der Beginn-Tag selbst zählt als volle Woche). Pur.
@@ -234,7 +245,8 @@ export function statusBody({ vorgaenger, jetzt, repo = REPO, start = null, wurze
     const url = /^https?:/.test(ziel) || !upstream ? ziel : factorySeite({ pfad, anker, repo, tag: "main" });
     return /^https?:/.test(url) ? `[${text}](${url})` : `${text} (Factory-Repo: \`${url}\`)`;
   };
-  const verdichtung = verdichtungsSchritt(wurzel);
+  const nurAnlass = istNurAnlass(wochenbericht);
+  const verdichtung = verdichtungsSchritt(wurzel, nurAnlass);
   const abschluss = abschlussZeile({ upstream, verweis, verdichtung });
   return [
     "Wiederkehrende Auswertung der Langfuse-Daten, vom Wochen-Workflow angelegt (kein Agent legt dieses Ticket an).",
@@ -242,8 +254,7 @@ export function statusBody({ vorgaenger, jetzt, repo = REPO, start = null, wurze
     `- **Zeitraum:** ${zeitraum}.`,
     budget,
     ...anlassZeilen({ wochenbericht, anlass, repo, vorgaenger, start, bis: w.letzte.bis }),
-    ...kennzahlenZeilen(vorgaenger?.closedAt ?? start ?? "<Start des Zeitraums>"),
-    ...laufzeitenZeile(upstream),
+    ...umfangZeilen({ nurAnlass, von: vorgaenger?.closedAt ?? start ?? "<Start des Zeitraums>", upstream }),
     `- **Checkliste:** ${verweis("Checkliste Langfuse-Status überprüfen", "docs/model-routing.md", "langfuse-status-überprüfen-1293")}.`,
     `- **Mechanik:** ${verweis("Wiederkehrendes Ticket Langfuse-Status überprüfen", "docs/ticket-reihenfolge.md", "wiederkehrendes-ticket-langfuse-status-überprüfen-1293")}.`,
     `- **Abschluss:** ${abschluss}`,

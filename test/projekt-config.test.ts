@@ -169,6 +169,15 @@ describe("pruefeProjektConfig", () => {
     for (const kein of [null, [], "x", 3]) assert.match(mit(kein).join("\n"), /langfuseWochenbericht muss ein Objekt/);
   });
 
+  test("langfuseWochenbericht.statusTicket (factory#579): takt oder nur-anlass; nur-anlass mit wochenOhneLaufMax ist ein Fehler", () => {
+    const mit = (b: unknown) => pc.pruefeProjektConfig({ ...gueltig(), langfuseWochenbericht: b });
+    assert.deepEqual(mit({ statusTicket: "takt" }), []);
+    assert.deepEqual(mit({ statusTicket: "takt", wochenOhneLaufMax: 4 }), []);
+    assert.deepEqual(mit({ statusTicket: "nur-anlass", kostenAnstiegProzent: 50 }), []);
+    for (const schlecht of ["aus", true, 1, null]) assert.match(mit({ statusTicket: schlecht }).join("\n"), /langfuseWochenbericht\.statusTicket muss/);
+    assert.match(mit({ statusTicket: "nur-anlass", wochenOhneLaufMax: 4 }).join("\n"), /wochenOhneLaufMax ist mit statusTicket "nur-anlass" ohne Wirkung/);
+  });
+
   test("risiko (factory#333): optional; hoch ist eine nicht-leere Liste nicht-leerer POSIX-Muster, kein stilles Abschalten", () => {
     const mit = (b: unknown) => pc.pruefeProjektConfig({ ...gueltig(), risiko: b });
     assert.deepEqual(pc.pruefeProjektConfig(gueltig()), []);

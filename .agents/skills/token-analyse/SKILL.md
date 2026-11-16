@@ -18,7 +18,7 @@ Vor jedem Teil: Zwischenstand der eigenen Session aus dem Transkript (`node scri
 ## Ablauf
 
 1. **Vorrunde zuerst prüfen:** letzter Schnappschuss in `$FACTORY_ANALYSE_ABLAGE` und das Folge-Ticket der letzten Analyse; was dort schon entschieden ist, wird nicht neu gemessen.
-2. **Teil 0 (Skript, kein Agent):** `node scripts/aenderungsregister.mjs --ablage "$FACTORY_ANALYSE_ABLAGE"` (je Quelle `--export <datei>`, Format: `docs/model-routing.md` › Änderungsregister). Exit 4 heißt Bezieher: der Skill bricht ganz ab.
+2. **Teil 0 (Skript, kein Agent):** `node scripts/aenderungsregister.mjs --ablage "$FACTORY_ANALYSE_ABLAGE"` (je Quelle `--export <datei>`, Format: `docs/model-routing.md` › Änderungsregister). Exit 4 heißt Bezieher: der Skill bricht ganz ab. Teil 0 trägt auch die Punkte 4, 5, 6, 8, 10 und 11 der Checkliste (Tabelle: `docs/model-routing.md` › Langfuse-Status überprüfen).
 3. **Teile 1 bis 6** nacheinander, vor jedem die Budgetprüfung, je mit der Auftragsdatei `teil-<n>.md` als Prompt. Jeder Spawn setzt `model` und `effort` laut Tabelle „Token-Analyse“ in `docs/model-routing.md` §1:
    - Teil 1: subagent_type "Explore", model "sonnet", effort "medium" ([teil-1.md](teil-1.md))
    - Teil 2: subagent_type "general-purpose", model "sonnet", effort "medium" ([teil-2.md](teil-2.md); nur dieser Typ hat das Langfuse-MCP, der Auftrag verbietet Schreiben)

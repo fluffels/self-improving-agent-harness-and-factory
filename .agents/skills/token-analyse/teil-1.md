@@ -10,3 +10,6 @@ Befehl und Datei je Zahl; Rohwerte vor Ableitungen.
 
 ## Unsicherheiten
 Fehlen Transkripte: „Lücke: Transkripte fehlen“, keine Empfehlung. Transkript-Kosten sind eine Schätzung (Langfuse ist maßgeblich).
+
+## Checklisten-Punkte
+Punkte 3 (Tokenfresser), 4 (Wiederkehrende Fehlschläge, Tool-Fehler) und 9 (Vermeidbare Arbeit; Quelle sind die Transkripte). Die Punkte stehen in der [Checkliste Langfuse-Status überprüfen](../../../docs/model-routing.md#langfuse-status-überprüfen-1293), hier nicht kopiert; Entscheidung je Punkt: dortige Tabelle.
