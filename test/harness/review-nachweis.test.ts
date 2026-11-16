@@ -42,7 +42,7 @@ const { MAX_FIX_RUNDEN, pflichtLenses } = raw as Mod;
 const { MAX_REVIEW_PAESSE, MAX_ZUSATZPAESSE } = nachweisLib as unknown as { MAX_REVIEW_PAESSE: number; MAX_ZUSATZPAESSE: number };
 const { MAX_RUNDEN } = kennzahlen as unknown as { MAX_RUNDEN: number };
 /** Zeilen der Fremd-Config; die Wrapper reichen sie durch. */
-const { commitZeilen } = sliceRaw as unknown as { commitZeilen: (p: string, pl: string) => { plan: string; review: string; reviewOverride: string } };
+const { commitZeilen } = sliceRaw as unknown as { commitZeilen: (p: string, pl: string) => { plan: string; review: string; zusatzpass: string; reviewOverride: string } };
 const PL = FREMD.agenten.planer;
 const Z = commitZeilen(FREMD.praefixe.commitZeile, PL);
 const parseNachweis = (t: string) => (raw as Mod).parseNachweis(t, Z);
@@ -474,7 +474,7 @@ describe("Zusatzpass: Rückgabefeld und CLI-Zeile (#1572 Z11)", () => {
   };
 
   test("gültiger Zusatzpass: das Feld trägt den Grund (Rückgabe von checkReviewNachweis)", () => {
-    const r = checkReviewNachweis({ runGit: fakeGit(`runden=3 zusatzpass=1:Maintainerin gab Pass frei ${LENSES} verdikt=ok`), env: {} });
+    const r = checkReviewNachweis({ runGit: fakeGit(`runden=3 zusatzpass=1:Maintainerin gab Pass frei ${LENSES} verdikt=ok`, `${Z.zusatzpass}: R3 Zusatzpass — Entscheidung: Pass nötig, weil Blocker offen\n`), env: {} });
     assert.equal(r.ok, true);
     assert.equal(r.zusatzpass?.grund, "Maintainerin gab Pass frei");
   });
@@ -508,7 +508,7 @@ describe("Zusatzpass: Rückgabefeld und CLI-Zeile (#1572 Z11)", () => {
       git("add", "-A");
       git("commit", "-q", "-m", "umsetzung");
       const head = git("rev-parse", "HEAD").trim();
-      git("commit", "-q", "--allow-empty", "-m", `nachweis\n\n${zeilen.plan}: ${e.agenten.planer}\n${zeilen.review}: head=${head} ${review}`);
+      git("commit", "-q", "--allow-empty", "-m", `nachweis\n\n${zeilen.plan}: ${e.agenten.planer}\n${zeilen.review}: head=${head} ${review}\n${zeilen.zusatzpass}: R3 Zusatzpass — Entscheidung: Pass nötig, weil Blocker offen`);
       const env = { ...process.env };
       ohneKernEnv(env, "FACTORY_DIFF_BASE");
       env.GITHUB_HEAD_REF = ""; // die Fixture-Branch feature/x ist ticketlos; ein geerbter PR-Branch (CI) würde arm= verlangen (factory#532)

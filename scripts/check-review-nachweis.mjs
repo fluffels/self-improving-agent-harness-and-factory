@@ -228,6 +228,11 @@ function bewerteZusatzpass(zp, zeilen) {
   return [];
 }
 
+/** Pässe ohne Zusatzpass je Risikostufe; Stufe 1: höchstens ein Fix-Pass (factory#526). Pure. */
+function basisPaesseJeStufe(risikostufe) {
+  return risikostufe.stufe === 1 ? MAX_REVIEW_PAESSE_STUFE1 : MAX_REVIEW_PAESSE;
+}
+
 /** Prüft `runden` gegen die Obergrenze samt optionalem `zusatzpass=<anzahl>:<ursache>` (#1561, #1693): bis zu drei Pässe über das Cap
  *  fährt der Umsetzer ohne Rückfrage, mehr gibt nur die Maintainerin frei; die gemeldete Zahl gleicht `bewerteRundenAbgleich` mit den Commit-Zeilen ab (factory#534).
  *  Ohne Überschreitung ist ein Zusatzpass ein Fehler. Pure. */
@@ -240,7 +245,7 @@ function bewerteRunden(review, zeilen, risikostufe) {
   if (af && typeof af === "object") {
     return [`${R}: abnahmefix=${af.ungueltig} ungültig (erwartet: abnahmefix=1, die eine Delta-Runde nach einem Abnahme-Fix).`];
   }
-  const basisPaesse = risikostufe.stufe === 1 ? MAX_REVIEW_PAESSE_STUFE1 : MAX_REVIEW_PAESSE; // Stufe 1: höchstens ein Fix-Pass (factory#526)
+  const basisPaesse = basisPaesseJeStufe(risikostufe);
   const reviewErlaubt = basisPaesse + (zp ? zp.anzahl : 0);
   const erlaubt = reviewErlaubt + (af ? 1 : 0);
   if (review.runden > erlaubt) {
@@ -259,11 +264,11 @@ function bewerteRunden(review, zeilen, risikostufe) {
   return [];
 }
 
-/** Runden-Abgleich (factory#534): `runden` darf nicht unter der höchsten `Runde <n>:`-Zeile der Branch-Commits plus 1 liegen; über dem Cap (MAX_REVIEW_PAESSE) trägt jeder Pass eine Commit-Zeile
- *  `<Präfix>Zusatzpass: R<k> <Ursache> — Entscheidung: <X>, weil <Y>`, genau für k = MAX+1 … runden, je einmal. Bei runden ≤ MAX ist eine solche Zeile ein Fehler.
- *  Das Cap ist bewusst fest MAX_REVIEW_PAESSE (wörtlich K2): bei Risikostufe 1 deckt `zusatzpass=` Pass 3 ab, eine Zeile verlangt der Abgleich dort nicht (bekannte Grenze, Zeile in factory#566).
+/** Runden-Abgleich (factory#534): `runden` darf nicht unter der höchsten `Runde <n>:`-Zeile der Branch-Commits plus 1 liegen; über dem Cap (basisPaesseJeStufe) trägt jeder Pass eine Commit-Zeile
+ *  `<Präfix>Zusatzpass: R<k> <Ursache> — Entscheidung: <X>, weil <Y>`, genau für k = Cap+1 … runden, je einmal. Bei runden ≤ Cap ist eine solche Zeile ein Fehler.
  *  `zusatzpassZeilen === null`: nicht übergeben, die Zeilenprüfung entfällt (nur direkte Aufrufer in Tests). Bewusste Grenze: lässt ein Fix-Commit die `Runde n:`-Zeile weg, bleibt die Runde unsichtbar. Pure. */
-function bewerteRundenAbgleich({ review, hoechste, zusatzpassZeilen, zeilen }) {
+function bewerteRundenAbgleich({ review, hoechste, zusatzpassZeilen, zeilen, risikostufe }) {
+  const cap = basisPaesseJeStufe(risikostufe);
   const R = zeilen.review;
   const Z = zeilen.zusatzpass;
   const fehler = [];
@@ -276,11 +281,11 @@ function bewerteRundenAbgleich({ review, hoechste, zusatzpassZeilen, zeilen }) {
   for (const z of ungueltig) fehler.push(`${Z}: "${z.ungueltig}" ist keine gültige Zeile (erwartet: ${vorlage}).`);
   const ks = zusatzpassZeilen.filter((z) => z.ungueltig === undefined).map((z) => z.k);
   const erwartet = [];
-  for (let k = MAX_REVIEW_PAESSE + 1; k <= review.runden; k++) erwartet.push(k);
+  for (let k = cap + 1; k <= review.runden; k++) erwartet.push(k);
   if (ungueltig.length === 0 && (ks.length !== erwartet.length || erwartet.some((k) => !ks.includes(k)))) {
     fehler.push(
       erwartet.length === 0
-        ? `${Z}-Zeile ohne Überschreitung: nur bei runden > ${MAX_REVIEW_PAESSE} zulässig (runden=${review.runden}, Zeilen: ${ks.map((k) => "R" + k).join(", ")}).`
+        ? `${Z}-Zeile ohne Überschreitung: nur bei runden > ${cap} zulässig (runden=${review.runden}, Zeilen: ${ks.map((k) => "R" + k).join(", ")}).`
         : `${R}: runden=${review.runden} braucht je Pass über dem Cap genau eine Commit-Zeile (${erwartet.map((k) => "R" + k).join(", ")}), gefunden: ${ks.length ? ks.map((k) => "R" + k).join(", ") : "keine"}. Format: ${vorlage}.`,
     );
   }
@@ -409,7 +414,7 @@ function bewerteReviewZeile({ review, dateien, headBekannt, headImSlice, stufe, 
   if (!Number.isInteger(review.runden) || review.runden < 1) {
     fehler.push(`${R}: runden fehlt oder ist keine Zahl ≥ 1.`);
   } else {
-    fehler.push(...bewerteRunden(review, zeilen, risikostufe), ...bewerteRundenAbgleich({ review, hoechste, zusatzpassZeilen, zeilen }));
+    fehler.push(...bewerteRunden(review, zeilen, risikostufe), ...bewerteRundenAbgleich({ review, hoechste, zusatzpassZeilen, zeilen, risikostufe }));
   }
   fehler.push(...bewerteLensSatz(review, dateien, stufe, zeilen, risikostufe));
   const unbekannt = review.lenses.filter((l) => !BEKANNTE_LENSES.includes(l));

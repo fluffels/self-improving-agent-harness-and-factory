@@ -535,11 +535,12 @@ export function umgebungsWert(env, name) {
 const ABSCHLUSS_AUS = "aus";
 
 /**
- * Der wirksame Abschluss-Skill (factory#139): `FACTORY_ABSCHLUSS_SKILL` (nicht leer) geht vor `skills.abschluss`; `aus` heißt kein Skill (`null`).
+ * Der wirksame Abschluss-Skill (factory#139): `FACTORY_ABSCHLUSS_SKILL` (nicht leer, Leerraum drumherum zählt nicht) geht vor `skills.abschluss`; `aus` heißt kein Skill (`null`).
  * Ohne Variable gilt der Repo-Wert (String oder `null`). Pur.
  */
 export function wirksamerAbschluss(config, env = {}) {
-  const lokal = umgebungsWert(env, "FACTORY_ABSCHLUSS_SKILL");
+  const roh = umgebungsWert(env, "FACTORY_ABSCHLUSS_SKILL");
+  const lokal = typeof roh === "string" ? roh.trim() : roh;
   if (typeof lokal === "string" && lokal !== "") return lokal === ABSCHLUSS_AUS ? null : lokal;
   return config?.skills?.abschluss ?? null;
 }

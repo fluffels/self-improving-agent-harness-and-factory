@@ -99,6 +99,7 @@
         "Teil-Akzeptanzkriterien"
       ],
       "nachMerge": "Nach dem Merge:",
+      "pfade": "Chemins",
       "blocker": "blockiert durch",
       "abhaengigkeit": [
         "folgt nach #",

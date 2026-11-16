@@ -50,6 +50,45 @@ describe("parseBerichte", () => {
   });
 });
 
+describe("Prüfbereich der Fundzeilen (L7, L8)", () => {
+  const kopf = (verdikt: string, rest: string) => `## Lens: Doku\n${verdikt}${rest}`;
+  test("L7: Fund direkt unter Verdikt, danach Scope-Absatz: 1 Hinweis, kein Fehler", () => {
+    const t = kopf("Verdikt: x\n", `${HIN("a.md:1")}\n\nScope-Vorschläge:\n- Muster — \`x:1\`\n`);
+    expect(L.parseBerichte(t)[0].funde).toHaveLength(1);
+  });
+  test("L8: unbekannte Marke, fehlendes '- ' und Liste ohne Marke werfen mit Lens und Zeile", () => {
+    for (const zeile of ["- [❓ wichtig] Text — `a:1`", "[🔶 sollte] Text — `a:1`", "- a — `x:1`"]) {
+      expect(() => L.parseBerichte(B("Doku", zeile))).toThrow(`Brille doku: Fundzeile ohne gültige Schwere-Marke oder ohne führendes "- ": ${zeile}`);
+    }
+  });
+  test("L8: CLI Exit 2 bei Formfehler", () => {
+    const r = spawnSync(process.execPath, [SKRIPT, "--runde", "1"], { input: B("Doku", "- [❓ wichtig] Text — `a:1`"), encoding: "utf8" });
+    expect(r.status).toBe(2);
+    expect(r.stderr).toMatch(/doku/);
+  });
+  test("mehrere Leerzeilen nach Verdikt und Leerzeile vor Verdikt sind gültig", () => {
+    expect(L.parseBerichte(kopf("Verdikt: x\n\n\n\n", `${HIN("a.md:1")}\n`))[0].funde).toHaveLength(1);
+    expect(L.parseBerichte(`## Lens: Doku\n\nVerdikt: x\n\n${HIN("a.md:1")}\n`)[0].funde).toHaveLength(1);
+  });
+  test("null Funde: der Scope-Absatz direkt nach Verdikt wird nicht geprüft", () => {
+    const t = "## Lens: Doku\nVerdikt: ✅ ok\n\nScope-Vorschläge:\n- Harness → Zeile Defekt — `x.mjs:1` — beleg\n";
+    expect(L.parseBerichte(t)[0].funde).toEqual([]);
+  });
+  test("Prüfbereich beginnt erst an der Verdikt-Zeile; ohne Verdikt-Zeile gibt es keinen", () => {
+    expect(L.parseBerichte(`## Lens: Doku\n- a — \`x:1\`\nVerdikt: x\n\n${HIN("a.md:1")}\n`)[0].funde).toHaveLength(1);
+    expect(L.parseBerichte(`## Lens: Doku\n- a — \`x:1\`\n${HIN("a.md:1")}\n`)[0].funde).toHaveLength(1);
+    expect(() => L.parseBerichte(`## Lens: Doku\n  verdikt: x\n- a — \`x:1\`\n`)).toThrow(/ohne gültige Schwere-Marke/);
+  });
+  test("eingerückte Formfehler werden erkannt, Zeilen wie '-x' nicht als Fundzeile gewertet", () => {
+    expect(() => L.parseBerichte(B("Doku", "  - a — `x:1`"))).toThrow(/ohne gültige Schwere-Marke/);
+    expect(L.parseBerichte(B("Doku", HIN("a.md:1"), "-x frei", "---"))[0].funde).toHaveLength(1);
+  });
+  test("Text nach der ersten Leerzeile hinter dem Fund-Absatz wird nicht geprüft", () => {
+    const t = B("Doku", HIN("a.md:1")) + "\n- Protokoll — `x:1`\n[❓ x] frei\n";
+    expect(L.parseBerichte(t)[0].funde).toHaveLength(1);
+  });
+});
+
 describe("Fixliste und Runde-Zeile", () => {
   const text = B("Architektur", SOLL("b.ts:2"), BLOCK("a.ts:1"), HIN("h.ts:1")) + B("Requirement-Treue", BLOCK("A.ts:1"), SOLL("c.ts:3")) + B("Test-Adäquanz");
   test("gleiche Fundstelle und Schwere über Brillen wird ein Eintrag, Reihenfolge Schwere dann Ort, Hinweise fehlen", () => {
@@ -203,7 +242,7 @@ describe("Fundstelle, Zusammenfassen, Sortierung (Review-Runde 1)", () => {
     expect(e.fixliste).toHaveLength(1);
   });
   test("Zeilenform: Klammerinhalt mit anderem Wort, Einrückung, fehlende Leerzeichen, Groß-/Kleinschreibung des Kopfs", () => {
-    expect(L.parseBerichte(B("Doku", "- [nicht blockierend] x — `a.md:1`"))[0].funde).toEqual([]);
+    expect(() => L.parseBerichte(B("Doku", "- [nicht blockierend] x — `a.md:1`"))).toThrow(/Schwere-Marke/);
     expect(L.parseBerichte(B("Doku", "  - [❌blockierend]x — `a.md:1` — b"))[0].funde).toHaveLength(1);
     expect(L.parseBerichte(B("Doku", "Text - [❌ blockierend] x — `a.md:1`"))[0].funde).toEqual([]);
     expect(L.parseBerichte("## lens: doku\n- [⚠️ Hinweis] x — `a.md:1` — b\n")[0].funde).toHaveLength(1);

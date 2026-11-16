@@ -11,9 +11,8 @@
  *  5. Stufe 0 nur bei (A) reinem `*.md`-Diff ohne Leitplanken- oder Grundschutz-Pfad oder (B) Größenstufe S mit Sweep `stichprobe` (nur Doku und Testdateien außerhalb von `test/harness/`).
  *  6. Sonst Stufe 1 (Produktionscode ist nie Stufe 0, Leitplanken-Markdown mindestens Stufe 1).
  *
- * Bekannte Grenze: der Abschnittsname „Pfade“ ist fest deutsch (K4 nennt ihn wörtlich); ein Bezieher mit anderssprachigen Tickets bekommt bei `--ticket` Stufe 2 („Abschnitt fehlt“, fail-closed). Ein Schlüssel in `sprache.spezifikation`
- * und die Vorlage des Abschnitts gehören zu factory#527 (Ablauf).
- * Eingang `--ticket`: nur die Listenzeilen im Abschnitt „Pfade“ (Formen: `-`, `*`, `+`, `1.` oder `1)`; der Pfad ist der erste Inline-Code-Span, sonst das erste Wort; Fließtext, Code-Fences und
+ * Der Abschnittsname steht in `sprache.spezifikation.pfade` der Projekt-Config (deutsch „Pfade“); fehlt der Schlüssel, ist `--ticket` Stufe 2 (fail-closed).
+ * Eingang `--ticket`: nur die Listenzeilen im Abschnitt dieses Namens (Formen: `-`, `*`, `+`, `1.` oder `1)`; der Pfad ist der erste Inline-Code-Span, sonst das erste Wort; Fließtext, Code-Fences und
  * der übrige Ticket-Text sind kein Eingang). Ein fehlender oder leerer Abschnitt, ein Glob (`*`, `?`, `[`) oder eine Zeile ohne Pfad ist Stufe 2. Die Prognose kennt keine Zeilen und prüft jeden Pfad zusätzlich als Verzeichnis.
  */
 import { readFileSync } from "node:fs";
@@ -145,12 +144,14 @@ export function bestimmeRisikostufe({ eintraege, basis, leitplanken, risiko, pro
 
 const normPfad = (p) => p.replace(/\\/g, "/").replace(/^\.\//, "").replace(/^\/+/, "");
 
-/** Die Pfade aus dem Abschnitt „Pfade“ eines Ticket-Bodys: `{pfade, fehler}` (`fehler` ist `null` oder ein Text; jeder Fehler ist Stufe 2). Sonstiger Text ist kein Eingang. Pur. */
-export function pfadeAusTicket(body) {
-  const zeilen = abschnitt(body, ["Pfade"]);
-  if (zeilen === null) return { pfade: [], fehler: "Abschnitt „Pfade“ fehlt" };
+/** Die Pfade aus dem Abschnitt `name` (Config `sprache.spezifikation.pfade`, kein Standardwert) eines Ticket-Bodys: `{pfade, fehler}` (`fehler` ist `null` oder ein Text; jeder Fehler ist Stufe 2). Sonstiger Text ist kein Eingang. Pur. */
+export function pfadeAusTicket(body, name) {
+  if (typeof name !== "string" || name.trim() === "") return { pfade: [], fehler: "sprache.spezifikation.pfade fehlt (Name des Ticket-Abschnitts mit der Pfadliste in der Projekt-Config eintragen)" };
+  const abschnittName = name.trim();
+  const zeilen = abschnitt(body, [abschnittName]);
+  if (zeilen === null) return { pfade: [], fehler: `Abschnitt „${abschnittName}“ fehlt` };
   const listen = zeilen.map((z) => /^\s*(?:[-*+]|\d+[.)])\s+(.*)$/.exec(z)).filter((m) => m !== null);
-  if (listen.length === 0) return { pfade: [], fehler: "Abschnitt „Pfade“ ohne Listenzeile (leer)" };
+  if (listen.length === 0) return { pfade: [], fehler: `Abschnitt „${abschnittName}“ ohne Listenzeile (leer)` };
   const pfade = [];
   for (const m of listen) {
     const rest = m[1].replace(/^\[[ xX]\]\s*/, "");

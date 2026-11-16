@@ -49,10 +49,10 @@ const pruefe = (review: string, davor = "") =>
     env: {},
     ladeZeilen: () => Zl,
   });
-const bewerte = (o: { runden: number; hoechste?: number; zeilen?: unknown[] | null }) =>
+const bewerte = (o: { runden: number; hoechste?: number; zeilen?: unknown[] | null; stufe?: number }) =>
   (raw as unknown as { bewerteNachweis: (o: unknown) => string[] }).bewerteNachweis({
     nachweis: (raw as unknown as { parseNachweis: (t: string, z: unknown) => unknown }).parseNachweis(
-      `${Zl.plan}: ${FREMD.agenten.planer}\n${Zl.review}: head=${SHA} runden=${o.runden}${o.runden > 3 ? ` zusatzpass=${o.runden - 3}:Entscheidung` : ""} ${LENSES} verdikt=ok`,
+      `${Zl.plan}: ${FREMD.agenten.planer}\n${Zl.review}: head=${SHA} runden=${o.runden}${o.runden > 3 - (o.stufe === 1 ? 1 : 0) ? ` zusatzpass=${o.runden - 3 + (o.stufe === 1 ? 1 : 0)}:Entscheidung` : ""} ${LENSES} verdikt=ok`,
       Zl,
     ),
     dateien: ["docs/a.md"],
@@ -60,7 +60,7 @@ const bewerte = (o: { runden: number; hoechste?: number; zeilen?: unknown[] | nu
     headImSlice: true,
     zeilen: Zl,
     risiko: { klasse: "doku", gruende: ["t"] },
-    risikostufe: { stufe: 0, gruende: ["t"], treffer: [], pfade: [] },
+    risikostufe: { stufe: o.stufe ?? 0, gruende: ["t"], treffer: [], pfade: [] },
     hoechsteRunde: o.hoechste ?? 0,
     zusatzpassZeilen: o.zeilen === undefined ? [] : o.zeilen,
   });
@@ -124,6 +124,18 @@ describe("bewerteNachweis: Runden-Abgleich (K2, K5)", () => {
   });
   test("ohne übergebene Eingaben (null) entfällt die Zeilenprüfung", () => {
     assert.deepEqual(bewerte({ runden: 4, zeilen: null }), []);
+  });
+});
+
+describe("bewerteNachweis: Runden-Abgleich bei Risikostufe 1 (Cap 2, Pass 3 ist Zusatzpass)", () => {
+  const abgleich = (f: string[]) => f.filter((x) => /Commit-Zeile \(|ohne Überschreitung/.test(x)).join("\n");
+  test("runden=3 ohne Zusatzpass-Zeile R3 ist rot, mit Zeile grün", () => {
+    assert.match(abgleich(bewerte({ runden: 3, stufe: 1 })), /braucht je Pass über dem Cap genau eine Commit-Zeile \(R3\), gefunden: keine/);
+    assert.equal(abgleich(bewerte({ runden: 3, stufe: 1, zeilen: zusatzpassZeilenAus(ZP(3), Zl.zusatzpass) })), "");
+  });
+  test("eine Zeile bei runden=2 ist rot (ohne Überschreitung), Stufe 2 bleibt bei Grenze 3", () => {
+    assert.match(abgleich(bewerte({ runden: 2, stufe: 1, zeilen: zusatzpassZeilenAus(ZP(2), Zl.zusatzpass) })), /ohne Überschreitung: nur bei runden > 2 zulässig/);
+    assert.match(abgleich(bewerte({ runden: 3, stufe: 2, zeilen: zusatzpassZeilenAus(ZP(3), Zl.zusatzpass) })), /ohne Überschreitung: nur bei runden > 3 zulässig/);
   });
 });
 

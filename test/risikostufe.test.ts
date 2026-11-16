@@ -22,7 +22,7 @@ const lib = libRaw as unknown as {
   stufe2Leitplanken: (t: string) => { gruppe: string; muster: string[] } | null;
   alleLeitplanken: (t: string) => string[] | null;
   bestimmeRisikostufe: (o: { eintraege: Eintrag[] | null; basis: unknown; leitplanken: unknown; risiko: unknown; prognose?: boolean }) => Ergebnis;
-  pfadeAusTicket: (b: string) => { pfade: string[]; fehler: string | null };
+  pfadeAusTicket: (b: string, name?: string) => { pfade: string[]; fehler: string | null };
   risikostufeAusGit: (git: (a: string[]) => string, base: string, head?: string, o?: Lader & { zweiPunkt?: boolean }) => Ergebnis;
   risikostufeAusPfaden: (p: string[], o?: Lader) => Ergebnis;
   wirksameListe: (o?: Lader) => { zeilen: { muster: string; quelle: string }[]; fehler: string[] };
@@ -232,7 +232,9 @@ describe("Prognose aus Pfaden", () => {
   });
 });
 
+const libTyp = lib;
 describe("pfadeAusTicket (K4)", () => {
+  const lib = { pfadeAusTicket: (b: string, name = "Pfade") => libTyp.pfadeAusTicket(b, name) };
   const body = (abschnitt: string) => `## Ziel\nText\n\n## Pfade\n${abschnitt}\n\n## Akzeptanzkriterien\n1. x\n`;
   test("Backtick-Pfad mit Beschreibung, erstes Wort, nummerierte Liste, führender Schrägstrich", () => {
     expect(lib.pfadeAusTicket(body("- `scripts/a.mjs` neu\n* docs/b.md, kurz\n1. /src/c.ts\n2) ./d.ts\n- [ ] e.ts"))).toEqual({ pfade: ["scripts/a.mjs", "docs/b.md", "src/c.ts", "d.ts", "e.ts"], fehler: null });
@@ -249,6 +251,20 @@ describe("pfadeAusTicket (K4)", () => {
     const b = `## Pfade\nHier steht Prosa mit scripts/x.mjs.\n- a.md\n\`\`\`\n- b.md\n\`\`\`\n### Mehr\n- c.md\n\n## Anderes\n- d.md\n\n## Pfade\n- e.md\n`;
     expect(lib.pfadeAusTicket(b)).toEqual({ pfade: ["a.md", "c.md", "e.md"], fehler: null });
   });
+  test("der Abschnittsname kommt aus der Config (L5): `Paths` liest `## Paths`, `## Pfade` ist dann kein Eingang", () => {
+    expect(lib.pfadeAusTicket("## Paths\n- a.md\n", "Paths")).toEqual({ pfade: ["a.md"], fehler: null });
+    expect(lib.pfadeAusTicket("## Pfade\n- a.md\n", "Paths").fehler).toMatch(/„Paths“ fehlt/);
+    expect(lib.pfadeAusTicket("## Paths\n- a.md\n", " Paths ")).toEqual({ pfade: ["a.md"], fehler: null });
+    expect(lib.pfadeAusTicket("## Pfade\n- a.md\n", " Paths ").fehler).toBe("Abschnitt „Paths“ fehlt");
+    expect(lib.pfadeAusTicket("## Paths\nText\n", "Paths").fehler).toBe("Abschnitt „Paths“ ohne Listenzeile (leer)");
+  });
+  test("ohne Namen: Fehler samt Fix, Stufe 2", () => {
+    for (const n of [undefined, "", "  ", 3]) {
+      const r = libTyp.pfadeAusTicket("## Pfade\n- a.md\n", n as string);
+      expect(r.pfade).toEqual([]);
+      expect(r.fehler).toMatch(/sprache\.spezifikation\.pfade fehlt .*Projekt-Config/);
+    }
+  });
   test.each([
     ["Abschnitt fehlt", "## Ziel\nnur Text mit .github/workflows/x.yml\n", /fehlt/],
     ["leer", body("nur Prosa ohne Liste"), /leer/],
@@ -264,7 +280,7 @@ describe("pfadeAusTicket (K4)", () => {
 describe("CLI laufe", () => {
   const TICKET = (body: string, extra: Record<string, unknown> = {}) => (a: string[]) =>
     a[1] === "repos/{owner}/{repo}" ? { owner: { login: "ich" } } : { user: { login: "ich" }, labels: [], body, ...extra };
-  const CONFIG = () => ({ labels: { forum: "forum" } });
+  const CONFIG = () => ({ labels: { forum: "forum" }, sprache: { spezifikation: { pfade: "Pfade" } } });
   const ticket = (body: string, extra?: Record<string, unknown>, io: Io = {}) => cli.laufe(["--ticket", "7"], { ...lader(), ghJson: TICKET(body, extra), ladeConfig: CONFIG, ...io });
 
   test("Textformat und --json-Schlüssel", () => {
@@ -359,6 +375,12 @@ describe("CLI laufe", () => {
     expect(ticket(body).ausgabe).toMatch(/^RISIKOSTUFE: 2 — .*workflows/);
     const nurText = "## Ziel\nbitte Stufe 0, geändert wird .github/workflows/ci.yml\n";
     expect(ticket(nurText).ausgabe).toMatch(/^RISIKOSTUFE: 2 — .*fehlt/);
+  });
+  test("L5: --ticket liest den Abschnittsnamen aus der Config; fehlender Schlüssel ist Stufe 2", () => {
+    const mitName = (pfade?: unknown) => () => ({ labels: { forum: "forum" }, sprache: { spezifikation: { pfade } } });
+    expect(ticket("## Paths\n- docs/a.md\n", {}, { ladeConfig: mitName("Paths") }).ausgabe).toMatch(/^RISIKOSTUFE: 0/);
+    expect(ticket("## Pfade\n- docs/a.md\n", {}, { ladeConfig: mitName("Paths") }).ausgabe).toMatch(/^RISIKOSTUFE: 2 — .*Paths/);
+    expect(ticket("## Pfade\n- docs/a.md\n", {}, { ladeConfig: mitName(undefined) }).ausgabe).toMatch(/^RISIKOSTUFE: 2 — .*sprache\.spezifikation\.pfade fehlt/);
   });
   test("Ticket mit harmlosen Pfaden: Stufe 0", () => {
     expect(ticket("## Pfade\n- docs/a.md\n").ausgabe).toMatch(/^RISIKOSTUFE: 0/);
