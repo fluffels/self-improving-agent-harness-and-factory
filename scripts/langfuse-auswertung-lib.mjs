@@ -33,6 +33,8 @@ export const QUELLEN = ["live", "nachgeliefert", "codex", "sonstige"];
 export const ARTEN = ["gesamt", "tage", "latenz", "metadaten", "leer"];
 /** Modellname der leeren Hook-GENERATIONs des Plugins (factory#522: Modell `claude`, leere Usage, eine je Tool-Call). */
 export const LEER_MODELL = "claude";
+/** Platzhalter-Modell ohne Usage: Dashboards (Filter) und Transkript (`istEchtesModell`) zählen es nicht, die Auswertung verwirft die Zeilen nach dem Lesen (factory#583; der Query-Filter bleibt). */
+export const SYNTHETIC_MODELL = "<synthetic>";
 /** Filter aller Kosten- und Zähl-Abfragen; nur der Export `leer` trägt ihn nicht. */
 export const LEER_FILTER = { column: "providedModelName", operator: "none of", value: [LEER_MODELL], type: "stringOptions" };
 const EPS = 1e-9;
@@ -184,6 +186,7 @@ export function leseExport(json, pfad) {
   const ex = { art: json.art, pfad, von: json.abfrage.fromTimestamp, bis: json.abfrage.toTimestamp, data: json.data };
   if (json.art === "leer") ex.zeilen = json.data.map((r, i) => leerZeileVon(r, pfad, i));
   else ex.zeilen = json.art === "tage" ? [] : json.data.map((r, i) => zeileVon(r, json.art, pfad, i));
+  ex.zeilen = ex.zeilen.filter((z) => z.providedModelName !== SYNTHETIC_MODELL);
   return json.art === "metadaten" ? { ...ex, ...metaFilter(json.abfrage, pfad) } : ex;
 }
 
