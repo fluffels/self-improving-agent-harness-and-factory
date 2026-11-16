@@ -11,7 +11,7 @@ const istBezieher = (standRaw as unknown as { istBezieher: (w: string) => boolea
 const WURZEL = fileURLToPath(new URL("..", import.meta.url));
 
 type E = { id: string; faellig: string; titel: string; text: string; label?: string; alerts?: unknown };
-type T = { number: number; state: string; body: string; closedAt?: string };
+type T = { number: number; state: string; body: string; closedAt?: string; author?: { login: string }; vertrauterAutor?: boolean };
 type Aktion = { art: string; eintrag: E; nummer?: number };
 const W = raw as unknown as {
   pruefeEintraege: (l: unknown) => string[];
@@ -20,6 +20,7 @@ const W = raw as unknown as {
   ticketText: (e: E) => { titel: string; body: string };
   markerFuer: (id: string) => string;
   istDatum: (s: unknown) => boolean;
+  markiereVertrauen: (t: T[], owner: string) => T[];
   TITEL_PRAEFIX: string;
   lauf: (a: { eintraege: E[]; heute: string; tickets: T[]; trocken?: boolean; anlegen: (e: E) => number; sortiereEin: (n: number) => boolean; log?: (m: string) => void }) => number;
 };
@@ -124,10 +125,33 @@ describe("planeAktionen: Dedupe über den Marker, alle Zustände", () => {
   });
 });
 
+describe("Marker nur von vertrauten Autoren (factory#604 L1)", () => {
+  const a = e("a");
+  const mit = (author: { login: string } | undefined): T => ({ number: 5, state: "open", body: W.markerFuer("a"), author });
+  test("ein offenes Ticket mit Marker von fremdem Autor unterdrückt die Wiedervorlage nicht", () => {
+    const tickets = W.markiereVertrauen([mit({ login: "fremd" })], "owner");
+    expect(W.planeAktionen({ faellige: [a], tickets })).toEqual([{ art: "anlegen", eintrag: a }]);
+  });
+  test("Owner, github-actions als gh-Form app/… und als REST-Form bleiben vertraut (keine Dubletten)", () => {
+    for (const login of ["owner", "Owner", "app/github-actions", "github-actions[bot]"]) {
+      expect(W.planeAktionen({ faellige: [a], tickets: W.markiereVertrauen([mit({ login })], "owner") }), login).toEqual([]);
+    }
+  });
+  test("ein fremdes Bot-Konto und ein fehlender Autor sind nicht vertraut (fail-closed)", () => {
+    for (const author of [{ login: "app/anderer-bot" }, undefined, { login: "" }]) {
+      expect(W.markiereVertrauen([mit(author)], "owner")[0]?.vertrauterAutor, JSON.stringify(author)).toBe(false);
+    }
+  });
+  test("ein fremdes geschlossenes Ticket mit Marker löst auch keine Warnung aus", () => {
+    const zu: T = { ...mit({ login: "fremd" }), state: "closed", closedAt: "2026-11-14T00:00:00Z" };
+    expect(W.planeAktionen({ faellige: [a], tickets: W.markiereVertrauen([zu], "owner") })).toEqual([{ art: "anlegen", eintrag: a }]);
+  });
+});
+
 describe("Wächter", () => {
   test("die Listenabfrage holt closedAt (sonst bliebe die Regel „verschoben, also anlegen“ tot)", () => {
     const src = readFileSync(new URL("../scripts/wiedervorlage.mjs", import.meta.url), "utf8");
-    expect(src).toMatch(/const ladeTickets = .*--json", "number,state,body,closedAt"/);
+    expect(src).toMatch(/const ladeTickets = .*--json", "number,state,body,closedAt,author"/);
   });
   test("die echte Datei .github/wiedervorlagen.json ist gültig", () => {
     const liste: unknown = JSON.parse(readFileSync(new URL("../.github/wiedervorlagen.json", import.meta.url), "utf8"));
@@ -184,6 +208,17 @@ describe("main: --dry-run über Deps (#1837)", () => {
     expect(log.join("\n")).toContain("[dry-run]");
     expect(angelegt).toEqual([]);
     expect(sortiert).toEqual([]);
+  });
+  test("Verdrahtung: ein Ticket mit Marker von fremdem Autor unterdrückt das Anlegen nicht, eines vom Owner schon", async () => {
+    vi.stubEnv("PROJECT_TOKEN", "t");
+    const marker = W.markerFuer("a");
+    const lauf = async (login: string) => {
+      const { angelegt, deps } = aufbau();
+      await main([], { ...deps, ticketsLaden: () => [{ number: 3, state: "open", body: marker, author: { login } }] });
+      return angelegt.length;
+    };
+    expect(await lauf("fremd")).toBe(1);
+    expect(await lauf(FREMD.repo.split("/")[0] as string)).toBe(0);
   });
   test("ohne Flag: legt an und sortiert ein, kein [dry-run]", async () => {
     vi.stubEnv("PROJECT_TOKEN", "t");
