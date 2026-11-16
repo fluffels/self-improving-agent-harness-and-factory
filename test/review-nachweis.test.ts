@@ -242,7 +242,7 @@ describe("sollte- und hinweis-Pflichtfelder (factory#530, Schwere der Lens-Funde
   const mit = (felder: string, runden = 2, lenses = DREI) =>
     bewerteNachweis({
       nachweis: parseNachweis(review(`head=${SHA} runden=${runden} lenses=${lenses} ${felder} verdikt=ok`)),
-      stufe: lenses === "kombiniert" ? "S" : "voll",
+      risikostufe: lenses === "kombiniert" ? { ...R1, kombi: KOMBI_JA } : R1,
       dateien: lenses === "doku" ? ["docs/x.md"] : ["src/x.ts"],
       headBekannt: true,
       headImSlice: true,
@@ -338,7 +338,7 @@ describe("teilbrillen-Feld (factory#402 L21, Kombi-Lens je Teil-Brille)", () => 
       dateien: ["src/x.ts"],
       headBekannt: true,
       headImSlice: true,
-      stufe: "S",
+      risikostufe: { ...R1, kombi: KOMBI_JA },
     });
   const GUT = "architektur:1,requirement-treue:1,test-adaequanz:1";
   test("Parser: Feld fehlt → null, sonst Liste wie blocker (Umlaute, Leerzeichen)", () => {
@@ -1400,8 +1400,8 @@ describe("Risikostufe: die Wächter rechnen nach (factory#526)", () => {
   });
   test("K7: kombiniert gilt nur unter der Kombi-Lens-Grenze bei Stufe ≤ 1; die Altformen Skizze und Klein sind bei jeder Stufe rot (K2)", () => {
     const kombi = `head=${SHA} runden=1 lenses=kombiniert blocker=kombiniert:0 sollte=kombiniert:0 hinweis=kombiniert:0 teilbrillen=architektur:0,requirement-treue:0,test-adaequanz:0 verdikt=ok`;
-    assert.deepEqual(bew(text(PL, kombi), R1, { stufe: "S" }), []);
-    rot(bew(text(PL, kombi), R1, { stufe: "voll" }), /kombiniert genügt nur unter der Kombi-Lens-Grenze.*KOMBI: nein/);
+    assert.deepEqual(bew(text(PL, kombi), { ...R1, kombi: KOMBI_JA }), []);
+    rot(bew(text(PL, kombi), { ...R1, kombi: { zulaessig: false, gruende: ["zu groß"] } }), /kombiniert genügt nur unter der Kombi-Lens-Grenze.*KOMBI: nein/);
     for (const r of [R0, R1, R2]) {
       rot(bew(text(`${PL} — skizze`, kombi), r, { stufe: "S" }), /Skizzen-Form ist entfernt.*ohne — stufe <0\|1>/);
       rot(bew(text("ohne — klein: Tippfehler", kombi), r, { stufe: "S" }), /Klein-Form ist entfernt.*ohne — stufe <0\|1>/);

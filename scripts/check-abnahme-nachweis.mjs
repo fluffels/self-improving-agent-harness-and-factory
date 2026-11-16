@@ -29,8 +29,8 @@ import { execFileSync } from "node:child_process";
 import { resolveBase } from "./check-basis.mjs";
 import { fehlerText, ghJson } from "./gh-cli.mjs";
 import { issueKommentare } from "./fremdtext-lib.mjs";
-import { MAX_REVIEW_PAESSE, kleinGrund, markerUrteile, nurSzenarioOffen, parseNachweis, risikostufeZeile, stufeGrund, stufeZeile, stufenAusnahmeFehler, vertrauteAbnahmeMarker } from "./nachweis-lib.mjs";
-import { groessenstufeAusGit, risikoMusterAus } from "./groessenstufe-lib.mjs";
+import { MAX_REVIEW_PAESSE, kleinGrund, kombiStufe, markerUrteile, nurSzenarioOffen, parseNachweis, risikostufeZeile, stufeGrund, stufeZeile, stufenAusnahmeFehler, vertrauteAbnahmeMarker } from "./nachweis-lib.mjs";
+import { risikoMusterAus } from "./groessenstufe-lib.mjs";
 import { risikostufeAusGit, zwei } from "./risikostufe-lib.mjs";
 import { ladeProjektConfig, spracheAus, trenneConfigArg, umgebungsWert } from "./projekt-config-lib.mjs";
 import { zerlegeRepo } from "./repo-form.mjs";
@@ -184,13 +184,13 @@ export function checkAbnahmeNachweis({ runGit, gh = (a) => ghJson(a), env = proc
   if (!base) return { ok: false, fehler: ["Keine Vergleichs-Basis auflösbar (flacher Checkout?): Abnahme-Nachweis nicht prüfbar."], invalid: [] };
   let fehler;
   let rov = { reason: null, invalid: [] };
-  let stufe = null; // einmal berechnet: nur die Anzeige der Kombi-Lens-Grenze (factory#402 L26), keine Bewertung
+  let stufe = null; // Anzeige der Kombi-Lens-Grenze (factory#402 L26) aus risikostufe.kombi.zulaessig (`S`/`voll`, ein Rechenpfad, L4), keine Bewertung
   let risikostufe = null; // einmal berechnet (factory#526): Anzeige und Bewertung von `entfaellt`
   let entwurf = false; // erst der Live-Abruf (oder der Ereigniswert ohne PR-Nummer) setzt ihn; ein Fehler davor bleibt streng
   try {
     if (git(["rev-parse", "HEAD"]).trim() === base) return { ok: true, skipped: true, fehler: [], invalid: [] };
-    stufe = anzeigeStufe(git, base, config);
     risikostufe = risikostufeAusGit(git, base, "HEAD", { ladeRisiko: () => risikoMusterAus(config), ladeBasis, ladeText });
+    stufe = kombiStufe(risikostufe);
     const ov = sliceOverride(git, base, zeilen.abnahmeOverride);
     if (ov.reason !== null) return { ok: true, override: ov.reason, overrideKey: zeilen.abnahmeOverride, fehler: [], invalid: [...ov.invalid], stufe, risikostufe };
     rov = sliceOverride(git, base, zeilen.reviewOverride);
@@ -221,9 +221,6 @@ export function entwurfLive({ gh, env, repo }) {
   if (typeof pr?.draft !== "boolean") throw new Error(`Entwurfs-Status des PR #${nr} nicht lesbar (Feld draft fehlt).`);
   return pr.draft;
 }
-
-/** Kombi-Lens-Grenze (`S` = unter der Grenze) für die Anzeige (factory#402 L26); `groessenstufeAusGit` ist fail-closed (git- und Ladefehler ergeben `voll`) und wirft nicht. */
-const anzeigeStufe = (git, base, config) => groessenstufeAusGit(git, base, "HEAD", { ladeRisiko: () => risikoMusterAus(config) }).stufe;
 
 /** Der eigentliche Ablauf nach Override-Prüfung; wirft bei git- oder gh-Fehlern (der Aufrufer wertet das als rot). */
 function pruefe({ git, gh, env, config, zeilen, base, reviewOverride, risikostufe }) {
