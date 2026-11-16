@@ -147,10 +147,11 @@ const normPfad = (p) => p.replace(/\\/g, "/").replace(/^\.\//, "").replace(/^\/+
 /** Die Pfade aus dem Abschnitt `name` (Config `sprache.spezifikation.pfade`, kein Standardwert) eines Ticket-Bodys: `{pfade, fehler}` (`fehler` ist `null` oder ein Text; jeder Fehler ist Stufe 2). Sonstiger Text ist kein Eingang. Pur. */
 export function pfadeAusTicket(body, name) {
   if (typeof name !== "string" || name.trim() === "") return { pfade: [], fehler: "sprache.spezifikation.pfade fehlt (Name des Ticket-Abschnitts mit der Pfadliste in der Projekt-Config eintragen)" };
-  const zeilen = abschnitt(body, [name.trim()]);
-  if (zeilen === null) return { pfade: [], fehler: `Abschnitt „${name}“ fehlt` };
+  const abschnittName = name.trim();
+  const zeilen = abschnitt(body, [abschnittName]);
+  if (zeilen === null) return { pfade: [], fehler: `Abschnitt „${abschnittName}“ fehlt` };
   const listen = zeilen.map((z) => /^\s*(?:[-*+]|\d+[.)])\s+(.*)$/.exec(z)).filter((m) => m !== null);
-  if (listen.length === 0) return { pfade: [], fehler: `Abschnitt „${name}“ ohne Listenzeile (leer)` };
+  if (listen.length === 0) return { pfade: [], fehler: `Abschnitt „${abschnittName}“ ohne Listenzeile (leer)` };
   const pfade = [];
   for (const m of listen) {
     const rest = m[1].replace(/^\[[ xX]\]\s*/, "");

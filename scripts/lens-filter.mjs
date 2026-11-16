@@ -10,7 +10,7 @@
  * sonst `schlank` (nur blockierend löst den nächsten Pass aus; sollte-Funde werden mit Begründung verworfen oder gefixt, ein Fix zieht einen Delta-Pass nach sich;
  * Hinweise lösen nie etwas aus). Verwerfen: nur Funde der Schwere sollte, nur im Arm `schlank`, nur mit echter Begründung; jeder Verstoß endet mit Exit 2 und verwirft nichts.
  * Formfehler (factory#566): im Absatz direkt nach der Zeile `Verdikt:` (Leerzeilen davor ignoriert) ist jede Zeile der Form `[…]`, `- […]` oder `- …` ohne gültige Schwere-Marke ein Fehler (Exit 2);
- * ein Lens-Block ohne `Verdikt:`-Zeile hat keinen Prüfbereich, Text nach der ersten Leerzeile dahinter bleibt ungeprüft.
+ * beginnt der Absatz nicht mit einer Fundzeile (null Funde, etwa Scope-Vorschläge), wird er nicht geprüft; Grenze: andere Listenzeichen (`*`, `1.`) gelten nicht als Fundzeile; ein Lens-Block ohne `Verdikt:`-Zeile hat keinen Prüfbereich, Text nach der ersten Leerzeile dahinter bleibt ungeprüft.
  * Ohne `--ticket` gilt das Verhalten von `vollablauf`, ohne Arm-Zeile. Exit 0 = Ausgabe, 2 = Eingabefehler. Der Kern ist pur und exportiert.
  */
 import { readFileSync } from "node:fs";
@@ -59,8 +59,13 @@ function pruefeFundzeile(block, zeile) {
     if (b.absatz === 0) b.absatz = 1;
     return;
   }
+  const fundartig = /^\s*(-\s|\[)/.test(zeile);
+  if (b.absatz === -1 && !fundartig) {
+    b.absatz = 1; // null Funde: der erste Absatz ist Text (etwa Scope-Vorschläge), kein Fundblock
+    return;
+  }
   b.absatz = 0;
-  if (!FUND_RE.test(zeile) && /^\s*(-\s|\[)/.test(zeile)) {
+  if (!FUND_RE.test(zeile) && fundartig) {
     throw new FilterFehler(`Brille ${block.lens}: Fundzeile ohne gültige Schwere-Marke oder ohne führendes "- ": ${zeile.trim()}`);
   }
 }

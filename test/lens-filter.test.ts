@@ -70,6 +70,19 @@ describe("Prüfbereich der Fundzeilen (L7, L8)", () => {
     expect(L.parseBerichte(kopf("Verdikt: x\n\n\n\n", `${HIN("a.md:1")}\n`))[0].funde).toHaveLength(1);
     expect(L.parseBerichte(`## Lens: Doku\n\nVerdikt: x\n\n${HIN("a.md:1")}\n`)[0].funde).toHaveLength(1);
   });
+  test("null Funde: der Scope-Absatz direkt nach Verdikt wird nicht geprüft", () => {
+    const t = "## Lens: Doku\nVerdikt: ✅ ok\n\nScope-Vorschläge:\n- Harness → Zeile Defekt — `x.mjs:1` — beleg\n";
+    expect(L.parseBerichte(t)[0].funde).toEqual([]);
+  });
+  test("Prüfbereich beginnt erst an der Verdikt-Zeile; ohne Verdikt-Zeile gibt es keinen", () => {
+    expect(L.parseBerichte(`## Lens: Doku\n- a — \`x:1\`\nVerdikt: x\n\n${HIN("a.md:1")}\n`)[0].funde).toHaveLength(1);
+    expect(L.parseBerichte(`## Lens: Doku\n- a — \`x:1\`\n${HIN("a.md:1")}\n`)[0].funde).toHaveLength(1);
+    expect(() => L.parseBerichte(`## Lens: Doku\n  verdikt: x\n- a — \`x:1\`\n`)).toThrow(/ohne gültige Schwere-Marke/);
+  });
+  test("eingerückte Formfehler werden erkannt, Zeilen wie '-x' nicht als Fundzeile gewertet", () => {
+    expect(() => L.parseBerichte(B("Doku", "  - a — `x:1`"))).toThrow(/ohne gültige Schwere-Marke/);
+    expect(L.parseBerichte(B("Doku", HIN("a.md:1"), "-x frei", "---"))[0].funde).toHaveLength(1);
+  });
   test("Text nach der ersten Leerzeile hinter dem Fund-Absatz wird nicht geprüft", () => {
     const t = B("Doku", HIN("a.md:1")) + "\n- Protokoll — `x:1`\n[❓ x] frei\n";
     expect(L.parseBerichte(t)[0].funde).toHaveLength(1);

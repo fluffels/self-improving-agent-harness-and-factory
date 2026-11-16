@@ -254,6 +254,9 @@ describe("pfadeAusTicket (K4)", () => {
   test("der Abschnittsname kommt aus der Config (L5): `Paths` liest `## Paths`, `## Pfade` ist dann kein Eingang", () => {
     expect(lib.pfadeAusTicket("## Paths\n- a.md\n", "Paths")).toEqual({ pfade: ["a.md"], fehler: null });
     expect(lib.pfadeAusTicket("## Pfade\n- a.md\n", "Paths").fehler).toMatch(/„Paths“ fehlt/);
+    expect(lib.pfadeAusTicket("## Paths\n- a.md\n", " Paths ")).toEqual({ pfade: ["a.md"], fehler: null });
+    expect(lib.pfadeAusTicket("## Pfade\n- a.md\n", " Paths ").fehler).toBe("Abschnitt „Paths“ fehlt");
+    expect(lib.pfadeAusTicket("## Paths\nText\n", "Paths").fehler).toBe("Abschnitt „Paths“ ohne Listenzeile (leer)");
   });
   test("ohne Namen: Fehler samt Fix, Stufe 2", () => {
     for (const n of [undefined, "", "  ", 3]) {
