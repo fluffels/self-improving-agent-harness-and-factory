@@ -81,3 +81,46 @@ describe("zusatzpassKopfAus", () => {
     assert.equal(zusatzpassKopfAus(undefined as unknown as string), null);
   });
 });
+
+describe("R6 stufenabhängig: bei Risikostufe 1 sperrt schon `-lens-r3-` (factory#583)", () => {
+  const WTPFAD = (ende: string) => `/w/.claude/worktrees/${WT}7-lens-${ende}`;
+  const mit = (stufe: number | "wirft", aufrufe: string[] = []) => (prompt: string) =>
+    hook.dispatch(agent(prompt), "/w", undefined, undefined, {
+      config: FREMD,
+      risikostufeFuer: (pfad: string) => {
+        aufrufe.push(pfad);
+        if (stufe === "wirft") throw new Error("Stufe nicht bestimmbar");
+        return stufe;
+      },
+    });
+  test("Stufe 1: `-lens-r3-` ohne Feld wird abgewiesen, die Meldung nennt das tatsächliche Cap; r2 nicht", () => {
+    const aufrufe: string[] = [];
+    const r = mit(1, aufrufe)(kopf("r3-architektur"));
+    assert.equal(r?.hookSpecificOutput.permissionDecision, "deny");
+    assert.match(r?.hookSpecificOutput.permissionDecisionReason ?? "", /Runde 3, das Cap liegt bei 2 Pässen/);
+    assert.deepEqual(aufrufe, [WTPFAD("r3-architektur")], "die Stufe kommt aus dem Lens-Worktree");
+    assert.equal(mit(1)(kopf("r2-architektur")), null);
+  });
+  test("Stufe 1: ein vollständiges Feld lässt `-lens-r3-` durch, auch ohne Stufenbestimmung", () => {
+    const aufrufe: string[] = [];
+    assert.equal(mit(1, aufrufe)(kopf("r3-architektur", FELD)), null);
+    assert.deepEqual(aufrufe, []);
+  });
+  test("Stufe 2: `-lens-r3-` ohne Feld geht durch, `-lens-r4-` bleibt gesperrt", () => {
+    assert.equal(mit(2)(kopf("r3-architektur")), null);
+    assert.match(mit(2)(kopf("r4-architektur"))?.hookSpecificOutput.permissionDecisionReason ?? "", /Cap liegt bei 3 Pässen/);
+  });
+  test("Stufe nicht bestimmbar: bisheriges Verhalten (Cap MAX_REVIEW_PAESSE), auch mit dem Standard-Kindprozess in einem fehlenden Worktree", () => {
+    assert.equal(mit("wirft")(kopf("r3-architektur")), null);
+    assert.equal(mit("wirft")(kopf("r4-architektur"))?.hookSpecificOutput.permissionDecision, "deny");
+    assert.equal(deny(kopf("r3-architektur")), null);
+  });
+  test("ein Pfad außerhalb von `.claude/worktrees/` (oder mit `..`) startet keinen Prozess", () => {
+    for (const ende of ["/tmp/fremd/" + WT + "7-lens-r3-architektur", "/w/.claude/worktrees/../x/" + WT + "7-lens-r3-architektur", WT + "7-lens-r3-architektur"]) {
+      const aufrufe: string[] = [];
+      const prompt = `Brille: architektur · Arbeitsverzeichnis: /w/.claude/worktrees/${WT}7 · Patch: /tmp/x/${WT}7-r1.patch · erwarteter HEAD: abc1234def · Sabotage-Worktree: ${ende}`;
+      assert.equal(mit(1, aufrufe)(prompt), null, ende);
+      assert.deepEqual(aufrufe, [], ende);
+    }
+  });
+});
