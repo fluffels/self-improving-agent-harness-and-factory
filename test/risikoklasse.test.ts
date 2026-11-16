@@ -158,7 +158,7 @@ describe("Doku-Regel nur im Klassifikator", () => {
   test("Scan-Wächter: kein anderer Nachweis-Wächter trägt die Regel noch einmal (Regex-Literal auf .md am Ende, endsWith(\".md\"))", () => {
     // Grenze: nur diese geschlossene Liste und nur diese beiden bekannten Schreibweisen.
     const wurzel = join(dirname(fileURLToPath(import.meta.url)), "..");
-    const dateien = ["scripts/check-review-nachweis.mjs", "scripts/check-abnahme-nachweis.mjs", "scripts/nachweis-lib.mjs", "scripts/groessenstufe.mjs"];
+    const dateien = ["scripts/check-review-nachweis.mjs", "scripts/check-abnahme-nachweis.mjs", "scripts/nachweis-lib.mjs", "scripts/risikostufe.mjs"];
     const regexMd = String.fromCharCode(92) + ".md" + String.fromCharCode(36) + "/";
     const treffer = (text: string) => text.includes(regexMd) || text.includes(".endsWith(\".md\")");
     // Gegenprobe: der Wächter erkennt die frühere Kopie der Regel
@@ -288,16 +288,15 @@ describe("Wächter rechnen mit der Risikoklasse", () => {
     const { git, base } = repo(aenderungen, nachweis, basisConfig);
     return (reviewRaw as { checkReviewNachweis: (o: unknown) => { ok: boolean; fehler: string[] } }).checkReviewNachweis({ runGit: git, env: { FACTORY_DIFF_BASE: base }, ladeZeilen: () => Z, ladeRisiko });
   };
-  const nach = `${Z.plan}: ${PL} — skizze\n${Z.review}: head=<HEAD> runden=1 lenses=kombiniert blocker=kombiniert:0 sollte=kombiniert:0 hinweis=kombiniert:0 verdikt=ok`;
-  test("Risiko-Pfad mit einer Zeile: kombiniert und skizze sind rot; ohne Treffer in der Config grün", () => {
+  const nach = `${Z.plan}: ${PL}\n${Z.review}: head=<HEAD> runden=1 lenses=kombiniert blocker=kombiniert:0 sollte=kombiniert:0 hinweis=kombiniert:0 verdikt=ok`;
+  test("Risiko-Pfad mit einer Zeile: kombiniert ist rot; ohne Treffer in der Config grün", () => {
     const f = review({ "src/auth/a.ts": "x\n" }, nach, () => STANDARD).fehler.join("\n");
-    expect(f).toMatch(/gilt nur bei Größenstufe S/);
-    expect(f).toMatch(/kombiniert genügt nur bei Größenstufe S/);
+    expect(f).toMatch(/kombiniert genügt nur unter der Kombi-Lens-Grenze/);
     expect(review({ "src/auth/a.ts": "x\n" }, nach, () => ({ muster: ["/geheim/"], quelle: "Projekt-Config" }), { risiko: { hoch: ["/geheim/"] } }).fehler).toEqual([]);
   });
   const CONFIG = { repo: FREMD.repo, praefixe: { commitZeile: FREMD.praefixe.commitZeile }, agenten: { planer: PL }, sprache: echteSprache() };
   const abnahme = (aenderungen: Record<string, string>, config: Record<string, unknown>, basisConfig?: object) => {
-    const { git, base } = repo(aenderungen, `${Z.plan}: ${PL}\n${Z.review}: head=<HEAD> runden=1 lenses=kombiniert sollte=kombiniert:0 hinweis=kombiniert:0 verdikt=ok\n${Z.abnahme}: entfaellt — klein: nichts zu beobachten`, basisConfig);
+    const { git, base } = repo(aenderungen, `${Z.plan}: ${PL}\n${Z.review}: head=<HEAD> runden=1 lenses=kombiniert sollte=kombiniert:0 hinweis=kombiniert:0 verdikt=ok\n${Z.abnahme}: entfaellt — stufe 1`, basisConfig);
     return (abnahmeRaw as { checkAbnahmeNachweis: (o: unknown) => { ok: boolean; fehler: string[] } }).checkAbnahmeNachweis({
       runGit: git,
       gh: () => ({ body: "## Akzeptanzkriterien\n1. eins\n2. zwei\n" }),
@@ -305,7 +304,7 @@ describe("Wächter rechnen mit der Risikoklasse", () => {
       ladeConfig: () => config,
     });
   };
-  test("Abnahme: entfaellt — klein mit Risiko-Pfad ist rot, mit CONFIG.risiko.hoch ohne Treffer grün", () => {
+  test("Abnahme: entfaellt — stufe 1 mit Risiko-Pfad ist rot, mit CONFIG.risiko.hoch ohne Treffer grün", () => {
     expect(abnahme({ "src/auth/a.ts": "x\n" }, CONFIG).ok).toBe(false);
     expect(abnahme({ "src/auth/a.ts": "x\n" }, { ...CONFIG, risiko: { hoch: ["/geheim/"] } }, { risiko: { hoch: ["/geheim/"] } }).fehler).toEqual([]);
   });

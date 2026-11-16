@@ -1222,6 +1222,16 @@
       "grund": "Gegenstand ist Besitz"
     },
     {
+      "muster": "test/token-analyse-freigabe.test.ts",
+      "art": "projekt-test",
+      "grund": "Fabrik-eigen (factory#518), nicht im Besitz"
+    },
+    {
+      "muster": "test/harness/fabrik-eigen-analyse.test.ts",
+      "art": "projekt-test",
+      "grund": "Fabrik-eigen (factory#518), nicht im Besitz"
+    },
+    {
       "muster": "test/harness/aenderungsregister.test.ts",
       "art": "projekt-test",
       "grund": "Prüft das Änderungsregister der Fabrik (.github/aenderungsregister.json, nicht im Besitz)"

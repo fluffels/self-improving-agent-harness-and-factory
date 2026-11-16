@@ -28,7 +28,12 @@ const lib = libRaw as unknown as {
   wirksameListe: (o?: Lader) => { zeilen: { muster: string; quelle: string }[]; fehler: string[] };
 };
 type Io = Lader & { git?: (a: string[]) => string; env?: Record<string, string>; ghJson?: (a: string[]) => unknown; ladeConfig?: () => unknown };
-const cli = cliRaw as unknown as { laufe: (argv: string[], io?: Io) => { code: number; ausgabe: string }; stufeZeile: (e: { stufe: number; gruende: string[] }) => string };
+const cli = cliRaw as unknown as {
+  laufe: (argv: string[], io?: Io) => { code: number; ausgabe: string };
+  stufeZeile: (e: { stufe: number; gruende: string[] }) => string;
+  sweepZeile: (e: object) => string;
+  kombiZeile: (e: object) => string;
+};
 const gs = gsRaw as unknown as { risikoMusterAus: (c: unknown) => unknown };
 
 const BASIS = lib.ladeStufe2Basis();
@@ -277,6 +282,99 @@ describe("pfadeAusTicket (K4)", () => {
   });
 });
 
+describe("RISIKO-, SWEEP- und KOMBI-Zeile (factory#529, vorher ein eigenes Skript)", () => {
+  const unter = (pfade: string[], io: Io = {}) => cli.laufe(["--pfade", ...pfade], { ...lader(), ...io });
+  const zeilen = (a: string) => a.split("\n");
+  test("reine Doku: Stufe 0, doku, stichprobe, Kombi ja", () => {
+    expect(zeilen(unter(["docs/x.md", "docs/y.md"]).ausgabe)).toEqual([
+      expect.stringMatching(/^RISIKOSTUFE: 0/),
+      "RISIKO: doku — nur *.md",
+      "SWEEP: stichprobe — nur Doku und Testdateien, Risikoklasse nicht hoch",
+      "KOMBI: ja",
+    ]);
+  });
+  test("Code in kleinem Diff: Kombi ja, Sweep voll, Stufe 1; Risikoklasse hoch: Kombi nein mit Grund", () => {
+    expect(zeilen(unter(["src/a.ts"]).ausgabe).slice(1)).toEqual(["RISIKO: normal — kein Pfad trifft ein Risiko-Muster (Standardliste)", "SWEEP: voll — src/a.ts ist Code oder Konfiguration", "KOMBI: ja"]);
+    expect(zeilen(unter(["src/auth/x.ts"]).ausgabe).slice(1)).toEqual([
+      "RISIKO: hoch — src/auth/x.ts trifft *auth* (Standardliste)",
+      "SWEEP: voll — src/auth/x.ts trifft *auth* (Standardliste)",
+      "KOMBI: nein — Risikostufe 2; Risikoklasse hoch: src/auth/x.ts trifft *auth* (Standardliste)",
+    ]);
+  });
+  test("über der Grenze (vier Dateien) und im Grundschutz: Kombi nein, auch bei Stufe 1", () => {
+    const vier = unter(["a/1.ts", "a/2.ts", "a/3.ts", "a/4.ts"]).ausgabe;
+    expect(vier).toMatch(/^RISIKOSTUFE: 1/);
+    expect(zeilen(vier)[3]).toMatch(/^KOMBI: nein — 4 Dateien \(höchstens 3\)/);
+    expect(zeilen(unter(["scripts/y.mjs"]).ausgabe)[3]).toMatch(/^KOMBI: nein — scripts\/y\.mjs liegt in einem geschützten Pfad/);
+  });
+  test("Stufe 2 ohne Grundschutz-Pfad (Lockfile der Basis): KOMBI nein mit Grund Risikostufe 2", () => {
+    for (const p of ["Cargo.lock", "go.mod", "requirements.txt"]) {
+      const z = zeilen(unter([p]).ausgabe);
+      expect(z[0], p).toMatch(/^RISIKOSTUFE: 2/);
+      expect(z[3], p).toMatch(/^KOMBI: nein — Risikostufe 2/);
+    }
+  });
+  test("--json trägt risiko mit allen Treffern, sweep und kombi", () => {
+    const j = JSON.parse(unter(["src/auth/x.ts", "--json"]).ausgabe) as { risiko: unknown; sweep: unknown; kombi: unknown };
+    expect(j.risiko).toMatchObject({ klasse: "hoch", quelle: "Standardliste", treffer: [{ pfad: "src/auth/x.ts", muster: "*auth*" }] });
+    expect(j.sweep).toMatchObject({ tiefe: "voll" });
+    expect(j.kombi).toMatchObject({ zulaessig: false, gruende: ["Risikostufe 2", expect.stringMatching(/Risikoklasse hoch/)] });
+    const klein = JSON.parse(unter(["docs/x.md", "--json"]).ausgabe) as { kombi: unknown };
+    expect(klein.kombi).toEqual({ zulaessig: true, gruende: [] });
+  });
+  test("der Text kürzt Risiko-Gründe auf fünf plus Zahl der weiteren, --json trägt alle", () => {
+    const viele = Array.from({ length: 7 }, (_, i) => `src/auth/${i}.ts`);
+    const zeile = zeilen(unter(viele).ausgabe)[1];
+    expect(zeile).toMatch(/RISIKO: hoch — .*\(\+2 weitere\)$/);
+    expect(zeile.split("; ")).toHaveLength(5);
+    expect((JSON.parse(unter([...viele, "--json"]).ausgabe) as { risiko: { treffer: unknown[] } }).risiko.treffer).toHaveLength(7);
+    const fuenf = Array.from({ length: 5 }, (_, i) => `src/auth/${i}.ts`);
+    expect(zeilen(unter(fuenf).ausgabe)[1]).not.toMatch(/weitere/);
+  });
+  test("fail-closed: Stufe 2 trägt RISIKO hoch, SWEEP voll und KOMBI nein mit demselben Grund (Ladefehler, keine Basis, git-Fehler)", () => {
+    const wirft = () => { throw new Error("kaputt"); };
+    const alle = [
+      unter(["src/a.ts"], { ladeText: wirft }),
+      unter(["src/a.ts"], { ladeRisiko: wirft }),
+      cli.laufe([], { ...lader(), env: {}, git: () => "" }),
+      cli.laufe(["--commit", "abc"], { ...lader(), git: wirft }),
+    ];
+    for (const r of alle) {
+      const z = zeilen(r.ausgabe);
+      expect(z).toHaveLength(4);
+      expect(z[0]).toMatch(/^RISIKOSTUFE: 2/);
+      expect(z[1]).toMatch(/^RISIKO: hoch — /);
+      expect(z[2]).toMatch(/^SWEEP: voll — /);
+      expect(z[3]).toMatch(/^KOMBI: nein — /);
+      const grund = z[0].replace(/^RISIKOSTUFE: 2 — /, "");
+      expect(z[1]).toContain(grund);
+      expect(z[2]).toContain(grund);
+      expect(z[3]).toContain(grund);
+    }
+  });
+  test("die injizierte Risikoliste wirkt über die CLI auf SWEEP (Verdrahtung, kein Default)", () => {
+    const eigen = gs.risikoMusterAus({ risiko: { hoch: ["*billing*"] } });
+    expect(zeilen(unter(["test/billing.test.ts", "docs/a.md"], { ladeRisiko: () => eigen }).ausgabe)[2]).toMatch(/^SWEEP: voll — /);
+    expect(zeilen(unter(["test/billing.test.ts", "docs/a.md"], { ladeRisiko: () => gs.risikoMusterAus({}) }).ausgabe)[2]).toMatch(/^SWEEP: stichprobe — /);
+    expect(zeilen(unter(["scripts/x.mjs", "test/x.test.ts"]).ausgabe)[2]).toMatch(/^SWEEP: voll — scripts\/x\.mjs ist Code oder Konfiguration$/);
+    expect(zeilen(unter(["test/harness/x.test.ts"]).ausgabe)[2]).toMatch(/^SWEEP: voll — test\/harness\/x\.test\.ts ist ein Wächter-Test/);
+  });
+  test("Zeilenfunktionen: fehlende Felder sind fail-closed (SWEEP voll, KOMBI nein)", () => {
+    expect(cli.sweepZeile({})).toBe("SWEEP: voll — nicht berechnet");
+    expect(cli.kombiZeile({})).toBe("KOMBI: nein — nicht berechnet");
+    expect(cli.kombiZeile({ kombi: { zulaessig: true, gruende: [] } })).toBe("KOMBI: ja");
+  });
+  test("als Prozess: vier Zeilen mit Exit 0, Aufruf-Fehler mit Exit 2 und Aufrufzeile", () => {
+    const skript = fileURLToPath(new URL("../scripts/risikostufe.mjs", import.meta.url));
+    const aus = execFileSync("node", [skript, "--pfade", "docs/x.md"], { encoding: "utf8" }).trim().split("\n");
+    expect(aus.map((z) => z.split(":")[0])).toEqual(["RISIKOSTUFE", "RISIKO", "SWEEP", "KOMBI"]);
+    expect(execFileSync("node", [skript, "--pfade", "src/auth/x.ts"], { encoding: "utf8" })).toMatch(/\nRISIKO: hoch — src\/auth\/x\.ts trifft \*auth\* \(Standardliste\)/);
+    const fehler = spawnSync("node", [skript, "--unbekannt"], { encoding: "utf8" });
+    expect(fehler.status).toBe(2);
+    expect(fehler.stderr).toMatch(/Aufruf: node scripts\/risikostufe\.mjs/);
+  });
+});
+
 describe("CLI laufe", () => {
   const TICKET = (body: string, extra: Record<string, unknown> = {}) => (a: string[]) =>
     a[1] === "repos/{owner}/{repo}" ? { owner: { login: "ich" } } : { user: { login: "ich" }, labels: [], body, ...extra };
@@ -286,9 +384,10 @@ describe("CLI laufe", () => {
   test("Textformat und --json-Schlüssel", () => {
     const r = cli.laufe(["--pfade", "docs/a.md"], lader());
     expect(r).toMatchObject({ code: 0 });
-    expect(r.ausgabe).toMatch(/^RISIKOSTUFE: [012] — .+$/);
+    expect(r.ausgabe.split("\n")).toHaveLength(4);
+    expect(r.ausgabe).toMatch(/^RISIKOSTUFE: [012] — .+\nRISIKO: (?:hoch|normal|doku) — .+\nSWEEP: (?:voll|stichprobe) — .+\nKOMBI: (?:ja|nein)/);
     const j = JSON.parse(cli.laufe(["--pfade", "package.json", "--json"], lader()).ausgabe) as { stufe: number };
-    expect(Object.keys(j)).toEqual(["stufe", "gruende", "treffer", "pfade"]);
+    expect(Object.keys(j)).toEqual(["stufe", "gruende", "treffer", "pfade", "risiko", "sweep", "kombi"]);
     expect(j.stufe).toBe(2);
   });
   test("lange Gründe werden im Text gekürzt", () => {
@@ -303,8 +402,9 @@ describe("CLI laufe", () => {
     expect(cli.stufeZeile({ stufe: 2, gruende: ["git-Fehler: Command failed\nfatal: bad object x\n", "b\r\nc"] })).toBe("RISIKOSTUFE: 2 — git-Fehler: Command failed fatal: bad object x; b c");
     const io = { ...lader(), git: () => { throw new Error("Command failed\nfatal: bad object deadbeef\n"); } };
     const r = cli.laufe(["--commit", "deadbeef"], io);
-    expect(r.ausgabe.split("\n")).toHaveLength(1);
+    expect(r.ausgabe.split("\n")).toHaveLength(4);
     expect(r.ausgabe.startsWith("RISIKOSTUFE: 2 — ")).toBe(true);
+    expect(r.ausgabe.split("\n").map((z) => z.split(":")[0])).toEqual(["RISIKOSTUFE", "RISIKO", "SWEEP", "KOMBI"]);
     const j = JSON.parse(cli.laufe(["--commit", "deadbeef", "--json"], io).ausgabe) as { gruende: string[] };
     expect(j.gruende.join("")).toContain("\n");
   });

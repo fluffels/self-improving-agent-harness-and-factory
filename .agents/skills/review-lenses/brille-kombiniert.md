@@ -1,4 +1,4 @@
-**Lens K — Kombiniert** (nur bei Größenstufe S mit Code-Diff, factory#271; statt der Lenses 1–3). Eine Lens liest den kleinen Diff durch alle drei Code-Brillen nacheinander. Die Pflicht bleibt dieselbe, nur die Besetzung ist kleiner.
+**Lens K — Kombiniert** (nur unter der Kombi-Lens-Grenze, `KOMBI: ja`, bei Risikostufe ≤ 1 und Code-Diff, factory#271, factory#529; statt der Lenses 1–3). Eine Lens liest den kleinen Diff durch alle drei Code-Brillen nacheinander. Die Pflicht bleibt dieselbe, nur die Besetzung ist kleiner.
 
 Regel-Ausschnitt: die Ausschnitte der drei Teil-Brillen (je der `Regel-Ausschnitt:` ihrer Datei). Mehr aus der Root-Kontextdatei liest du nicht.
 
@@ -6,4 +6,4 @@ Regel-Ausschnitt: die Ausschnitte der drei Teil-Brillen (je der `Regel-Ausschnit
 - Die Sabotage-Probe und der Vollsweep der Test-Brille gelten unverändert (eigener sauberer Lens-Worktree, nie im Feature-Worktree); die Plan-Prüfliste hängt an den Punkten der Requirement- und der Test-Brille.
 - Jedes Finding nennt seine Teil-Brille (`architektur`, `requirement-treue` oder `test-adaequanz`) in der Kopfzeile; die Blocker-Zahl der Review-Zeile ist die Summe über alle drei (`blocker=kombiniert:<n>`; `sollte=kombiniert:<n>` und `hinweis=kombiniert:<n>` zählen ebenso als Summe, ohne Aufteilung), je Teil-Brille in `teilbrillen=architektur:<a>,requirement-treue:<r>,test-adaequanz:<t>` (Summe gleich `<n>`).
 - Ab Runde 2 läuft `kombiniert` allein auf dem Delta, wenn sie in der Vorrunde blockiert hat (der Test-Teil ist enthalten, keine zusätzliche Test-Lens). Die Blocker je Teil-Brille nennt die Zusammenfassung der Lens für den PR-Text.
-- Stellt sich beim Lesen heraus, dass der Diff über der Größenstufe S liegt (`node scripts/groessenstufe.mjs`), melde das als Blocker der Brille `architektur`: der Orchestrator fährt dann den vollen Satz.
+- Stellt sich beim Lesen heraus, dass der Diff über der Kombi-Lens-Grenze liegt (`KOMBI: nein` aus `node scripts/risikostufe.mjs`), melde das als Blocker der Brille `architektur`: der Orchestrator fährt dann den vollen Satz.
