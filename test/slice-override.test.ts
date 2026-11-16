@@ -71,6 +71,7 @@ describe("commitZeilen (#1741): alle Schlüssel aus dem Präfix, kein Standardwe
       syncDringlich: "AB-Sync-Dringlich",
       bezieherMigration: "AB-Bezieher-Migration",
       budgetBeleg: "AB-Budget-Beleg",
+      zusatzpass: "AB-Zusatzpass",
     });
     expect(Z.diffcovOverride).toBe(`${FREMD.praefixe.commitZeile}Diffcov-Override`);
   });
