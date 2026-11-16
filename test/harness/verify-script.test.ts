@@ -270,7 +270,8 @@ describe("#605 CI-Post-hoc-Netz auf main (zweite Grenze hinter #592)", () => {
   });
 
   it("der Alarm-Job ruft den Kern-Workflow auf (factory#401): Label per Input, PROJECT_TOKEN einzeln, nie secrets: inherit", () => {
-    expect(ci).toContain("uses: ./.github/workflows/alarm-rot-main.yml");
+    expect(ci).toContain("uses: $/.github/workflows/alarm-rot-main.yml");
+    expect(ci).not.toContain("uses: ./.github/workflows/alarm-rot-main.yml");
     expect(ci).toMatch(/with:\s*\n\s+label:\s*area:[\w-]+/);
     expect(ci).toMatch(/secrets:\s*\n\s+PROJECT_TOKEN:\s*\$\{\{\s*secrets\.PROJECT_TOKEN\s*\}\}/);
     expect(ci).not.toMatch(/secrets:\s*inherit/);

@@ -14,7 +14,8 @@ interface Ergebnis { punkt: string; ok: boolean; nichtPruefbar?: boolean; hinwei
 const punktFuer = rawPunkt as (e: { config?: unknown; workflows?: Workflow[]; vorAbbruch?: boolean }) => Ergebnis;
 const jobsLesen = rawJobs as (t: string) => { ausloeser?: string[]; jobs?: { id: string; needs: string[]; if: string | null; uses: string | null }[]; fehler?: { zeile: number; konstrukt: string } };
 
-const ALARM_USES = "./.github/workflows/alarm-rot-main.yml";
+const ALARM_USES = "$/.github/workflows/alarm-rot-main.yml";
+const ALARM_ALT = "./.github/workflows/alarm-rot-main.yml";
 const CONFIG = { sammelChecks: [{ workflow: "ci.yml", job: "gate" }] };
 const KOPF = "name: CI\non:\n  push:\n    branches: [main]\n  pull_request:\njobs:\n";
 const BUILD = "  build:\n    runs-on: ubuntu-latest\n  audit:\n    runs-on: ubuntu-latest\n";
@@ -53,6 +54,16 @@ describe("Sammel-Check (factory#401)", () => {
     expect(lauf(GUT.replace("needs: [build, audit]", "needs:\n      - build\n      - audit")).ok).toBe(true);
     expect(lauf(KOPF + "  build:\n    runs-on: x\n  gate:\n    needs: build\n    if: always()\n" + PRUEF + ALARM).ok).toBe(true);
     expect(lauf(GUT.replace("needs: [build, audit]", "needs: [build]")).befund).toMatch(/audit/);
+  });
+
+  test("Alarm-Job in beiden Formen ($/ und ./) gilt als Alarm-Aufruf; ein anderer Workflow nicht", () => {
+    expect(lauf(GUT.replace(ALARM_USES, ALARM_ALT))).toEqual({ punkt: "Sammel-Check", ok: true });
+    for (const anderer of ["./.github/workflows/anderer.yml", "$/.github/workflows/anderer.yml"]) {
+      const p = lauf(GUT.replace(ALARM_USES, anderer));
+      expect(p.ok).toBe(false);
+      expect(p.befund).toMatch(/kein Job ruft/);
+      expect(p.fix).toContain(ALARM_USES);
+    }
   });
 
   test("L52: Alarm-Job ohne failure() im if ist eine Lücke", () => {

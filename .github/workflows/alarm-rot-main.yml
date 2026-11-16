@@ -16,7 +16,7 @@ name: Alarm bei rotem main
 #     permissions:
 #       contents: read
 #       issues: write
-#     uses: ./.github/workflows/alarm-rot-main.yml
+#     uses: $/.github/workflows/alarm-rot-main.yml
 #     with:
 #       label: <existierendes Label>
 #     secrets:
