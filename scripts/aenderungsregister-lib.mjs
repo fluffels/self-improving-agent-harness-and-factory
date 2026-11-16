@@ -413,6 +413,8 @@ export function urteilZeile(zeile, kontext, { heute, bereich, repoTagAb = REPO_T
 /**
  * Pur: berühren die Fenster zweier Zeilen dieselbe Rolle oder Messgröße? Die Rolle hängt im Katalog nur am Kostenmaß je Rolle: gleiche Rolle heißt
  * gleiche Messgröße samt Parameter. Dazu zählt ein gleiches Qualitätsmaß (beide Zeilen prüfen dieselbe Toleranz).
+ * Gewollt (factory#604 L10): die Nacharbeit-Quote gilt je PR, ein Folge-Fix im Fenster ist bei überlappenden Fenstern keiner Planer- oder Lens-Umstellung eindeutig
+ * zuzuordnen; eine Auflösung nach Rolle täuschte Trennschärfe vor, darum gilt jedes gleiche Qualitätsmaß als Überlappung.
  */
 export const beruehren = (a, b) => {
   if (!(a.datum <= b.pruefTermin && b.datum <= a.pruefTermin)) return false;

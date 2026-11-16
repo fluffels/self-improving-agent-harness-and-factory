@@ -222,9 +222,9 @@ Bezugspunkt für die Token-Optimierungen **quellprojekt#1065** (Modell-/Effort-R
 ### Messen
 
 ```bash
-node scripts/token-baseline.mjs --session <claude-session-id> --issue <nr> --pr <pr-nr>
+node scripts/token-baseline.mjs --session <claude-session-id|eindeutiger Präfix> --issue <nr> --pr <pr-nr>   # Präfix nur ohne --langfuse
 # Session mit mehreren Tickets: immer ab dem Claim des Tickets schneiden (Zeit aus dem assigned-Event)
-node scripts/token-baseline.mjs --session <id> --issue <nr> --pr <pr-nr> --from <ISO-Zeit des Claims>
+node scripts/token-baseline.mjs --session <id|eindeutiger Präfix> --issue <nr> --pr <pr-nr> --from <ISO-Zeit des Claims>
 ```
 
 - **Quelle ist das lokale Claude-Code-Transkript** (`~/.claude/projects/<projekt>/<session>.jsonl` + `subagents/`). `--langfuse` liest stattdessen die Langfuse-v2-Observations-API (braucht `LANGFUSE_PUBLIC_KEY`/`LANGFUSE_SECRET_KEY`; Agentenläufe nutzen den Secret-Key nicht (Regel: `permissions.deny` `Read(~/.langfuse-secret)` sperrt nur das Read-Tool, keinen Node-Prozess; technisch gesperrt ist die Datei nur unter der Sandbox mit `filesystem.denyRead`, WSL2, und die greift unter Windows nicht), dort gilt der `queryMetrics`-Weg aus Checkliste Punkt 1; liefert dieselben Calls inkl. der Cache-TTL-Aufteilung). Für die Baseline zählt das Transkript, weil die Langfuse-Aufzeichnung zum Messzeitpunkt **unvollständig** war (Zahlen: Kommentar auf quellprojekt#1064). Ab dem [Stichtag](langfuse-hook-patch.md#abgleich-als-garantie-1578) des Abgleichs ist `--langfuse` durch den Abgleich gleichwertig (siehe nächster Punkt), davor zählt das Transkript. Transkripte rotieren nach einigen Wochen: **direkt nach dem Merge messen.**
