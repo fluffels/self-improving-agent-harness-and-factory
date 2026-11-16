@@ -31,7 +31,7 @@ type Mod = {
   MAX_REVIEW_PAESSE: number;
   parseNachweis: (text: string, zeilen: Zeilen) => Nachweis;
   pflichtLenses: (d: unknown) => string[];
-  bewerteNachweis: (o: { nachweis: Nachweis; dateien: string[]; headBekannt: boolean; headImSlice: boolean; konfliktMerges?: string[]; aenderungsCommits?: { sha: string; dateien: string[] }[]; zeilen: Zeilen; stufe?: string; risiko?: Risiko; risikostufe?: Stufe; ticket?: number | null }) => string[];
+  bewerteNachweis: (o: { nachweis: Nachweis; dateien: string[]; headBekannt: boolean; headImSlice: boolean; konfliktMerges?: string[]; aenderungsCommits?: { sha: string; dateien: string[] }[]; zeilen: Zeilen; stufe?: string; risiko?: Risiko; risikostufe?: Stufe; ticket?: number | null; hoechsteRunde?: number; zusatzpassZeilen?: unknown[] | null }) => string[];
   bewerteKlasseHoch: (nachweis: Nachweis, risiko: Risiko, zeilen: Zeilen, risikostufe?: Stufe) => string[];
   konfliktMergesNach: (git: (a: string[]) => string, headSha: string) => string[];
   vorlage: (zeilen: Zeilen) => string;

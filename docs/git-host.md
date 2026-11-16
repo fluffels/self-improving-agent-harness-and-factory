@@ -17,9 +17,9 @@ GitLab als Beispiel für einen anderen Host: Pipeline-Zeitpläne liegen dort in 
 
 | Teil | Bestandteile | Git-Host | Was GitHub voraussetzt |
 |---|---|---|---|
-| Lokale Gates aus `npm run verify` | `check-size.mjs`, `check-docmap.mjs`, `check-docdrift.mjs`, `check-internalrefs.mjs`, `check-lockfile.mjs`, `check-context-size.mjs`, `check-diffsize.mjs`, `verify-lauf.mjs`, `gate-befehl.mjs` | hostneutral | nichts |
+| Lokale Gates aus `npm run verify` | `check-size.mjs`, `check-docmap.mjs`, `check-docdrift.mjs`, `check-internalrefs.mjs`, `check-lockfile.mjs`, `check-context-size.mjs`, `verify-lauf.mjs`, `gate-befehl.mjs` | hostneutral | nichts |
 | PR-Nachweise aus `git log` | `check-review-nachweis.mjs`, `check-basis.mjs` | hostneutral | nichts (lesen nur Commit-Zeilen) |
-| PR- und Ticket-Gates | `check-abnahme-nachweis.mjs`, `check-festgefahren.mjs`, `check-doc-tickets.mjs` | GitHub | lesen Issues, PRs und Labels per `gh` |
+| PR- und Ticket-Gates | `check-abnahme-nachweis.mjs`, `check-festgefahren.mjs`, `check-diffsize.mjs`, `check-doc-tickets.mjs` | GitHub | lesen Issues, PRs und Labels per `gh` (`check-diffsize.mjs` lokal: Ticket-Titel per `gh issue view`, fail-open) |
 | Required Checks, Ruleset, Auto-Merge, CODEOWNERS | `.github/ruleset-main-schutz.json`, `.github/CODEOWNERS` | GitHub | Ruleset, Required Checks, Auto-Merge und Code-Owner-Review gibt es nur dort |
 
 ## Skripte
