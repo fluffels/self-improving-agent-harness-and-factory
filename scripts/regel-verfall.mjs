@@ -29,8 +29,7 @@ import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
 import { istBezieher } from "./sync-stand-lib.mjs";
 import { istDatum, leseMesspunkte, pruefeRegister } from "./aenderungsregister-lib.mjs";
 import { ghText } from "./gh-cli.mjs";
-import { lade, trenneFremdtext } from "./fremdtext.mjs";
-import { ladeProjektConfig } from "./projekt-config-lib.mjs";
+import { flach, issueKommentare, istVertraut } from "./fremdtext-lib.mjs";
 import {
   STREICH_LABEL,
   ankerAus,
@@ -129,10 +128,14 @@ const REGISTER_REL = ".github/aenderungsregister.json";
 const git = (args) => execFileSync("git", args, { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], windowsHide: true });
 const ghStandard = (args) => ghText(args, { timeout: 60_000 });
 
-/** IO: Beiträge eines PR laut `fremdtext.mjs` (Autor vertraut oder nicht); jeder Fehler wirft (fail-closed: dann kein Merge). */
+/** IO: Beiträge eines PR (Kommentare, Reviews, Review-Kommentare) mit der Vertrauensprüfung des Fremdtext-Gates (`fremdtext-lib.mjs`, dieselbe Liste wie `fremdtext.mjs`); jeder Fehler wirft (fail-closed: dann kein Merge). */
 const fremdtextTeile = (nr) => {
-  const { owner, kopf, eintrag, beitraege } = lade({ art: "pr", nr }, ghStandard);
-  return trenneFremdtext({ owner, art: kopf, eintrag, beitraege, config: ladeProjektConfig({ pruefen: false }) }).teile;
+  const json = (args) => JSON.parse(ghStandard(args));
+  const liste = (pfad) => flach(json(["api", "--paginate", "--slurp", pfad]));
+  const owner = json(["api", "repos/{owner}/{repo}"]).owner?.login;
+  if (!owner) throw new Error("Repo-Owner nicht ermittelbar");
+  const beitraege = [...issueKommentare(nr, json), ...liste(`repos/{owner}/{repo}/pulls/${nr}/reviews?per_page=100`), ...liste(`repos/{owner}/{repo}/pulls/${nr}/comments?per_page=100`)];
+  return beitraege.map((b) => ({ vertraut: istVertraut(b.user, owner), text: b.body ?? "" }));
 };
 
 /** IO: Required Checks eines PR (`gh pr checks` endet bei rot oder offen mit Exit ≠ 0, die JSON-Ausgabe steht dann in `stdout` des Fehlers); nicht lesbar ist `null`. */

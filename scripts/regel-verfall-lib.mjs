@@ -267,9 +267,9 @@ export const streichText = (k, { fenster, heute, plan }) => {
   return { titel: `Regel-Verfall: ${k.ziel} streichen`, commit: `Regel-Verfall: ${k.ziel} streichen (${k.id})`, body };
 };
 
-/** Pur: Widerspruch = Label `status:widerspruch` oder ein Beitrag einer vertrauten Person (`teile` aus `trenneFremdtext`; das erste Teil ist der PR-Body selbst und zählt nicht). */
+/** Pur: Widerspruch = Label `status:widerspruch` oder ein nicht leerer Beitrag (Kommentar, Review) einer vertrauten Person (`teile`: `{ vertraut, text }` je Beitrag, ohne den PR-Body). */
 export const hatWiderspruch = (labels, teile) =>
-  labels.includes(WIDERSPRUCH_LABEL) || teile.slice(1).some((t) => t.vertraut === true && String(t.text ?? "").trim() !== "");
+  labels.includes(WIDERSPRUCH_LABEL) || teile.some((t) => t.vertraut === true && String(t.text ?? "").trim() !== "");
 
 /** Pur: alle Required Checks grün (`gh pr checks --required --json name,bucket`); leere oder fehlende Liste ist nie grün (fail-closed). */
 export const checksGruen = (checks) => Array.isArray(checks) && checks.length > 0 && checks.every((c) => c?.bucket === "pass" || c?.bucket === "skipping");

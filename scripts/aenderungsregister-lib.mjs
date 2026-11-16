@@ -158,6 +158,8 @@ const pruefeVerfallDurch = (z, p) => {
   return ok ? [] : [`${p}durch: nicht leere Liste von Ids (nur [a-z0-9-]) erwartet`];
 };
 
+const pruefeGestrichen = (z, p) => (z.gestrichen === undefined || istDatum(z.gestrichen) ? [] : [`${p}gestrichen: Datum JJJJ-MM-TT erwartet`]);
+
 const pruefeVerfallFelder = (z, p) => {
   const f = [];
   for (const feld of VERFALL_PFLICHTFELDER) if (z[feld] === undefined) f.push(`${p}Pflichtfeld ${feld} fehlt`);
@@ -171,10 +173,9 @@ const pruefeVerfall = (z, p) => {
   if (z.id !== undefined && !(typeof z.id === "string" && /^[a-z0-9-]+$/.test(z.id))) f.push(`${p}id: nur [a-z0-9-] erwartet`);
   if (z.ziel !== undefined && !istText(z.ziel)) f.push(`${p}ziel: Pfad oder Anker (nicht leerer Text) erwartet`);
   for (const feld of ["aufgenommen", "ablauf"]) if (z[feld] !== undefined && !istDatum(z[feld])) f.push(`${p}${feld}: Datum JJJJ-MM-TT erwartet`);
-  if (z.gestrichen !== undefined && !istDatum(z.gestrichen)) f.push(`${p}gestrichen: Datum JJJJ-MM-TT erwartet`);
   if (istDatum(z.aufgenommen) && istDatum(z.ablauf) && z.ablauf <= z.aufgenommen) f.push(`${p}ablauf: muss nach aufgenommen liegen`);
   if (z.messgroesse !== undefined && z.messgroesse !== "fangquote") f.push(`${p}messgroesse: bei art verfall nur fangquote erwartet`);
-  return [...f, ...pruefeVerfallDurch(z, p)];
+  return [...f, ...pruefeVerfallDurch(z, p), ...pruefeGestrichen(z, p)];
 };
 
 /** Jede Id in `durch` nennt eine Verfall-Zeile mit Wächter-Ziel (Pfad ohne Anker). */

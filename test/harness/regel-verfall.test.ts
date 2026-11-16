@@ -422,7 +422,7 @@ describe("Regel-Verfall: Streich-PR und Widerspruchsfrist (factory#610)", () => 
     const jetzt = new Date("2026-03-01T12:00:00Z");
     const alt = "2026-02-15T12:00:00Z"; // genau 14 Tage vorher
     const gruen = [{ name: "verify", bucket: "pass" }, { name: "lint", bucket: "skipping" }];
-    const teile = [{ vertraut: true, text: "PR-Body" }];
+    const teile: { vertraut: boolean; text: string }[] = [];
     const basis = { labels: [lib.STREICH_LABEL], teile, checks: gruen, angelegt: alt, jetzt };
 
     it("alle drei Bedingungen erfüllt mergt", () => {
@@ -437,8 +437,7 @@ describe("Regel-Verfall: Streich-PR und Widerspruchsfrist (factory#610)", () => 
       expect(lib.mergeEntscheidung({ ...basis, teile: [...teile, { vertraut: true, text: "Bitte nicht streichen" }] }).merge).toBe(false);
       expect(lib.hatWiderspruch([], [...teile, { vertraut: false, text: "[Fremdtext ausgeblendet: Kommentar von @x, u]" }])).toBe(false);
       expect(lib.hatWiderspruch([], [...teile, { vertraut: true, text: "  " }])).toBe(false);
-      expect(lib.hatWiderspruch([], [{ vertraut: true, text: "Body mit Text" }])).toBe(false);
-    });
+          });
 
     it("Negativfall: ein roter, offener oder nicht lesbarer Check verhindert den Merge (Red-Green)", () => {
       for (const checks of [[...gruen, { name: "x", bucket: "fail" }], [...gruen, { name: "x", bucket: "pending" }], [...gruen, { name: "x", bucket: "cancel" }], [], null, undefined, "kaputt"]) {
@@ -488,7 +487,7 @@ describe("Regel-Verfall: Streich-PR und Widerspruchsfrist (factory#610)", () => 
     const prs = (labels: string[], createdAt = "2026-02-01T00:00:00Z") => JSON.stringify([{ number: 7, createdAt, labels: labels.map((name) => ({ name })) }]);
     const mergeD = (liste: string, extra: Record<string, unknown> = {}) => {
       const gh: string[][] = [];
-      return { gh, d: { bezieher: false, jetzt: () => new Date("2026-03-01T00:00:00Z"), gh: (a: string[]) => (gh.push(a), a[1] === "list" ? liste : ""), fremdtext: () => [{ vertraut: true, text: "Body" }], checks: () => [{ bucket: "pass" }], ...extra } };
+      return { gh, d: { bezieher: false, jetzt: () => new Date("2026-03-01T00:00:00Z"), gh: (a: string[]) => (gh.push(a), a[1] === "list" ? liste : ""), fremdtext: () => [], checks: () => [{ bucket: "pass" }], ...extra } };
     };
     const gemergt = (gh: string[][]) => gh.some((a) => a[1] === "merge");
 
@@ -506,7 +505,7 @@ describe("Regel-Verfall: Streich-PR und Widerspruchsfrist (factory#610)", () => 
     it("Negativfälle: Widerspruch (Label oder vertrauter Kommentar), roter Check, junge Frist und Lesefehler mergen nie (Red-Green)", () => {
       const faelle: [string, ReturnType<typeof mergeD>][] = [
         ["Label", mergeD(prs([lib.STREICH_LABEL, "status:widerspruch"]))],
-        ["Kommentar", mergeD(prs([lib.STREICH_LABEL]), { fremdtext: () => [{ vertraut: true, text: "Body" }, { vertraut: true, text: "nein" }] })],
+        ["Kommentar", mergeD(prs([lib.STREICH_LABEL]), { fremdtext: () => [{ vertraut: true, text: "nein" }] })],
         ["rot", mergeD(prs([lib.STREICH_LABEL]), { checks: () => [{ bucket: "pass" }, { bucket: "fail" }] })],
         ["jung", mergeD(prs([lib.STREICH_LABEL], "2026-02-25T00:00:00Z"))],
         ["Fremdtext-Fehler", mergeD(prs([lib.STREICH_LABEL]), { fremdtext: () => { throw new Error("gh weg"); } })],
