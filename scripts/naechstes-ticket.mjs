@@ -343,7 +343,7 @@ function zugangsGrund(c, { owner, config, offene, repo, fremdStatus }) {
 }
 
 /** Grund der spätesten Datumssperre im Body (`""` = keine oder erreicht); eine unlesbare Zeile sperrt immer. Pur. */
-function datumssperreAus(body, heute) {
+function datumssperreAus(body, heute = new Date()) {
   for (const datum of datumssperreZeilen(body).sort().reverse()) {
     const grund = datumssperreGrund(datum, heute);
     if (grund) return grund;
@@ -352,7 +352,7 @@ function datumssperreAus(body, heute) {
 }
 
 /** `{ grund }` (`""` = frei); dazu `fehlt` bei hartem Spezifikations-Mangel, `bestandFehlt` bei freiem Bestandsticket mit Mangel. */
-function ueberspringGrund(c, { offene, belegt, owner, messfenster, fuellstand = null, hartAb, config, repo, fremdStatus, heute = new Date() }) {
+function ueberspringGrund(c, { offene, belegt, owner, messfenster, fuellstand = null, hartAb, config, repo, fremdStatus, heute }) {
   const zugang = zugangsGrund(c, { owner, config, offene, repo, fremdStatus });
   if (zugang) return { grund: zugang };
   const fenster = messfenster === null ? [] : messfensterZeilen(c.body); // `null`: Mängelliste, das teure Messfenster zählt dort nicht
