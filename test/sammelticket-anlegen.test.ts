@@ -632,6 +632,7 @@ describe("main mit injizierten gh-/Board-Nähten (factory#189 L7): Verzweigung j
   const M = (raw as unknown as { main: (argv: string[], deps: object) => Promise<void> }).main;
   const BOARD = (rawLib as unknown as { boardFuerRolle: (r: string) => unknown }).boardFuerRolle;
   const FABRIK = "zz-org/zz-fabrik";
+  const Z = raw as unknown as { findeVorhandenes: (a: object, n: object) => unknown };
   const cfg = { ...FREMD, boards: FREMD.boards.map((b: { rolle: string }) => (b.rolle === "factory" ? { ...b, repo: FABRIK } : b)), labels: { ...FREMD.labels, codequalitaet: "area:code" } };
   const it = (n: number, title = `T${n}`) => ({ id: `I${n}`, number: n, status: "Todo", title, assignees: [], state: "open" });
   const listeVoll = () => [it(1, "Langfuse-Status überprüfen"), it(2), it(3), it(4), it(5), it(6), it(7), it(8), it(9)];
@@ -782,7 +783,7 @@ describe("main mit injizierten gh-/Board-Nähten (factory#189 L7): Verzweigung j
       err: () => {},
       exit: (c: number) => { throw new Error(`exit ${c}`); },
     };
-    const { deps, rufe, log } = fakes({ findeVorhandenes: (a: { repo: string; titel: string; vorgaenger: number | null; owner: string }) => raw.findeVorhandenes(a, naht) });
+    const { deps, rufe, log } = fakes({ findeVorhandenes: (a: object) => Z.findeVorhandenes(a, naht) });
     await M(["codequalitaet"], deps);
     expect(namen(rufe)).not.toContain("legeAn");
     expect(log.join("\n")).toContain("„Codequalität (gesammelt)“ gibt es schon: #15");
@@ -796,7 +797,7 @@ describe("main mit injizierten gh-/Board-Nähten (factory#189 L7): Verzweigung j
       err: () => {},
       exit: (c: number) => { throw new Error(`exit ${c}`); },
     };
-    const { deps, rufe } = fakes({ findeVorhandenes: (a: { repo: string; titel: string; vorgaenger: number | null; owner: string }) => raw.findeVorhandenes(a, naht) });
+    const { deps, rufe } = fakes({ findeVorhandenes: (a: object) => Z.findeVorhandenes(a, naht) });
     await M(["codequalitaet"], deps);
     expect(rufe.find((r) => r[0] === "legeAn")![1]).toMatchObject({ titel: "Refactoring (gesammelt)" });
   });

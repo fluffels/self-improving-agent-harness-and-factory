@@ -418,7 +418,7 @@ export async function main(argv = process.argv.slice(2), deps = {}) {
   let nr;
   if (vorhanden) {
     nr = vorhanden.number;
-    d.log(`Ungeclaimtes „${vorhanden.titel ?? titel}“ gibt es schon: #${nr}, nichts wird angelegt.`);
+    d.log(`Ungeclaimtes „${vorhanden.titel}“ gibt es schon: #${nr}, nichts wird angelegt.`);
   } else if (args.dry) {
     d.log(`Würde „${titel}“ anlegen${position ? ` und auf Position ${position} setzen` : ""}.`);
     return;

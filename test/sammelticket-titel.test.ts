@@ -32,6 +32,12 @@ describe("sammelticket-titel", () => {
     expect(blatt.NICHT_EINTRAGBAR_PRAEFIX).toBe("Nicht eintragbar: ");
   });
 
+  test("die Quote erkennt das Refactoring-Sammelticket unter dem neuen und dem alten Titel (sammelIssues)", () => {
+    const { sammelStand } = produktquoteRaw as unknown as { sammelStand: (i: { number: number; title: string; state: string; closedAt?: string }[]) => { sammelIssues: Set<number> } };
+    const s = sammelStand(blatt.REFACTORING_TITEL_AKZEPTIERT.map((title, n) => ({ number: n + 1, title, state: "CLOSED", closedAt: "2026-10-09T00:00:00Z" })));
+    expect([...s.sammelIssues].sort()).toEqual([1, 2]);
+  });
+
   test("Zeilenerkennung: eine Quelle im Blatt, produktquote-lib exportiert dieselben Objekte, meldung-lib trägt keine Kopie des Regex (L45)", () => {
     expect(produktquote.BEFUND_ZEILE).toBe(blatt.BEFUND_ZEILE);
     expect(produktquote.BEFUND_ZEILE_OFFEN).toBe(blatt.BEFUND_ZEILE_OFFEN);
