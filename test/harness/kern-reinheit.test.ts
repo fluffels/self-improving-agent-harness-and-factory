@@ -14,13 +14,15 @@ import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { posix } from "node:path";
 import { fileURLToPath } from "node:url";
-import { importeAus, kandidatenPfade, lokaleImporteTransitiv, relativeImporte } from "./hook-importe";
+import { hookSkripte, importeAus, kandidatenPfade, lokaleImporteTransitiv, relativeImporte } from "./hook-importe";
 import { type ProjektConfig, projektConfig } from "../support/fremd-config";
 import { escapeRe } from "../support/regex";
 import { basisTexte } from "../support/git-batch";
 import { ladeBesitzManifest } from "../support/besitz-anker";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawModul from "../../scripts/modul-wahl-lib.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
+import * as rawProfil from "../../scripts/profil-lib.mjs";
 import { type Baseline, type VergleichsTexte, anhebungen, diffBasisModus, vergleiche as vergleicheZaehlung, zaehle } from "../support/baseline-zaehlung";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as checkBasis from "../../scripts/check-basis.mjs";
@@ -76,6 +78,7 @@ export interface Eintrag {
   pflichtChecks?: unknown;
   modul?: string;
   art?: string;
+  profil?: string;
 }
 interface Manifest {
   version: number;
@@ -319,6 +322,50 @@ export function modulImportVerstoesse(eintraege: Eintrag[], lies: (pfad: string)
   return out;
 }
 
+/** Profil-Regel (factory#519): lokale Importe jeder Ganz-Datei-Code-Einheit ohne `profil`, die auf eine Einheit mit `profil` zeigen ("<von> -> <nach>"): ein Bezieher mit Minimalprofil
+ *  bekäme sonst einen Import ins Leere. Regel selbst: `profilImportErlaubt` (profil-lib.mjs). Grenze wie bei der Modul-Regel: nur statische relative Importe. Abhilfe: das Ziel ohne `profil` führen oder dem Importeur `profil` geben. */
+export function profilImportVerstoesse(eintraege: Eintrag[], lies: (pfad: string) => string | null): string[] {
+  const ganze = new Map(eintraege.filter((e) => istGanzeDatei(e)).map((e) => [e.pfad, e]));
+  const out: string[] = [];
+  for (const [von, evon] of ganze) {
+    const text = CODE_ENDUNG.test(von) ? lies(von) : null;
+    if (text === null) continue;
+    for (const spec of relativeImporte(text)) {
+      const nach = kandidatenPfade(posix.normalize(posix.join(posix.dirname(von), spec))).find((p) => ganze.has(p));
+      const enach = nach === undefined ? undefined : ganze.get(nach);
+      if (nach !== undefined && enach !== undefined && !profilLib.profilImportErlaubt(evon, enach) && !out.includes(`${von} -> ${nach}`)) out.push(`${von} -> ${nach}`);
+    }
+  }
+  return out;
+}
+
+/** Sicherheits-Regel des Profils (factory#519, AK4): jede Einheit der statischen Import-Hülle der `SICHERHEITS_EINSTIEGE` (profil-lib.mjs), die `profil` trägt, ist ein Verstoß
+ *  (der Einstieg selbst eingeschlossen). Aus Nicht-Code-Einstiegen (Workflows, Agenten, Skills, Hook-Dateien) folgt sie jedem genannten `scripts/<x>.mjs`, aus Code den statischen Importen. Grenze: dynamische Importe, `spawn` mit Skriptname und zur Laufzeit gebaute Pfade sieht die Hülle nicht. Abhilfe: `profil` entfernen. */
+export function profilSicherheitsVerstoesse(eintraege: Eintrag[], lies: (pfad: string) => string | null, einstiegsDateien: string[] = []): string[] {
+  const ganze = new Map(eintraege.filter((e) => istGanzeDatei(e)).map((e) => [e.pfad, e]));
+  const offen = [...ganze.keys()].filter((p) => profilLib.istSicherheitsEinstieg(p)).concat(einstiegsDateien);
+  const huelle = new Set<string>();
+  while (offen.length > 0) {
+    const von = offen.pop() as string;
+    if (huelle.has(von)) continue;
+    huelle.add(von);
+    const text = lies(von);
+    if (text === null) continue;
+    // Code: statische Importe. Alles andere (Workflow, Hook-Datei, Agent, Skill, settings.json): jedes genannte `scripts/<x>.mjs` (Aufruf aus Text).
+    const nachPfade = CODE_ENDUNG.test(von)
+      ? relativeImporte(text).map((spec) => kandidatenPfade(posix.normalize(posix.join(posix.dirname(von), spec))).find((q) => ganze.has(q)))
+      : [...text.matchAll(/scripts\/[\w./-]*[\w-]\.mjs/g)].map((m) => (ganze.has(m[0]) ? m[0] : undefined));
+    for (const nach of nachPfade) if (nach !== undefined) offen.push(nach);
+  }
+  return [...huelle].filter((p) => ganze.get(p)?.profil !== undefined).sort();
+}
+
+/** Einstiege der Sicherheits-Hülle im Repo, auch solche, die nicht Besitz-Einheit sind (ein Workflow wie `ci.yml` steht als Vorlage oder Teil im Manifest, nicht als Ganz-Datei): jede versionierte Datei, die ein Muster von `SICHERHEITS_EINSTIEGE` trifft, dazu `package.json` (Skripte, auch über `npm run`). */
+function repoEinstiege(): string[] {
+  const getrackt = execFileSync("git", ["ls-files"], { cwd: WURZEL, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 }).split("\n").filter((p) => p !== "");
+  return [...getrackt.filter((p) => profilLib.istSicherheitsEinstieg(p)), "package.json"];
+}
+
 /** Einheiten im Ring kern-nach-entkopplung (Ganz-Datei-Code), die dort nicht gebraucht werden: keine Literal-Einträge in der Baseline
  *  und alle lokalen Importe zeigen auf Besitz im Ring kern oder auf die Projekt-Config (Importe ohne Besitz-Ziel zählen als Grund zu bleiben).
  *  Abhilfe: Ring auf `kern` setzen. Grenze: nur statische lokale Importe (`relativeImporte`) werden gesehen. */
@@ -389,6 +436,10 @@ export function istZaehlung(eintraege: Eintrag[], lies: (pfad: string) => string
 
 const modulStandard = (rawModul as unknown as { MODUL_STANDARD: string[] }).MODUL_STANDARD;
 const modulImportErlaubt = (rawModul as unknown as { modulImportErlaubt: (von: { modul?: string }, nach: { modul?: string }) => boolean }).modulImportErlaubt;
+const profilLib = rawProfil as unknown as {
+  profilImportErlaubt: (von: { profil?: string }, nach: { profil?: string }) => boolean;
+  istSicherheitsEinstieg: (pfad: string) => boolean;
+};
 const ein = (pfad: string, extra: Partial<Eintrag> = {}): Eintrag => ({ pfad, ring: "kern", quelle: "t", ...extra });
 
 const NEU = {
@@ -837,6 +888,58 @@ describe("modulImportVerstoesse (Modul-Regel, factory#119)", () => {
   });
 });
 
+describe("profilImportVerstoesse und profilSicherheitsVerstoesse (Profil, factory#519)", () => {
+  const V = { profil: "voll" };
+  const E = [ein("scripts/k.mjs"), ein("scripts/v.mjs", V), ein("scripts/v2.mjs", V), ein("scripts/check-x.mjs"), ein("scripts/pretooluse-hook.mjs"), ein("scripts/lib.mjs")];
+  const mit = (m: Record<string, string>): ((p: string) => string | null) => (p) => m[p] ?? null;
+  test("Kern importiert Kern, eine profil-Einheit importiert Kern und profil-Einheiten: grün", () => {
+    assert.deepEqual(profilImportVerstoesse(E, mit({ "scripts/k.mjs": 'import { x } from "./lib.mjs";', "scripts/v.mjs": 'import { x } from "./v2.mjs"; import { y } from "./k.mjs";' })), []);
+  });
+  test("Negativfall: Kern importiert eine profil-Einheit (auch endungslos und per export from)", () => {
+    assert.deepEqual(profilImportVerstoesse(E, mit({ "scripts/k.mjs": 'import { x } from "./v.mjs";' })), ["scripts/k.mjs -> scripts/v.mjs"]);
+    assert.deepEqual(profilImportVerstoesse(E, mit({ "scripts/k.mjs": 'import { x } from "./v";' })), ["scripts/k.mjs -> scripts/v.mjs"]);
+    assert.deepEqual(profilImportVerstoesse(E, mit({ "scripts/k.mjs": 'export { x } from "./v.mjs";' })), ["scripts/k.mjs -> scripts/v.mjs"]);
+  });
+  test("fehlende Datei und Nicht-Besitz-Ziel werden nicht gemeldet", () => {
+    assert.deepEqual(profilImportVerstoesse(E, () => null), []);
+    assert.deepEqual(profilImportVerstoesse(E, mit({ "scripts/k.mjs": 'import { x } from "./fremd.mjs";' })), []);
+  });
+  test("Sicherheits-Hülle: sauber ist leer", () => {
+    assert.deepEqual(profilSicherheitsVerstoesse(E, mit({ "scripts/pretooluse-hook.mjs": 'import { x } from "./lib.mjs";' })), []);
+  });
+  test("Negativfall: profil direkt am Hook oder an einem Gate ist ein Verstoß", () => {
+    const direkt = [ein("scripts/pretooluse-hook.mjs", V), ein("scripts/check-x.mjs", V)];
+    assert.deepEqual(profilSicherheitsVerstoesse(direkt, () => null), ["scripts/check-x.mjs", "scripts/pretooluse-hook.mjs"]);
+  });
+  test("Negativfall: profil an einer Lib, die ein Gate transitiv importiert, ist ein Verstoß", () => {
+    const e = [ein("scripts/check-x.mjs"), ein("scripts/mitte.mjs"), ein("scripts/tief.mjs", V)];
+    const lies = mit({ "scripts/check-x.mjs": 'import { m } from "./mitte.mjs";', "scripts/mitte.mjs": 'import { t } from "./tief";' });
+    assert.deepEqual(profilSicherheitsVerstoesse(e, lies), ["scripts/tief.mjs"]);
+  });
+  test("Negativfall: ein Workflow ruft ein Skript auf, das profil trägt, ist ein Verstoß (Aufruf aus Text)", () => {
+    const e = [ein(".github/workflows/x.yml"), ein("scripts/gate.mjs", V), ein("scripts/anderes.mjs", V)];
+    assert.deepEqual(profilSicherheitsVerstoesse(e, mit({ ".github/workflows/x.yml": "run: node scripts/gate.mjs --x" })), ["scripts/gate.mjs"]);
+  });
+  test("Negativfall: eine Agentendatei und ein Review-Skill rufen Skripte auf, die profil tragen", () => {
+    const e = [ein(".claude/agents/a.md"), ein("x/review-lenses/SKILL.md"), ein("scripts/g1.mjs", V), ein("scripts/g2.mjs", V)];
+    const lies = mit({ ".claude/agents/a.md": "node scripts/g1.mjs", "x/review-lenses/SKILL.md": "node scripts/g2.mjs" });
+    assert.deepEqual(profilSicherheitsVerstoesse(e, lies), ["scripts/g1.mjs", "scripts/g2.mjs"]);
+  });
+  test("Negativfall (K4-Lücke): ein Workflow, der selbst nicht im Manifest steht, ruft ein Skript mit profil auf", () => {
+    const e = [ein("scripts/gate.mjs", V), ein("scripts/anderes.mjs", V)];
+    const lies = mit({ ".github/workflows/ci.yml": "run: node scripts/gate.mjs --audit-level high" });
+    assert.deepEqual(profilSicherheitsVerstoesse(e, lies, [".github/workflows/ci.yml"]), ["scripts/gate.mjs"]);
+    assert.deepEqual(profilSicherheitsVerstoesse(e, lies), [], "ohne die Repo-Datei als Einstieg bleibt die Lücke (darum reicht der echte Wächter sie mit)");
+  });
+  test("Negativfall: package.json-Skripte sind Einstiege, auch über npm run", () => {
+    const e = [ein("scripts/gate.mjs", V)];
+    assert.deepEqual(profilSicherheitsVerstoesse(e, mit({ "package.json": '{"scripts":{"check:x":"node scripts/gate.mjs"}}' }), ["package.json"]), ["scripts/gate.mjs"]);
+  });
+  test("profil an einer Einheit außerhalb der Hülle ist kein Verstoß", () => {
+    assert.deepEqual(profilSicherheitsVerstoesse(E, mit({ "scripts/check-x.mjs": 'import { x } from "./lib.mjs";' })), []);
+  });
+});
+
 describe("ringVerstoesse (Ring-Regel der Import-Hülle, #1663)", () => {
   const E = [
     ein("scripts/a.mjs"),
@@ -1012,6 +1115,19 @@ describe("Kern-Reinheit (#1610)", () => {
 
   test("kein Kern-Code importiert eine Moduleinheit und kein Modul ein anderes (modul, factory#119)", () => {
     assert.deepEqual(modulImportVerstoesse(manifest.eintraege, lesenWurzel), []);
+  });
+
+  test("kein Kern-Code importiert eine profil-Einheit (profil, factory#519)", () => {
+    assert.deepEqual(profilImportVerstoesse(manifest.eintraege, lesenWurzel), []);
+  });
+
+  test("keine Einheit der Sicherheits-Hülle trägt profil: das Minimalprofil lässt nie ein Sicherheits-Gate oder einen Sicherheits-Hook weg (factory#519, AK4)", () => {
+    assert.deepEqual(profilSicherheitsVerstoesse(manifest.eintraege, lesenWurzel, repoEinstiege()), []);
+  });
+
+  test("jedes Hook-Skript aus .claude/settings.json (außer der Statuszeile) steht in der Einstiegsliste SICHERHEITS_EINSTIEGE (profil-lib.mjs, factory#519)", () => {
+    const hooks = hookSkripte(lesenWurzel(".claude/settings.json") ?? "{}").filter((h) => h !== "scripts/statusline.mjs");
+    assert.deepEqual(hooks.filter((h) => !profilLib.istSicherheitsEinstieg(h)), [], "ein Hook-Skript fehlt in SICHERHEITS_EINSTIEGE");
   });
 
   test("keine Einheit bleibt im Ring kern-nach-entkopplung, die nichts entkoppeln muss (kein Baseline-Eintrag, nur Kern-Importe, #1740)", () => {

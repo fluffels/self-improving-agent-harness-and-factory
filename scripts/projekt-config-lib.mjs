@@ -19,6 +19,7 @@ import { internalrefsMaengel } from "./internalrefs-lib.mjs";
 import { QUELL_VERZEICHNIS, ZEIGER_WURZEL } from "./skill-pfade.mjs";
 import { gleichesRepo, istRepoForm, zerlegeRepo } from "./repo-form.mjs";
 import { modulFormFehler } from "./modul-wahl-lib.mjs";
+import { profilFormFehler } from "./profil-lib.mjs";
 import { DATEN_STANDARD_ENDUNGEN } from "./quellwurzeln-lib.mjs";
 import { istObjekt, istText, pruefeAudit, pruefeAusnahmen, pruefeBerechtigungen, pruefeDatengroesse, pruefeDokuPflicht, pruefeE2e, pruefeEscapeKopien, pruefeFactoryLinks, pruefeGates, pruefeLabels, pruefeLangfuseWochenbericht, pruefeLiterale, pruefeRisiko, pruefeSammelChecks, pruefeSandbox, pruefeSkills, pruefeSprache, pruefeStruktur, pruefeVorpruefung } from "./projekt-config-bloecke.mjs";
 import { pruefeDesign } from "./design-lib.mjs";
@@ -417,7 +418,7 @@ export function pruefeProjektConfig(wert) {
   fehler.push(...pruefeDesign(wert.design), ...pruefeDokuPflicht(wert.dokuPflicht));
   fehler.push(...pruefeBefehle(wert.befehle), ...pruefeE2e(wert.e2e, wert.befehle));
   fehler.push(...internalrefsMaengel(wert.internalrefs));
-  fehler.push(...modulFormFehler(wert));
+  fehler.push(...modulFormFehler(wert), ...profilFormFehler(wert));
   if (wert.arbeitsplatz !== undefined) fehler.push(...arbeitsplatzMaengel(wert.arbeitsplatz, { worktreePraefix: wert.praefixe?.worktree }));
   return fehler;
 }
