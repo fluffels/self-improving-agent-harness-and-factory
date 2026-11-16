@@ -127,40 +127,44 @@ export function checkReadme({ rootDir = ROOT, abschnitte = [] } = {}) {
 /** README-Prüfung mit den Abschnitten aus der Projekt-Config (`dokuPflicht.readmeAbschnitte`, ohne den Schlüssel keine). */
 export const checkReadmeAusConfig = (config, rootDir = ROOT) => checkReadme({ rootDir, abschnitte: config?.dokuPflicht?.readmeAbschnitte ?? [] });
 
-function main() {
-  const config = ladeProjektConfig();
+/** Ein Lauf des Gates: Exit-Code (0 ok, 1 rot). Ausgabe über `log`/`err`, Git, Config und Wurzel injizierbar (Test); `paint(code, text)` färbt. */
+export function laufe({ config, rootDir = ROOT, runGit, env = process.env, log = console.log, err = console.error, paint = (_c, s) => s } = {}) {
   const zeilen = commitZeilenAus(config);
-  const tty = process.stdout.isTTY;
-  const paint = (code, s) => (tty ? `\x1b[${code}m${s}\x1b[0m` : s);
   const red = (s) => paint("31", s);
   const dim = (s) => paint("2", s);
   let rot = false;
 
-  for (const b of checkReadmeAusConfig(config)) {
-    console.error(red(`✖ ${b}`));
+  for (const b of checkReadmeAusConfig(config, rootDir)) {
+    err(red(`✖ ${b}`));
     rot = true;
   }
 
-  const s = checkDokuPflichtSlice({ zeilen });
+  const s = checkDokuPflichtSlice({ zeilen, runGit, env });
   if (!s.skipped) {
-    meldeUngueltigeOverrides(s.invalidOverrides, { dim });
+    meldeUngueltigeOverrides(s.invalidOverrides, { dim, log });
     if (s.stale) {
-      console.error(red(staleOverrideHinweis(zeilen.dokuOverride, "der Slice ändert kein Verhalten ohne Doku")));
+      err(red(staleOverrideHinweis(zeilen.dokuOverride, "der Slice ändert kein Verhalten ohne Doku")));
       rot = true;
     } else if (s.allowed) {
-      console.log(dim(`• geduldet: Verhaltens-Änderung ohne Doku — bewusst durchgelassen: ${s.reason}`));
+      log(dim(`• geduldet: Verhaltens-Änderung ohne Doku — bewusst durchgelassen: ${s.reason}`));
     } else if (s.rot) {
-      console.error(red(`✖ Verhaltens-Pfade geändert (${s.verhalten.slice(0, 5).join(", ")}${s.verhalten.length > 5 ? ", …" : ""}), aber weder docs/ noch README.md.`));
-      for (const h of versetzteOverrideHinweis(zeilen.dokuOverride, s.versetzteOverrides)) console.error(h);
-      console.error(
+      err(red(`✖ Verhaltens-Pfade geändert (${s.verhalten.slice(0, 5).join(", ")}${s.verhalten.length > 5 ? ", …" : ""}), aber weder docs/ noch README.md.`));
+      for (const h of versetzteOverrideHinweis(zeilen.dokuOverride, s.versetzteOverrides)) err(h);
+      err(
         "\nFix: die betroffene Doku im selben Slice nachziehen (docs/ oder README.md). Ändert der Slice wirklich nichts, was Doku braucht\n" +
           `(z. B. ein reiner Refactor), mit Pflicht-Begründung als Commit-Zeile durchlassen:\n  git commit --allow-empty -m "chore: Doku unverändert (#<nr>)" -m "${zeilen.dokuOverride}: #<nr> warum"`,
       );
       rot = true;
     }
   }
-  if (rot) process.exit(1);
-  console.log("✔ check:dokupflicht ok — Verhaltens-Änderungen tragen Doku, die README verweist auf die Referenzseiten.");
+  if (rot) return 1;
+  log("✔ check:dokupflicht ok — Verhaltens-Änderungen tragen Doku, die README verweist auf die Referenzseiten.");
+  return 0;
+}
+
+function main() {
+  const tty = process.stdout.isTTY;
+  process.exitCode = laufe({ config: ladeProjektConfig(), paint: (code, s) => (tty ? `\x1b[${code}m${s}\x1b[0m` : s) });
 }
 
 if (istDirektaufruf(import.meta.url)) main();

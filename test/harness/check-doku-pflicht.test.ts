@@ -20,6 +20,7 @@ const m = raw as unknown as {
   bewerte: (a: { dateien: string[]; agentsKernGeaendert?: boolean; override?: string | null }) => Urteil;
   kernBlockGeaendert: (alt: string | null, neu: string | null) => boolean;
   pruefeReadme: (a: { readme: string | null; seitenVorhanden: (p: string) => boolean; abschnitte?: string[] }) => string[];
+  laufe: (a: { config: unknown; rootDir: string; runGit: (args: string[]) => string; env?: Record<string, string>; log: (s: string) => void; err: (s: string) => void }) => number;
   checkReadmeAusConfig: (c: unknown, rootDir: string) => string[];
   checkReadme: (a: { rootDir: string; abschnitte?: string[] }) => string[];
   checkDokuPflichtSlice: (a: { runGit: (args: string[]) => string; env?: Record<string, string>; zeilen: { dokuOverride: string } }) => Record<string, unknown>;
@@ -184,6 +185,47 @@ describe("checkReadme gegen die Platte", () => {
   it("README ohne Zielseiten und ohne Liste: nichts; ohne README: nichts", () => {
     mitReadme("# T\n", [], (w) => expect(m.checkReadme({ rootDir: w })).toEqual([]));
     mitReadme(null, [], (w) => expect(m.checkReadme({ rootDir: w })).toEqual([]));
+  });
+});
+
+describe("laufe: Exit-Code und Meldungen", () => {
+  const git = (dateien: string[], msgs: string) => (args: string[]): string => {
+    if (args[0] === "rev-parse") return "base1\n";
+    if (args[0] === "diff") return dateien.join("\n");
+    if (args[0] === "log") return msgs;
+    throw new Error("unerwartet");
+  };
+  const lauf = (dateien: string[], msgs: string, config: unknown = FREMD) => {
+    const ausgabe: string[] = [];
+    const w = mkdtempSync(join(tmpdir(), "dokupflicht-lauf-"));
+    try {
+      const code = m.laufe({ config, rootDir: w, runGit: git(dateien, msgs), env: { FACTORY_DIFF_BASE: "base1" }, log: (s) => ausgabe.push(s), err: (s) => ausgabe.push(s) });
+      return { code, text: ausgabe.join("\n") };
+    } finally {
+      rmSync(w, { recursive: true, force: true });
+    }
+  };
+  it("Verhalten ohne Doku: Exit 1 mit Fix-Hinweis", () => {
+    const r = lauf(["scripts/a.mjs"], "");
+    expect(r.code).toBe(1);
+    expect(r.text).toContain(Z.dokuOverride);
+  });
+  it("Verhalten mit Doku: Exit 0", () => {
+    expect(lauf(["scripts/a.mjs", "docs/x.md"], "").code).toBe(0);
+  });
+  it("Override: Exit 0 mit Hinweis; stale: Exit 1", () => {
+    const zeile = `${Z.dokuOverride}: #5 Refactor`;
+    const erlaubt = lauf(["scripts/a.mjs"], zeile);
+    expect(erlaubt.code).toBe(0);
+    expect(erlaubt.text).toContain("geduldet");
+    const stale = lauf(["scripts/a.mjs", "docs/x.md"], zeile);
+    expect(stale.code).toBe(1);
+    expect(stale.text).toContain("stale");
+  });
+  it("README-Befund macht den Lauf rot, auch ohne Slice-Problem", () => {
+    const r = lauf(["docs/x.md"], "", { ...FREMD, dokuPflicht: { readmeAbschnitte: ["Gibtsnicht"] } });
+    expect(r.code).toBe(1);
+    expect(r.text).toContain("README.md");
   });
 });
 
