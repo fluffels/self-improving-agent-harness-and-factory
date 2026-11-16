@@ -158,6 +158,7 @@
     "/scripts/skill-pfade.mjs",
     "/scripts/subagent-laeufe.mjs",
     "/scripts/mess-lib.mjs",
+    "/scripts/claim-fenster.mjs",
     "/scripts/patch-zugriff.mjs",
     "/scripts/haupt-sync.mjs",
     "/scripts/lens-edit-guard.mjs",

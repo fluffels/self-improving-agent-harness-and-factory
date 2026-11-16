@@ -637,6 +637,11 @@
       "grund": "Gegenstand ist Besitz"
     },
     {
+      "muster": "test/claim-fenster.test.ts",
+      "art": "kern-test",
+      "grund": "Gegenstand ist Besitz"
+    },
+    {
       "muster": "test/mess-ausgaben-golden.test.ts",
       "art": "kern-test",
       "grund": "Gegenstand ist Besitz"

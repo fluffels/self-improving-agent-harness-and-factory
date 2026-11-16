@@ -12,8 +12,13 @@ import { priceParts, sumParts } from "./preise.mjs";
 const sha = (text) => createHash("sha256").update(text).digest("hex");
 /** Observation-ID: 16 Hex, deterministisch aus Session und Message (idempotentes Nachtragen in 2/3). */
 export const beobachtungsId = (session, messageId) => sha(session + messageId).slice(0, 16);
-/** Trace-ID: 32 Hex, je Session ein Abgleich-Trace. */
+/** Trace-ID: 32 Hex aus einem Text. */
 export const traceIdVon = (session) => sha(session).slice(0, 32);
+/** Schlüssel des Tickets am Trace: das Ticket (`<praefixe.worktree><nr>`) oder `ohne-ticket` (factory#524). */
+export const OHNE_TICKET = "ohne-ticket";
+export const ticketSchluessel = (ticket) => ticket || OHNE_TICKET;
+/** Trace-ID je Session und Ticket-Schlüssel (factory#524): ein Abgleich-Trace je Ticket einer Session, damit der Ticket-Tag nie an einem fremden Ticket hängt. */
+export const traceIdJeTicket = (session, ticket) => traceIdVon(`${session}:${ticketSchluessel(ticket)}`);
 /** Span-ID eines Subagenten: 16 Hex, deterministisch aus Session und Agent-ID (Nachliefern sendet den Span je Session einmal). */
 export const subagentSpanId = (session, agentId) => sha(session + "agent:" + agentId).slice(0, 16);
 /** Score-ID: 32 Hex, deterministisch aus Name und Session (Upsert statt Dublette). */
@@ -99,6 +104,12 @@ export function zuordnungsAttribute(z, repoName) {
   return out;
 }
 
+/** Ticket-Metadaten einer Generation (factory#524): `ticket` aus dem Claim-Fenster, sonst `ticket_grund` (`vor-claim`, `nach-freigabe`, `nachlauf`, `ohne-zeit`). */
+export function ticketAttribute(e) {
+  if (e.ticket) return [attr("langfuse.observation.metadata.ticket", e.ticket)];
+  return [attr("langfuse.observation.metadata.ticket", OHNE_TICKET), attr("langfuse.observation.metadata.ticket_grund", e.ticketGrund || "ohne-zeit")];
+}
+
 /** Eine Generation; `ctx` = `{ traceAttrs, parentSpanId?, repoName? }`. Ohne Modell entfallen Modellname und Kosten, ohne Preis die Kosten. */
 export function generationSpan(e, { traceAttrs, parentSpanId = null, repoName }) {
   const attributes = [attr("langfuse.observation.type", "generation")];
@@ -106,7 +117,8 @@ export function generationSpan(e, { traceAttrs, parentSpanId = null, repoName })
   attributes.push(attr("langfuse.observation.usage_details", JSON.stringify(usageDetails(e.usage))));
   const kosten = e.model ? costDetails(e) : null;
   if (kosten) attributes.push(attr("langfuse.observation.cost_details", JSON.stringify(kosten)));
-  attributes.push(attr("langfuse.observation.metadata.message_id", e.messageId), attr("langfuse.observation.metadata.quelle", "abgleich"), ...zuordnungsAttribute(e.zuordnung, repoName), ...traceAttrs);
+  else attributes.push(attr("langfuse.observation.metadata.kosten", "ohne-preis"), attr("langfuse.observation.metadata.modell", e.model || "unbekannt")); // nie still 0 $: die Abfrage zeigt die Lücke mit Grund
+  attributes.push(attr("langfuse.observation.metadata.message_id", e.messageId), attr("langfuse.observation.metadata.quelle", "abgleich"), ...ticketAttribute(e), ...zuordnungsAttribute(e.zuordnung, repoName), ...traceAttrs);
   return span({ traceId: e.traceId, spanId: e.id, parentSpanId, name: "Call", start: nanos(e.ts), ende: nanos(e.ts), attributes });
 }
 
@@ -122,7 +134,7 @@ export function subagentSpan(rolle, { traceAttrs, traceId, spanId, parentSpanId 
   return span({ traceId, spanId, parentSpanId, name: `Subagent: ${rolle.description || rolle.agentType || "unbekannt"}`, start: nanos(von), ende: nanos(bis), attributes });
 }
 
-const normAgent = (id) => (id ? String(id).replace(/^agent-/, "") : null);
+export const normAgent = (id) => (id ? String(id).replace(/^agent-/, "") : null);
 
 /** Agenten der Session (`agentId` → Rolle, früheste und späteste Call-Zeit) aus dem vollständigen Soll. */
 function agentenVon(soll) {
@@ -130,7 +142,7 @@ function agentenVon(soll) {
   for (const e of soll) {
     const id = e.rolle?.agentId;
     if (!id) continue;
-    const a = agenten.get(id) ?? { rolle: e.rolle, von: e.ts, bis: e.ts };
+    const a = agenten.get(id) ?? { rolle: e.rolle, von: e.ts, bis: e.ts, ticket: e.ticket ?? null };
     if (Date.parse(e.ts) < Date.parse(a.von)) a.von = e.ts;
     if (Date.parse(e.ts) > Date.parse(a.bis)) a.bis = e.ts;
     agenten.set(id, a);
@@ -163,17 +175,19 @@ export function projektFilterTags({ tags = [], repoName }) {
 export function bauePayloads(session, eintraege, { soll = eintraege, ledgerSpans = [], env = {}, project, repoName, maxSpans = MAX_SPANS_JE_REQUEST }) {
   if (typeof repoName !== "string" || repoName === "") throw new Error("bauePayloads braucht repoName (Namensteil von repo der Projekt-Config)");
   const scope = scopeName(repoName);
-  const traceId = traceIdVon(session);
   // `repoName` bleibt das erste Tag; die Projekt-Tags der Hook-Traces (`CC_LANGFUSE_TRACE_TAGS`, kommagetrennt) kommen additiv dazu, damit der Tag-Filter beide erfasst (#78).
   const projektTags = projektTagsAus(env.CC_LANGFUSE_TRACE_TAGS);
-  const tags = [...new Set([repoName, ...projektTags, "abgleich", ...[...new Set(soll.map((e) => e.ticket).filter(Boolean))].sort()])];
-  const traceAttrs = traceAttribute({ session, tags, project, env });
+  // Ein Trace je Ticket-Schlüssel (factory#524): Tags je Trace nur mit dem eigenen Ticket (oder `ohne-ticket`), nie mit einem fremden.
+  const traceDaten = (ticket) => {
+    const schluessel = ticketSchluessel(ticket);
+    return { traceId: traceIdJeTicket(session, ticket), schluessel, traceAttrs: traceAttribute({ session, tags: [...new Set([repoName, ...projektTags, "abgleich", schluessel])], project, env }) };
+  };
   const agenten = agentenVon(soll);
   const spanIdVon = (agentId) => subagentSpanId(session, agentId);
   // Eltern-Agent bekannt → dessen Span, sonst Root (unbekannter oder fehlender Eltern-Agent).
   const elternVon = (a) => {
     const p = normAgent(a.rolle.parentAgentId);
-    if (!p || p === a.rolle.agentId || !agenten.has(p)) return null;
+    if (!p || p === a.rolle.agentId || !agenten.has(p) || ticketSchluessel(agenten.get(p).ticket) !== ticketSchluessel(a.ticket)) return null; // Eltern-Span in anderem Trace: kein Verweis
     // Zyklus (a → b → a): den Eltern-Verweis kappen, damit der Span-Baum ein Baum bleibt.
     for (let id = p, n = 0; id && n <= agenten.size; n++) {
       if (id === a.rolle.agentId) return null;
@@ -199,13 +213,15 @@ export function bauePayloads(session, eintraege, { soll = eintraege, ledgerSpans
     const sid = spanIdVon(id);
     if (schonGesendet.has(sid)) continue;
     const a = agenten.get(id);
+    const { traceId, traceAttrs } = traceDaten(a.ticket);
     spans.push({ id: sid, span: subagentSpan(a.rolle, { traceAttrs, traceId, spanId: sid, parentSpanId: elternVon(a) }, a) });
   }
-  const generationen = eintraege.map((e) => ({
-    id: e.id,
-    span: generationSpan(e, { traceAttrs, repoName, parentSpanId: e.rolle?.agentId && agenten.has(e.rolle.agentId) ? spanIdVon(e.rolle.agentId) : null }),
-    gen: true,
-  }));
+  const generationen = eintraege.map((e) => {
+    const { traceId, traceAttrs } = traceDaten(e.ticket);
+    const agent = e.rolle?.agentId ? agenten.get(e.rolle.agentId) : null;
+    const elternImTrace = agent && ticketSchluessel(agent.ticket) === ticketSchluessel(e.ticket);
+    return { id: e.id, span: generationSpan({ ...e, traceId }, { traceAttrs, repoName, parentSpanId: elternImTrace ? spanIdVon(e.rolle.agentId) : null }), gen: true };
+  });
   const alle = [...spans, ...generationen];
   const chunks = [];
   for (let i = 0; i < alle.length; i += maxSpans) {

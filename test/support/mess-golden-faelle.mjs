@@ -134,20 +134,21 @@ function baselineFaelle(S, config) {
 }
 
 function langfuseFaelle(S, config) {
-  const branch = `${config.praefixe.branch}1562-x`;
+  // factory#524: das Ticket kommt aus dem Claim-Fenster (nicht mehr aus dem Branch): Claim im ersten Call, dann zwei Calls im Fenster, der Planer startet danach.
   const planer = config.agenten.planer;
-  const rows = (branch) => [call(0, { branch, model: "claude-opus-5-5" }), call(1, { branch, model: "claude-opus-5-5" })];
+  const claim = { tool: "Bash", input: { command: "gh issue edit 1562 --add-assignee @me" } };
+  const hauptRows = [call(0, { ...claim }), call(1, {}), call(2, {})];
   const sitzung = {
     id: "s1",
-    main: rows(branch),
-    subagents: [{ datei: "agent-a1.jsonl", meta: { agentType: planer, description: "Plan" }, zeilen: rows(branch) }],
+    main: hauptRows,
+    subagents: [{ datei: "agent-a1.jsonl", meta: { agentType: planer, description: "Plan" }, zeilen: [call(3, {}), call(4, {})] }],
   };
   const soll = S.sollEintraege(sitzung, { session: "s1" });
-  const ohneTicket = S.sollEintraege({ id: "s2", main: rows("main"), subagents: [] }, { session: "s2" });
+  const ohneTicket = S.sollEintraege({ id: "s2", main: [call(0, {}), call(1, {})], subagents: [] }, { session: "s2" });
   const payloads = S.bauePayloads("s1", soll, { soll, env: {}, project: "proj" });
   return {
     "langfuse-soll-json": JSON.stringify(soll, null, 2),
-    "langfuse-ohne-ticket-json": JSON.stringify(ohneTicket.map((e) => e.ticket)),
+    "langfuse-ohne-ticket-json": JSON.stringify(ohneTicket.map((e) => [e.ticket, e.ticketGrund])),
     "langfuse-payload-json": JSON.stringify(payloads, null, 2),
     "kontingent-logdatei": basename(S.logPfad({})),
     "kontingent-logdatei-env": S.logPfad({ FACTORY_GH_KOSTEN_LOG: "X:/eigen.jsonl" }),

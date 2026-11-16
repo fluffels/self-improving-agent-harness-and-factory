@@ -17,8 +17,9 @@
 
 import { istDirektaufruf } from "./direktaufruf.mjs";
 import { toolEventsFromTranscript } from "./brain-metrics.mjs";
+import { claimsAus } from "./claim-fenster.mjs";
 import { fehlerText, ghText } from "./gh-cli.mjs";
-import { CACHE_TTL_MS, claimNummer, istEchtesModell, median, TICKET_OPTIONEN, ticketFilterAus, ticketMeldung } from "./mess-lib.mjs";
+import { CACHE_TTL_MS, istEchtesModell, median, TICKET_OPTIONEN, ticketFilterAus, ticketMeldung } from "./mess-lib.mjs";
 import { flagsLesen } from "./flag-lib.mjs";
 import { priceParts } from "./preise.mjs";
 import { KERN_TICKET_SKILL, PROJEKT_CONFIG, TICKET_SKILL_NAME, repoName, wirksamerAbschluss } from "./projekt-config-lib.mjs";
@@ -127,16 +128,6 @@ function turnZu(turns, ts) {
   let best = turns[0];
   for (const turn of turns) if (turn.startTs && Date.parse(turn.startTs) <= t) best = turn;
   return best;
-}
-
-function claimsAus(events, turnVon) {
-  const claims = [];
-  for (const ev of events) {
-    if (ev.tool !== "Bash" && ev.tool !== "PowerShell") continue;
-    const nr = claimNummer(ev.input?.command);
-    if (nr) claims.push({ nr, ts: ev.ts, turn: turnVon(ev) });
-  }
-  return claims;
 }
 
 /**
