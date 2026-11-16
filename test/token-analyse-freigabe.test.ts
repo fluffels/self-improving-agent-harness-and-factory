@@ -318,7 +318,7 @@ describe("Aufruf und Bezieher-Sperre", () => {
     const s = welt((w) => `${w.alpha}\n`);
     for (const argv of [[], ["pruefen", "x"], ["ablegen"], ["ablegen", "--eingabe"], ["ablegen", "x", "y"], ["ablegen", "--eingabe", "a", "b"]]) {
       const r = cli.cli(argv, s.env, s.deps);
-      expect([argv, r.code, r.zeilen]).toEqual([argv, 2, ["Aufruf: node scripts/token-analyse-freigabe.mjs (pruefen | ablegen --eingabe <datei>)"]]);
+      expect([argv, r.code, r.zeilen]).toEqual([argv, 2, ["Aufruf: node scripts/token-analyse-freigabe.mjs (pruefen | lesen <k> <git|wc …> | ablegen --eingabe <datei>)"]]);
     }
   });
 });
@@ -357,5 +357,54 @@ describe("Analyse-Schnappschuss (Format)", () => {
   test("pruefeAblage ohne absoluten Pfad und bezieherLabel", () => {
     expect(lib.pruefeAblage({ ablage: "rel", repoWurzel: "/r" }).ok).toBe(false);
     expect(lib.bezieherLabel(3)).toBe("Bezieher 3");
+  });
+});
+
+describe("lesen (Teil 6): nur über die Allowlist, ohne Pfad im Aufruf", () => {
+  const mitschnitt = () => {
+    const aufrufe: string[][] = [];
+    const runner = (argv: string[]) => (aufrufe.push(argv), { status: 0, stdout: "zeile 1\n\nzeile 2\n", stderr: "" });
+    return { aufrufe, runner };
+  };
+  test("git: -C <Wurzel> setzt der Aufruf selbst, die Ausgabe kommt zeilenweise zurück", () => {
+    const s = welt((w) => `${w.alpha}\n`);
+    const m = mitschnitt();
+    const r = cli.cli(["lesen", "1", "git", "ls-files"], s.env, { ...s.deps, runner: m.runner });
+    expect(r).toMatchObject({ code: 0, zeilen: ["zeile 1", "zeile 2"] });
+    expect(m.aufrufe[0].slice(0, 2)).toEqual(["git", "--no-pager"]);
+    expect(m.aufrufe[0]).toContain(s.w.alpha);
+  });
+  test("nicht freigegebener Bezieher, unbekannte Nummer, fremdes Programm und Option: Exit 2, kein Prozess", () => {
+    const s = welt((w) => `${w.alpha}\n${w.beta}\n`);
+    const m = mitschnitt();
+    const d = { ...s.deps, runner: m.runner };
+    expect(cli.cli(["lesen", "2", "git", "ls-files"], s.env, d).code).toBe(2); // beta gehört einem anderen Konto
+    expect(cli.cli(["lesen", "9", "git", "ls-files"], s.env, d).code).toBe(2);
+    expect(cli.cli(["lesen", "1", "cat", "a.txt"], s.env, d).code).toBe(2);
+    expect(cli.cli(["lesen", "1", "git", "log", "--output=x"], s.env, d).code).toBe(2);
+    expect(cli.cli(["lesen", "1", "git"], s.env, d).zeilen[0]).toMatch(/abgelehnt/); // Länge 3: erst die Allowlist lehnt den fehlenden Unterbefehl ab
+    expect(m.aufrufe).toEqual([]);
+  });
+  test("zu wenige Argumente, Nummer 0 oder Text: Aufrufhilfe, kein Prozess", () => {
+    const s = welt((w) => `${w.alpha}\n`);
+    const m = mitschnitt();
+    for (const argv of [["lesen", "1"], ["lesen", "0", "git", "ls-files"], ["lesen", "x", "git", "ls-files"]]) {
+      const r = cli.cli(argv, s.env, { ...s.deps, runner: m.runner });
+      expect([argv, r.code, r.zeilen[0]]).toEqual([argv, 2, expect.stringMatching(/^Aufruf: /)]);
+    }
+    expect(m.aufrufe).toEqual([]);
+  });
+  test("wc läuft unverändert über die Allowlist, ein Fehlerstatus wird Exit 1", () => {
+    const s = welt((w) => `${w.alpha}\n`);
+    const aufrufe: string[][] = [];
+    const runner = (argv: string[]) => (aufrufe.push(argv), { status: 1, stdout: "", stderr: "" });
+    const r = cli.cli(["lesen", "1", "wc", "-l", "a.txt"], s.env, { ...s.deps, runner });
+    expect(r.code).toBe(1);
+    expect(aufrufe).toEqual([["wc", "-l", "a.txt"]]);
+  });
+  test("bricht pruefen ab (Ablage fehlt), meldet lesen den Grund statt „nicht freigegeben“", () => {
+    const s = welt((w) => `${w.alpha}\n`);
+    const r = cli.cli(["lesen", "1", "git", "ls-files"], { ...s.env, FACTORY_ANALYSE_ABLAGE: "" }, s.deps);
+    expect([r.code, r.zeilen.join(" ")]).toEqual([1, expect.stringContaining("FACTORY_ANALYSE_ABLAGE")]);
   });
 });

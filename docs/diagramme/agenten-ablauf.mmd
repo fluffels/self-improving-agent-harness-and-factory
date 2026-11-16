@@ -23,6 +23,7 @@ flowchart TD
   merge["Merge (squash)"]
   cleanup["Aufräumen: Issue zu,<br/>Worktree weg"]
   alarm["Alarm-Issue: CI rot auf main"]
+  analyse["Token-Analyse (nur auf Auftrag, außerhalb des Ticketlaufs)<br/>${skill:token-analyse} mit ${agent:analyse-extern} und ${agent:analyse-recherche}"]
 
   board --> claim --> plan --> epic
   epic -- ja --> kinder --> board
