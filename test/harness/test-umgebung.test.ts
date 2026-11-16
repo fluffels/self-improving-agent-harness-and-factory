@@ -18,12 +18,23 @@ import { istZugang } from "../support/zugaenge";
 
 const WURZEL = join(__dirname, "..", "..");
 const TOKEN_NAMEN = ["GH_TOKEN", "GITHUB_TOKEN", "PROJECT_TOKEN", "GH_ENTERPRISE_TOKEN", "GITHUB_ENTERPRISE_TOKEN"];
-const GH_FEHLT = spawnSync("gh", ["--version"]).status !== 0;
+// Das echte gh (Ausnahme von der Sperre, factory#560): Kindprozess mit dem Original-PATH, den gh-sperre-setup.ts gemerkt hat.
+const ECHT = { ...process.env, PATH: process.env.FACTORY_ORIGINAL_PATH ?? process.env.PATH };
+const GH_FEHLT = spawnSync("gh", ["--version"], { env: ECHT }).status !== 0;
 
 describe("Test-Umgebung ohne Zugangs-Variablen", () => {
   it("vite.config.ts lädt das Setup zugaenge-entfernen.ts", () => {
     const text = readFileSync(join(WURZEL, "vite.config.ts"), "utf8");
     expect(text).toMatch(/setupFiles:\s*\[[^\]]*test\/support\/zugaenge-entfernen\.ts/u);
+  });
+
+  it("vite.config.ts lädt die gh-Sperre, und gh im Test endet mit Exit 1 und der Sperr-Meldung", () => {
+    const text = readFileSync(join(WURZEL, "vite.config.ts"), "utf8");
+    expect(text).toMatch(/setupFiles:\s*\[[^\]]*test\/support\/gh-sperre-setup\.ts/u);
+    if (process.env.FACTORY_GH_ECHT === "1") return;
+    const r = spawnSync("gh", ["api", "user"], { encoding: "utf8" });
+    expect(r.status).toBe(1);
+    expect(r.stderr).toContain("gh in Vitest gesperrt (Naht injizieren)");
   });
 
   it("istZugang erkennt LANGFUSE_*, GH_TOKEN, GITHUB_TOKEN und sonst nichts", () => {
@@ -44,7 +55,7 @@ describe("Test-Umgebung ohne Zugangs-Variablen", () => {
   });
 
   it.skipIf(GH_FEHLT)("echtes gh (Leseaufruf) ist abgemeldet: Exit 4 und 'gh auth login'", () => {
-    const r = spawnSync("gh", ["api", "user"], { encoding: "utf8" });
+    const r = spawnSync("gh", ["api", "user"], { encoding: "utf8", env: ECHT });
     expect(r.status).toBe(4);
     // Lokal nennt gh `gh auth login`, in GitHub Actions (GITHUB_ACTIONS gesetzt) die Aufforderung, GH_TOKEN zu setzen.
     expect(r.stderr).toMatch(/gh auth login|GH_TOKEN environment variable/u);
