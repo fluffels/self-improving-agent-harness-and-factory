@@ -19,8 +19,8 @@ Entscheidung: Proben werden vorab bewertet und Modellwechsel folgen der Anbieter
 ## Folgen
 
 - `docs/model-routing.md` ersetzt „bei jedem neuen Release eine Gegenprobe“ durch den Ablauf aus Punkt 2; alte Gegenproben bleiben als Historie mit Zahlen stehen.
-- Prüftermin: Eintrag `proben-bewertung-541` in `.github/wiedervorlagen.json`.
+- Prüftermin: Punkt (15) des Sammeleintrags `regeln-verfall-2027-03` in `.github/wiedervorlagen.json` (factory#573; vorher eigener Eintrag mit Termin 2027-01-15).
 
 ## Re-Evaluierung
 
-Prüftermin 2027-01-15 (`proben-bewertung-541`). Auslöser für Verschärfung: ein Modellwechsel nach Empfehlung zieht Nacharbeit (Revert oder `Folge #` binnen 14 Tagen) nach sich, oder ein Probe-Ticket lief ohne Vorab-Bewertung.
+Prüftermin 2027-03-01 (Punkt (15) von `regeln-verfall-2027-03`; der frühere eigene Termin 2027-01-15 entfiel mit der Faltung, factory#573). Auslöser für Verschärfung: ein Modellwechsel nach Empfehlung zieht Nacharbeit (Revert oder `Folge #` binnen 14 Tagen) nach sich, oder ein Probe-Ticket lief ohne Vorab-Bewertung.
