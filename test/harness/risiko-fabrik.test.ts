@@ -32,8 +32,8 @@ describe("Risiko-Muster der Fabrik", () => {
   });
 
   test("die öffentliche Ticket-Brücke der Token-Analyse ist Klasse hoch", () => {
-    assert.ok(risiko.muster?.includes("/scripts/token-analyse-tickets.mjs"));
-    assert.equal(bestimmeRisikoklasse(["/scripts/token-analyse-tickets.mjs"], risiko).klasse, "hoch");
+    assert.ok(risiko.muster?.some((m) => m.endsWith("scripts/token-analyse-tickets.mjs")));
+    assert.equal(bestimmeRisikoklasse(["scripts/token-analyse-tickets.mjs"], risiko).klasse, "hoch"); // Pfadform wie im Diff, ohne führenden Schrägstrich
   });
 
   test("Negativfall: ein gewöhnliches Skript bleibt normal", () => {

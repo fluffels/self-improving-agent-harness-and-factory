@@ -134,7 +134,7 @@ describe("Plugin-Scope-Punkt (pluginScopePunkt, Sammelzeile L4)", () => {
     expect(scope({ settingsText: JSON.stringify({}) }).hinweis).toContain("Ticket-Tag");
   });
   test("Settings fehlen oder kein JSON-Objekt, enabledPlugins kein Objekt: nicht prüfbar mit Fix", () => {
-    for (const settingsText of [null, undefined, "kein json", "42", "[]", "null", JSON.stringify({ enabledPlugins: "x" }), JSON.stringify({ enabledPlugins: [] })]) {
+    for (const settingsText of [null, undefined, "kein json", "42", "[]", "null", JSON.stringify({ enabledPlugins: "x" }), JSON.stringify({ enabledPlugins: [] }), JSON.stringify({ enabledPlugins: null })]) {
       const x = scope({ settingsText });
       expect(x.nichtPruefbar, String(settingsText)).toBe(true);
       expect(x.fix).toContain(".claude/settings.json");

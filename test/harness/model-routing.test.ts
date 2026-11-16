@@ -1057,7 +1057,9 @@ describe("Pflegeschritt und Brain-Lesen (#1099)", () => {
 
   test("Planer-Spawn bekommt bei veralteter Definition den Planer-Zusatz (Sammelzeile L6)", () => {
     const t = liesTicketAblauf();
-    const vorPlaner = t.slice(0, t.indexOf('subagent_type: "<agenten.planer>"'));
+    const spawn = t.indexOf(`subagent_type: "${AG.planer}"`);
+    assert.ok(spawn > 0, "Planer-Spawn im Ablauf gefunden");
+    const vorPlaner = t.slice(0, spawn);
     assert.match(vorPlaner, /Vor dem Planer-Spawn denselben Sitzungsbasis-Diff/);
     assert.match(t, /Lies deine Definition \(`\.claude\/agents\/factory-planer\.md`\) aus dem Hauptcheckout; sie ist neuer als diese Session\./);
   });
