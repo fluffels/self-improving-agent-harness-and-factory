@@ -23,7 +23,14 @@ import { abschnitt } from "./spezifikation-lib.mjs";
 const BASIS_URL = new URL("../.github/risikostufe-basis.json", import.meta.url);
 const LEITPLANKEN_URL = new URL("../.github/protected-paths.json", import.meta.url);
 
-export const meldung = (e) => (e instanceof Error ? e.message : String(e));
+/** Rollen, die je Risikostufe starten (factory#528; Quelle: docs/model-routing.md, Tabelle „Rollen je Risikostufe“, vom Wächter in test/harness/model-routing.test.ts gegen die Agenten-Frontmatter geprüft). Stufe 0 hat nie Planer, Lens oder Holdout. */
+export const ROLLEN_JE_STUFE = Object.freeze({
+  0: Object.freeze(["umsetzer"]),
+  1: Object.freeze(["umsetzer", "lens"]),
+  2: Object.freeze(["planer", "holdout-szenario", "umsetzer", "lens", "holdout-abnahme"]),
+});
+
+export const meldung =(e) => (e instanceof Error ? e.message : String(e));
 const istText = (x) => typeof x === "string" && x.trim() !== "";
 
 /** Lädt die feste Stufe-2-Basis: `{kategorien: {name: muster[]}, muster}`; wirft bei fehlender Datei, kaputtem JSON, ungültiger oder leerer Kategorie und null Mustern. Die Text-Taste `beschreibung` wird ignoriert. */
