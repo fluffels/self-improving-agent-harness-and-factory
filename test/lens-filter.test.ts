@@ -259,3 +259,43 @@ describe("Fundstelle, Zusammenfassen, Sortierung (Review-Runde 1)", () => {
     expect(L.liesArgumente(["--runde", "3"])).toMatchObject({ runde: 3, ticket: null });
   });
 });
+
+describe("liesEingabe (factory#622 L10): kein unbegrenztes Warten auf stdin", () => {
+  type Strom = EventEmitter & { isTTY?: boolean; destroy: () => void; setEncoding: (e: string) => void; resume: () => void };
+  const R = raw as unknown as { liesEingabe: (o: { stdin: unknown; fristMs: number }) => Promise<string>; FilterFehler: new (m: string) => Error };
+  const strom = (isTTY = false): Strom => {
+    const s = new EventEmitter() as Strom;
+    s.isTTY = isTTY;
+    s.destroy = () => { s.emit("close"); };
+    s.setEncoding = () => {};
+    s.resume = () => {};
+    return s;
+  };
+  test("TTY: sofort Fehler mit Umleitungs-Hinweis", async () => {
+    const p = R.liesEingabe({ stdin: strom(true), fristMs: 20 });
+    await expect(p).rejects.toThrow(/< berichte\.md/);
+    await expect(R.liesEingabe({ stdin: strom(true), fristMs: 20 })).rejects.toBeInstanceOf(R.FilterFehler);
+  });
+  test("kein Byte innerhalb der Frist: Fehler mit Hinweis, Strom zerstört", async () => {
+    const s = strom();
+    let zerstoert = false;
+    s.destroy = () => { zerstoert = true; };
+    await expect(R.liesEingabe({ stdin: s, fristMs: 20 })).rejects.toThrow(/< berichte\.md/);
+    expect(zerstoert).toBe(true);
+  });
+  test("sofort leeres Ende: leere Eingabe", async () => {
+    const s = strom();
+    const p = R.liesEingabe({ stdin: s, fristMs: 1000 });
+    s.emit("end");
+    await expect(p).rejects.toThrow(/leere Eingabe/);
+  });
+  test("Text: geliefert; Frist zählt nur bis zum ersten Byte", async () => {
+    const s = strom();
+    const p = R.liesEingabe({ stdin: s, fristMs: 20 });
+    s.emit("data", "ab");
+    await new Promise((r) => setTimeout(r, 60));
+    s.emit("data", "cd");
+    s.emit("end");
+    await expect(p).resolves.toBe("abcd");
+  });
+});
