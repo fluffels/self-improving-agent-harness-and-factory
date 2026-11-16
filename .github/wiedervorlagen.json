@@ -6,6 +6,12 @@
     "text": "Messen: die Blöcke der letzten mindestens 4 Bericht-Kommentare der Wochen-Status-Tickets „Langfuse-Status überprüfen“ auswerten (geschlossene Tickets seit 2026-10-16 zählen: `gh issue list --state all --search '\"Langfuse-Status überprüfen\" in:title' --json number,closedAt --limit 30`). Unter 4 Läufen um die fehlenden Wochen schieben, die Zahl der Läufe als Grund nennen. Ab 4 je Kennzahl (Lauf-Ergebnis, Nacharbeit, Kosten je Ticket, Abo-Kontingent, Abnahme-Quote) eine Schwelle mit Prüftermin (ADR 0027) oder „keine Schwelle, weil …“ festlegen; die Entscheidung gehört nach docs/model-routing.md (Factory-Kennzahlen › Grenzen) und als Fortschreibung zu ADR 0022. Dann diesen Eintrag löschen."
   },
   {
+    "id": "risikostufen-kosten-511",
+    "faellig": "2026-12-14",
+    "titel": "Kosten und Blocker je Risikostufe messen (factory#528, Epic factory#511)",
+    "text": "Vorher: Beleg-Werte aus factory#511 und Rückrechnung aus Teil 1/5 (60 Commits: Stufe 0/1/2 = 10/22/28, docs/model-routing.md „Vorher-Verteilung“). Nachher messen: je gemergtem PR seit dem Merge von factory#528 die berechnete Stufe (`node scripts/risikostufe.mjs --commit <sha> --json`; Fortsetzungen zählen einmal je PR); Kosten über `node scripts/token-baseline.mjs` (ohne `--langfuse`) und `node scripts/factory-kennzahlen.mjs`; dazu die Blocker je Stufe (Feld `blocker=` der `SIH-Review:`-Zeile, etwa über `node scripts/lauf-ergebnis.mjs`). Unter 10 Läufen je Stufe: faellig um 4 Wochen schieben und die Zahl der Läufe je Stufe als Grund nennen. Ab 10 je Stufe: Vorher-Nachher-Ergebnis nach docs/model-routing.md (Abschnitt „Risikostufe“) schreiben und diesen Eintrag löschen. Ist das Änderungsregister (factory#571, Migration factory#573) da, wird der Eintrag eine Registerzeile."
+  },
+  {
     "id": "planer-medium-547",
     "faellig": "2026-12-13",
     "titel": "Planer-Effort medium prüfen, Rückfall auf xhigh bei Nacharbeit (factory#547, ADR 0027)",
