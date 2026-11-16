@@ -30,7 +30,7 @@ const lib = libModul as unknown as {
   renderMarkdown: (e: Z, t?: string[]) => string;
   pruefeRegister: (z: unknown) => string[];
 };
-const cli = cliModul as unknown as { parseArgs: (a: string[]) => Z; auswerten: (a: Z, d?: Z) => { exitCode: number; text: string } };
+const cli = cliModul as unknown as { parseArgs: (a: string[]) => Z; anlegeArgumente: (a: Z) => string[]; auswerten: (a: Z, d?: Z) => { exitCode: number; text: string } };
 const spec = specModul as unknown as { pruefeEingang: (i: Z, o: Z) => { art: string; fehlt?: string[] } };
 
 const FIX = join(__dirname, "fixtures", "aenderungsregister");
@@ -67,10 +67,10 @@ describe("Urteile je Zeile", () => {
     expect(solo(z, nurQualitaet([10, 10], [7, 7])).urteil).toBe("Verstoß");
     expect(solo(z, nurQualitaet([10, 10], [13, 13])).urteil).toBe("eingehalten");
   });
-  it("Prozent: Basis 0 ist eine Lücke, nie ein Wert", () => {
+  it("Prozent: Basis 0 ist eine Lücke mit Grund, nie ein Wert", () => {
     const z = zeile({ messgroesse: "ci-fix-runden", parameter: undefined, toleranz: { ...zeile().toleranz, einheit: "prozent" } });
     const u = solo(z, nurQualitaet([0, 0], [1, 1]));
-    expect(u).toMatchObject({ urteil: "Lücke", messwert: null });
+    expect(u).toMatchObject({ urteil: "Lücke", messwert: null, grund: "Prozent bei Basis 0 nicht berechenbar" });
     expect(lib.abweichung(10, 12, "prozent")).toBeCloseTo(20);
   });
   it("noch nicht fällig vor dem Prüftermin, am Prüftermin fällig", () => {
@@ -81,7 +81,7 @@ describe("Urteile je Zeile", () => {
     const z = zeile({ messgroesse: "ci-fix-runden", parameter: undefined });
     const nach = nurQualitaet([], [20, 20]);
     expect(solo({ ...z, basis: { fenster: "irgendwann", wert: 10 } }, nach).urteil).toBe("Verstoß");
-    expect(solo({ ...z, basis: { fenster: "irgendwann", wert: null } }, nach)).toMatchObject({ urteil: "Lücke", messwert: null });
+    expect(solo({ ...z, basis: { fenster: "irgendwann", wert: null } }, nach)).toMatchObject({ urteil: "Lücke", messwert: null, grund: "Basisfenster nicht auswertbar: irgendwann" });
     expect(lib.basisFenster({ datum: "2026-10-01", basis: { fenster: "4 Wochen vor Merge" } })).toEqual({ von: "2026-09-03", bis: "2026-09-30" });
   });
   it("Aggregation: Kosten Median, Qualität Mittelwert", () => {
@@ -186,6 +186,7 @@ describe("Bezieher getrennt und anonym", () => {
     const b = erg.zeilen[0].bezieher as Z;
     expect(b).toMatchObject({ bereich: "bezieher", urteil: "Lücke", messwert: null });
     expect(b.grund).toContain("Quelle nur in der Fabrik");
+    expect(b.kosten).toMatchObject({ basis: 9, nach: 9, vermerk: "Wirkung ausgeblieben" });
     const k = lib.bereichKontext([LANGFUSE], "bezieher", { ...O, repoTagAb: "2026-01-01" });
     expect(k.langfuse.punkte).toHaveLength(4);
     const text = JSON.stringify(erg) + lib.renderMarkdown(erg);
@@ -203,10 +204,12 @@ describe("Messpunkte-Export: Form", () => {
     const p = { messgroesse: "nacharbeit-quote", zeitpunkt: "2026-10-10", einheitId: "a", wert: 1 };
     const e = (x: Z) => ({ art: "aenderungsregister-messpunkte", quelle: "lauf-ergebnis", punkte: [{ ...p, ...x }] });
     expect(() => lib.leseMesspunkte(e({}), "x")).not.toThrow();
-    for (const schlecht of [{ wert: "1" }, { wert: Infinity }, { zeitpunkt: "gestern" }, { einheitId: "" }, { messgroesse: "kosten-alles" }, { repoTag: 3 }]) {
+    for (const schlecht of [{ wert: "1" }, { wert: Infinity }, { zeitpunkt: "gestern" }, { zeitpunkt: 3 }, { einheitId: "" }, { messgroesse: "kosten-alles" }, { repoTag: 3 }, { parameter: "" }]) {
       expect(() => lib.leseMesspunkte(e(schlecht), "x")).toThrow(/punkte\[0\]/);
     }
-    expect(() => lib.leseMesspunkte({ art: "anders" }, "x")).toThrow(/art/);
+    expect(() => lib.leseMesspunkte(null, "x")).toThrow(/art/);
+    expect(() => lib.leseMesspunkte({ art: "aenderungsregister-messpunkte", quelle: "langfuse", punkte: [null] }, "x")).toThrow(/punkte\[0\]: Objekt erwartet/);
+    expect(() => lib.leseMesspunkte({ art: "anders" }, "x")).toThrow(/art "aenderungsregister-messpunkte" erwartet/);
     expect(() => lib.leseMesspunkte({ art: "aenderungsregister-messpunkte", quelle: "magie", punkte: [] }, "x")).toThrow(/quelle/);
     expect(() => lib.leseMesspunkte({ art: "aenderungsregister-messpunkte", quelle: "langfuse" }, "x")).toThrow(/punkte/);
   });
@@ -250,13 +253,13 @@ describe("Ticket nur bei Verstoß", () => {
     expect(r.text).toContain("Ticket angelegt");
   });
   it("zweite Auswertung bei vorhandenem Ticket (auch geschlossen) legt kein zweites an", () => {
-    const { r, aufrufe } = lauf(verstoss(), ["--nach", "5"], { ladeTickets: () => [{ number: 7, state: "CLOSED", body: "x\n<!-- aenderungsregister:solo -->" }] });
+    const { r, aufrufe } = lauf(verstoss(), ["--nach", "5"], { ladeTickets: () => [{ number: 7, state: "CLOSED", author: { login: "o" }, body: "x\n<!-- aenderungsregister:solo -->" }] });
     expect(r.exitCode).toBe(0);
     expect(aufrufe).toEqual([]);
     expect(r.text).toMatch(/Ticket #7 besteht/);
   });
   it("ein Ticket ohne den Marker der Id zählt nicht als Dublette", () => {
-    const { aufrufe } = lauf(verstoss(), ["--nach", "5"], { ladeTickets: () => [{ number: 7, state: "OPEN", body: "<!-- aenderungsregister:andere -->" }] });
+    const { aufrufe } = lauf(verstoss(), ["--nach", "5"], { ladeTickets: () => [{ number: 7, state: "OPEN", author: { login: "o" }, body: "<!-- aenderungsregister:andere -->" }] });
     expect(aufrufe.filter((a) => a.art === "anlegen")).toHaveLength(1);
   });
   it("--trocken legt nichts an und braucht kein --nach", () => {
@@ -297,7 +300,7 @@ describe("CLI", () => {
     expect(r.text).toContain("Register ungültig");
   });
   it("Ablage im Repo wird verweigert (Exit 2), außerhalb entstehen .json und .md", () => {
-    expect(cli.auswerten(cli.parseArgs([...args, "--ablage", join(__dirname, "..", "scratch")]), basis).exitCode).toBe(2);
+    expect(cli.auswerten(cli.parseArgs([...args, "--ablage", join(__dirname, "..", "scratch")]), { ...basis, schreibe: () => undefined }).exitCode).toBe(2);
     const ordner = mkdtempSync(join(tmpdir(), "aenderungsregister-test-"));
     try {
       const r = cli.auswerten(cli.parseArgs([...args, "--ablage", ordner, "--trocken"]), { ...basis, ladeTickets: () => [] });
@@ -310,6 +313,188 @@ describe("CLI", () => {
   it("--json gibt den Schnappschuss als JSON aus", () => {
     const r = cli.auswerten(cli.parseArgs([...args, "--json"]), basis);
     expect(JSON.parse(r.text).zeilen).toHaveLength(3);
+  });
+});
+
+describe("Grenzen und Zweige (Review Runde 1)", () => {
+  const qualitaetZeile = (extra: Z = {}): Z => zeile({ messgroesse: "ci-fix-runden", parameter: undefined, ...extra });
+  const langfuse = (rows: Z[]): Export => ({ quelle: "langfuse", punkte: rows.map((r) => ({ messgroesse: "kosten-je-ticket-rolle", parameter: "planer", repoTag: "fix-fabrik", ...r })) });
+  const q = (): Export => nurQualitaet([10, 10], [10, 10])[0];
+  const kosten = (rows: Z[], z: Z = zeile()) => (solo(z, [q(), langfuse(rows)]) as Z).kosten as Z;
+  const kost = (basis: number[], nach: number[], extra: Z = {}): Z[] => [
+    ...basis.map((wert, i) => ({ zeitpunkt: BASIS_Z[i % 2], einheitId: `b${i}`, wert, ...extra })),
+    ...nach.map((wert, i) => ({ zeitpunkt: NACH_Z[i % 2], einheitId: `n${i}`, wert, ...extra })),
+  ];
+
+  describe("Basisfenster und Argumente (Regex-Komponenten)", () => {
+    const bf = (fenster: string) => lib.basisFenster({ datum: "2026-10-01", basis: { fenster } });
+    it("nur „<n> Wochen vor Merge“ (n ≥ 1, ein oder mehrere Ziffern, Woche oder Wochen) ist auswertbar", () => {
+      expect(bf("1 Woche vor Merge")).toEqual({ von: "2026-09-24", bis: "2026-09-30" });
+      expect(bf("12 Wochen vor Merge")).toEqual({ von: "2026-07-09", bis: "2026-09-30" });
+      for (const schlecht of ["x 4 Wochen vor Merge", "4 Wochen vor Merge!", "0 Wochen vor Merge", "4 Wochen", ""]) expect(bf(schlecht), schlecht).toBeNull();
+    });
+    it("--nach nimmt genau eine Ticketnummer (mit oder ohne #), sonst Aufruffehler", () => {
+      for (const gut of ["5", "#5", "123"]) expect(cli.parseArgs(["--nach", gut]).fehler, gut).toBeUndefined();
+      for (const schlecht of ["x5", "5x", "#", "5 5"]) expect(cli.parseArgs(["--nach", schlecht]).fehler, schlecht).toContain("--nach");
+    });
+    it("anlegeArgumente: #5 und 5 sind dieselbe Nummer, --label nur mit Label", () => {
+      const a = cli.anlegeArgumente({ titel: "t", datei: "d", nach: "#5", label: "x" });
+      expect(a[a.indexOf("--nach") + 1]).toBe("5");
+      expect(a).toContain("--label");
+      expect(cli.anlegeArgumente({ titel: "t", datei: "d", nach: "5", label: undefined })).not.toContain("--label");
+    });
+  });
+
+  describe("Fenster, Zählung, Parameter (aggregat)", () => {
+    it("Kosten zählen nur den Parameter der Zeile (planer), nicht andere Rollen", () => {
+      const k = kosten([...kost([5, 5], [4, 4]), ...kost([100, 100], [100, 100], { parameter: "umsetzer", einheitId: "u" }).map((r, i) => ({ ...r, einheitId: `u${i}` }))]);
+      expect(k).toMatchObject({ basis: 5, nach: 4 });
+    });
+    it("mindestdaten zählt verschiedene einheitId, nicht Punkte", () => {
+      const doppelt = [...kost([5, 5], []), ...[0, 1, 2].map((i) => ({ zeitpunkt: NACH_Z[i % 2], einheitId: "t-1", wert: 4 }))];
+      expect(kosten(doppelt).luecke).toContain("(1 < 2");
+    });
+    it("beide Fenstergrenzen sind inklusive (Änderungsdatum, Prüftermin, Basis von und bis)", () => {
+      const rand = [
+        { zeitpunkt: "2026-09-03", einheitId: "b1", wert: 5 },
+        { zeitpunkt: "2026-09-30", einheitId: "b2", wert: 5 },
+        { zeitpunkt: "2026-10-01", einheitId: "n1", wert: 4 },
+        { zeitpunkt: "2026-10-29", einheitId: "n2", wert: 4 },
+      ];
+      expect(kosten(rand)).toMatchObject({ basis: 5, nach: 4 });
+      const draussen = [...rand.slice(0, 2), { zeitpunkt: "2026-09-02", einheitId: "b0", wert: 99 }, { zeitpunkt: "2026-10-30", einheitId: "n0", wert: 99 }, ...rand.slice(2)];
+      expect(kosten(draussen)).toMatchObject({ basis: 5, nach: 4 });
+    });
+  });
+
+  describe("Lücken auf Basis- und Nachher-Seite (AK 8)", () => {
+    it("Basis zu dünn bei vollem Nachher: Lücke mit Präfix „Basis:“", () => {
+      expect(solo(qualitaetZeile(), nurQualitaet([10], [11, 11]))).toMatchObject({ urteil: "Lücke", messwert: null, grund: expect.stringMatching(/^Basis: weniger Läufe als mindestdaten \(1 < 2/) });
+    });
+    it("Nachher zu dünn bei voller Basis: Lücke mit Präfix „Nachher:“", () => {
+      expect(solo(qualitaetZeile(), nurQualitaet([10, 10], [11]))).toMatchObject({ urteil: "Lücke", messwert: null, grund: expect.stringMatching(/^Nachher: weniger Läufe als mindestdaten \(1 < 2/) });
+    });
+    it("übrige Zeilen behalten ihr Urteil: eine Lücke neben einer ausgewerteten, fälligen Zeile", () => {
+      const a = qualitaetZeile({ id: "a", toleranz: { ...zeile().toleranz, qualitaetsmass: "ci-fix-runden" } });
+      const b = zeile({ id: "b", messgroesse: "nacharbeit-quote", parameter: undefined });
+      const erg = lib.auswertung({ zeilen: [a, b] }, nurQualitaet([10, 10], [11, 11]), { heute: "2026-11-16", ...O });
+      expect(erg.zeilen[0].fabrik).toMatchObject({ urteil: "Lücke", messwert: null });
+      expect(erg.zeilen[1].fabrik).toMatchObject({ urteil: "eingehalten", messwert: 11 });
+    });
+  });
+
+  describe("Kosten-Zweige", () => {
+    it("eine Qualitätszeile hat kein Kostenfeld", () => {
+      expect((solo(qualitaetZeile(), nurQualitaet([10, 10], [11, 11])) as Z).kosten).toBeNull();
+    });
+    it("Freitext-Basis mit basis.wert: das Urteil steht, die Kosten sind eine Lücke mit Grund", () => {
+      const z = zeile({ basis: { fenster: "irgendwann", wert: 10 } });
+      const u = solo(z, [q(), langfuse(kost([5, 5], [4, 4]))]) as Z;
+      expect(u.urteil).toBe("eingehalten");
+      expect(u.kosten).toEqual({ luecke: "Basisfenster nicht auswertbar: irgendwann" });
+    });
+    it("fehlt die Basis oder das Nachher, ist es eine Lücke mit dem Grund der fehlenden Seite", () => {
+      expect(kosten(kost([5], [4, 4])).luecke).toContain("(1 < 2");
+      expect(kosten(kost([5, 5], [4])).luecke).toContain("(1 < 2");
+    });
+    it("gleiche Kosten sinken nicht: Wirkung ausgeblieben", () => {
+      expect(kosten(kost([5, 5], [5, 5]))).toMatchObject({ basis: 5, nach: 5, vermerk: "Wirkung ausgeblieben" });
+    });
+  });
+
+  describe("Fund-Regel: Grenzen und Zweige", () => {
+    const z = zeile({ messgroesse: "blocker-schwere-brille", parameter: "doku", toleranz: { qualitaetsmass: "blocker-schwere-brille", richtung: "faellt", schwelle: 1, einheit: "absolut" } });
+    const funde = (basis: number[], nach: number[], extra: Z[] = []): Export[] => [
+      { quelle: "lauf-ergebnis", punkte: [...punkte("blocker-schwere-brille", basis, BASIS_Z, { parameter: "doku" }), ...punkte("blocker-schwere-brille", nach, NACH_Z, { parameter: "doku" }), ...extra] },
+    ];
+    it("genau an der Schwelle (−1 bei Schwelle 1) ist noch eingehalten, auch ohne Nacharbeit-Daten", () => {
+      expect(solo(z, funde([5, 5], [4, 4])).urteil).toBe("eingehalten");
+    });
+    it("nicht verletzt: eingehalten, ohne die Nacharbeit zu brauchen", () => {
+      expect(solo(z, funde([5, 5], [5, 5])).urteil).toBe("eingehalten");
+    });
+    it("fehlt die Nacharbeit der Basis (nur Nachher da): Lücke, nie eingehalten", () => {
+      const u = solo(z, funde([5, 5], [1, 1], punkte("nacharbeit-quote", [14, 14], NACH_Z)));
+      expect(u).toMatchObject({ urteil: "Lücke", messwert: null });
+      expect(u.grund).toContain("Nacharbeit-Quote fehlt");
+    });
+    it("Richtung faellt bei normalem Maß: genau −Schwelle ist eingehalten, darunter Verstoß", () => {
+      const n = qualitaetZeile({ toleranz: { ...zeile().toleranz, richtung: "faellt" } });
+      expect(solo(n, nurQualitaet([10, 10], [8, 8])).urteil).toBe("eingehalten");
+      expect(solo(n, nurQualitaet([10, 10], [7.9, 7.9])).urteil).toBe("Verstoß");
+    });
+  });
+
+  describe("Bereich: Trennung und Stichtag", () => {
+    it("Fabrik-Kosten zählen nur den eigenen Tag (die fremden Tags im selben Export verfälschen nichts)", () => {
+      const erg = lib.auswertung(register, [FABRIK, LANGFUSE], { heute: "2026-11-16", ...O });
+      expect((erg.zeilen[0].fabrik as Z).kosten).toMatchObject({ basis: 5, nach: 4 });
+    });
+    it("Stichtag: ein Punkt am Stichtag zählt, davor nicht", () => {
+      const k = lib.bereichKontext([LANGFUSE], "bezieher", { ...O, repoTagAb: "2026-09-20" });
+      expect((k.langfuse as Z).punkte).toHaveLength(3);
+    });
+    it("Stichtag nach dem Prüftermin: Lücke mit dem Bezieher-Grund, Kosten werden trotzdem berichtet", () => {
+      const erg = lib.auswertung(register, [FABRIK, LANGFUSE], { heute: "2026-11-16", ...O, repoTagAb: "2026-11-01" });
+      expect(erg.zeilen[0].bezieher).toMatchObject({ urteil: "Lücke", grund: "Repo-Tag fehlt (factory#523)" });
+      expect(erg.zeilen[0].bezieher).toHaveProperty("kosten");
+    });
+  });
+
+  describe("Überlappung: Berührung und Partner", () => {
+    const a = register.zeilen[0] as Z;
+    const kosten2 = (extra: Z): Z => ({ ...register.zeilen[2], messgroesse: "kosten-je-ticket-rolle", parameter: "planer", toleranz: { ...a.toleranz, qualitaetsmass: "ci-fix-runden" }, ...extra });
+    it("gleiche Messgröße samt Parameter berührt auch bei anderem Qualitätsmaß", () => {
+      expect(lib.ueberlappungen([a, kosten2({})])).toEqual([["fix-faellig", "fix-ueberlappt"]]);
+    });
+    it("gleiche Messgröße mit anderem Parameter und anderem Maß berührt nicht", () => {
+      expect(lib.ueberlappungen([a, kosten2({ parameter: "umsetzer" })])).toEqual([]);
+    });
+    const verstoss = (): Export[] => [{ quelle: "lauf-ergebnis", punkte: FABRIK.punkte.map((p) => (p.messgroesse === "nacharbeit-quote" && p.zeitpunkt.startsWith("2026-10") ? { ...p, wert: 30 } : p)) }, LANGFUSE];
+    const partner = (extra: Z) => ({ zeilen: [a, { ...a, id: "partner", ...extra }] });
+    it("ein nicht fälliger Partner steht in mit: der Verstoß wird eine Überlappung, kein Einzel-Ticket mit Rückfall", () => {
+      const reg = partner({ datum: "2026-10-20", pruefTermin: "2026-12-01" });
+      const erg = lib.auswertung(reg, verstoss(), { heute: "2026-11-16", ...O });
+      expect(erg.zeilen[1].fabrik.urteil).toBe("noch nicht fällig");
+      expect(erg.zeilen[0].fabrik).toMatchObject({ urteil: "Überlappung", mit: ["fix-faellig", "partner"], verstoss: true, einzel: "Verstoß" });
+      const g = lib.ticketGruppen(erg, reg);
+      expect(g.map((x) => x.ids)).toEqual([["fix-faellig", "partner"]]);
+      expect(lib.ticketBody(g[0]).body).toContain("kein automatischer Rückfall");
+    });
+    it("ein Partner mit Lücke steht ebenfalls in mit", () => {
+      const reg = partner({ datum: "2026-10-20", pruefTermin: "2026-11-10" });
+      const erg = lib.auswertung(reg, verstoss(), { heute: "2026-11-16", ...O });
+      expect(erg.zeilen[1].fabrik.urteil).toBe("Lücke");
+      expect(erg.zeilen[0].fabrik).toMatchObject({ urteil: "Überlappung", mit: ["fix-faellig", "partner"], verstoss: true });
+    });
+  });
+
+  describe("CLI-Verdrahtung", () => {
+    const basis = { bezieher: false, heute: "2026-11-16", eigenerRepoTag: "fix-fabrik", repo: "o/r", label: "x", schreibe: () => undefined, ladeTickets: () => [] };
+    const dateien = ["--register", join(FIX, "register.json"), "--export", join(FIX, "messpunkte-fabrik.json"), "--export", join(FIX, "messpunkte-langfuse.json"), "--json"];
+    it("--heute geht vor dem Standard-Datum", () => {
+      const r = cli.auswerten(cli.parseArgs([...dateien, "--heute", "2026-10-28"]), basis);
+      expect(JSON.parse(r.text).zeilen[0].fabrik.urteil).toBe("noch nicht fällig");
+    });
+    it("der eigene Repo-Tag erreicht die Auswertung (Fabrik-Kosten aus dem Langfuse-Export)", () => {
+      const r = cli.auswerten(cli.parseArgs(dateien), basis);
+      expect(JSON.parse(r.text).zeilen[0].fabrik.kosten).toMatchObject({ basis: 5, nach: 4 });
+    });
+    it("Ablage in der Repo-Wurzel selbst oder im Repo wird verweigert, ohne etwas zu schreiben", () => {
+      const geschrieben: string[] = [];
+      const d = { ...basis, schreibe: (p: string) => geschrieben.push(p) };
+      for (const ziel of [join(__dirname, ".."), join(__dirname, "..", "scratch")]) expect(cli.auswerten(cli.parseArgs([...dateien, "--ablage", ziel]), d).exitCode, ziel).toBe(2);
+      expect(geschrieben).toEqual([]);
+    });
+    it("ein Issue fremder Autorschaft mit dem Marker unterdrückt das Ticket nicht", () => {
+      const reg = { zeilen: [zeile({ messgroesse: "ci-fix-runden", parameter: undefined, toleranz: { ...zeile().toleranz, qualitaetsmass: "ci-fix-runden" } })] };
+      const f: Record<string, string> = { "reg.json": JSON.stringify(reg), "ex.json": JSON.stringify({ art: "aenderungsregister-messpunkte", quelle: "lauf-ergebnis", punkte: nurQualitaet([10, 10], [30, 30], "ci-fix-runden")[0].punkte }) };
+      const angelegt: Z[] = [];
+      const fremd = { number: 3, state: "OPEN", author: { login: "fremder" }, body: "<!-- aenderungsregister:solo -->" };
+      const r = cli.auswerten(cli.parseArgs(["--register", "reg.json", "--export", "ex.json", "--nach", "5"]), { ...basis, lies: (p: string) => f[p], ladeTickets: () => [fremd], legeAn: (a: Z) => (angelegt.push(a), "u/99") });
+      expect(r.exitCode).toBe(0);
+      expect(angelegt).toHaveLength(1);
+    });
   });
 });
 

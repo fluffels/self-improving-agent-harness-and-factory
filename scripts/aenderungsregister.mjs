@@ -9,7 +9,7 @@
  * (außerhalb des Repos; ein Ablageordner im Repo wird verweigert). Messpunkte kommen nur aus Exportdateien (Format: docs/model-routing.md ›
  * Änderungsregister), nie aus dem Netz und nie mit dem Langfuse-Secret-Key (ein Test hält die Import-Hülle fest). Nur ein Verstoß der
  * Qualitäts-Toleranz legt ein Ticket an (`spezifikation.mjs anlegen`, dedupliziert über den Marker im Body, Pflicht `--nach <nr>`); sonst bleibt
- * es bei Bericht und Schnappschuss, ohne `gh`-Aufruf. FABRIK-EIGEN: das Skript wird nie an Bezieher verteilt und bricht dort ab (Exit 4).
+ * es bei Bericht und Schnappschuss, ohne `gh`-Aufruf. Die Ablage-Sperre schützt vor Versehen (Pfadvergleich), nicht vor Symlinks oder abweichender Schreibweise auf case-insensitiven Dateisystemen. FABRIK-EIGEN: das Skript wird nie an Bezieher verteilt und bricht dort ab (Exit 4).
  * Exit 0 Bericht (auch mit Lücken), 1 Lese- oder Registerfehler, 2 Aufruffehler, 3 Verstoß ohne `--nach` oder Ticket-Anlage gescheitert, 4 Abbruch im Bezieher.
  */
 
@@ -22,10 +22,27 @@ import { istDirektaufruf } from "./direktaufruf.mjs";
 import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
 import { ghJson } from "./gh-cli.mjs";
 import { istBezieher } from "./sync-stand-lib.mjs";
+import { istVertraut } from "./fremdtext-lib.mjs";
+import { nutzerAus } from "./ticket-drift-lib.mjs";
 import { istDatum, leseMesspunkte, markerFuer, pruefeRegister, renderMarkdown, ticketBody, ticketGruppen, auswertung } from "./aenderungsregister-lib.mjs";
 
 const WURZEL = fileURLToPath(new URL("..", import.meta.url));
 const REGISTER = join(WURZEL, ".github", "aenderungsregister.json");
+/** Pur: die Argumente für `spezifikation.mjs anlegen` (`#5` und `5` sind dieselbe Nummer; `--label` nur mit Label). */
+export const anlegeArgumente = ({ titel, datei, nach, label }) => [
+  "scripts/spezifikation.mjs",
+  "anlegen",
+  "--titel",
+  titel,
+  "--body-datei",
+  datei,
+  ...(label ? ["--label", label] : []),
+  "--nach",
+  String(nach).replace(/^#/, ""),
+  "--weil",
+  WEIL,
+];
+
 const WEIL = "Qualitätsverstoß einer geprüften Änderung: kleine, entblockende Entscheidung vor Features, Rückfall-Frist läuft";
 
 export const aufrufHilfe = () =>
@@ -66,13 +83,13 @@ const standardDeps = () => {
       mkdirSync(join(pfad, ".."), { recursive: true });
       writeFileSync(pfad, text);
     },
-    ladeTickets: (repo, id) => ghJson(["issue", "list", "--repo", repo, "--search", `aenderungsregister:${id} in:body`, "--state", "all", "--limit", "20", "--json", "number,state,body"]),
+    ladeTickets: (repo, id) => ghJson(["issue", "list", "--repo", repo, "--search", `aenderungsregister:${id} in:body`, "--state", "all", "--limit", "20", "--json", "number,state,body,author"]),
     legeAn: ({ titel, body, nach, label }) => {
       const ordner = mkdtempSync(join(tmpdir(), "aenderungsregister-"));
       try {
         const datei = join(ordner, "body.md");
         writeFileSync(datei, body);
-        const args = ["scripts/spezifikation.mjs", "anlegen", "--titel", titel, "--body-datei", datei, ...(label ? ["--label", label] : []), "--nach", String(nach).replace(/^#/, ""), "--weil", WEIL];
+        const args = anlegeArgumente({ titel, datei, nach, label });
         return execFileSync(process.execPath, args, { cwd: WURZEL, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
       } finally {
         rmSync(ordner, { recursive: true, force: true });
@@ -105,10 +122,11 @@ function lese(args, lies) {
   return { register, exporte };
 }
 
-/** Je Gruppe: bestehendes Ticket nennen oder anlegen (`trocken`: nur nennen). Wirft bei gescheiterter Anlage. */
+/** Je Gruppe: bestehendes Ticket nennen oder anlegen (`trocken`: nur nennen). Wirft bei gescheiterter Anlage. Nur ein Ticket mit vertrautem Autor (Repo-Owner) zählt als Dublette: ein fremdes Issue mit dem Marker darf kein Verstoß-Ticket unterdrücken. */
 function tickets(gruppen, args, d) {
+  const owner = String(d.repo).split("/")[0];
   return gruppen.map((g) => {
-    const bestehend = g.ids.flatMap((id) => d.ladeTickets(d.repo, id).filter((t) => String(t.body ?? "").includes(markerFuer(id))));
+    const bestehend = g.ids.flatMap((id) => d.ladeTickets(d.repo, id).filter((t) => String(t.body ?? "").includes(markerFuer(id)) && istVertraut(nutzerAus(t.author), owner)));
     if (bestehend.length > 0) return `${g.ids.join(", ")}: Ticket #${bestehend[0].number} besteht (${String(bestehend[0].state).toLowerCase()}), kein zweites angelegt`;
     if (args.trocken) return `${g.ids.join(", ")}: würde ein Ticket anlegen (--trocken)`;
     const { titel, body } = ticketBody(g);

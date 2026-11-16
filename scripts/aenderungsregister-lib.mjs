@@ -260,7 +260,7 @@ export const basisFenster = (zeile) => {
 /** Pur: Nachher-Fenster `{ von, bis }` (inklusive): Änderungsdatum bis Prüftermin. */
 export const nachherFenster = (zeile) => ({ von: zeile.datum, bis: zeile.pruefTermin });
 
-/** Pur: Aggregat laut `AGGREGATION` (`null` bei leerer Liste). */
+/** Pur: Aggregat laut `AGGREGATION` (`null` bei leerer Liste). Der Median steht hier bewusst ein zweites Mal (wie `mess-lib.mjs`): die Lib bleibt ohne Imports. */
 export const aggregiere = (art, werte) => {
   if (werte.length === 0) return null;
   if (AGGREGATION[art] === "mittelwert") return werte.reduce((s, w) => s + w, 0) / werte.length;
@@ -275,15 +275,15 @@ export const abweichung = (basis, nach, einheit) => {
   return basis === 0 ? null : ((nach - basis) / Math.abs(basis)) * 100;
 };
 
-const luecke = (kopf, grund) => ({ ...kopf, urteil: "Lücke", grund, messwert: null, basis: null, abweichung: null, kosten: null });
+const luecke = (kopf, grund, kosten = null) => ({ ...kopf, urteil: "Lücke", grund, messwert: null, basis: null, abweichung: null, kosten });
 
 /** Pur: der Kontext je Bereich (`fabrik` | `bezieher`): Quelle → `{ punkte }` oder `{ grund }` (Lücke). */
 export const bereichKontext = (exporte, bereich, { eigenerRepoTag, repoTagAb = REPO_TAG_AB }) => {
   const aus = {};
   for (const quelle of QUELLEN) {
     const punkte = exporte.filter((e) => e.quelle === quelle).flatMap((e) => e.punkte);
-    if (exporte.every((e) => e.quelle !== quelle)) aus[quelle] = { grund: `Export fehlt (Quelle ${quelle})` };
-    else if (bereich === "bezieher" && repoTagAb === null) aus[quelle] = { grund: BEZIEHER_GRUND };
+    if (bereich === "bezieher" && repoTagAb === null) aus[quelle] = { grund: BEZIEHER_GRUND };
+    else if (exporte.every((e) => e.quelle !== quelle)) aus[quelle] = { grund: `Export fehlt (Quelle ${quelle})` };
     else if (quelle !== "langfuse") aus[quelle] = bereich === "fabrik" ? { punkte } : { grund: "Quelle nur in der Fabrik" };
     else if (punkte.some((p) => p.repoTag === undefined)) aus[quelle] = { grund: "Repo-Tag fehlt im Export (Quelle langfuse)" };
     else if (bereich === "fabrik") aus[quelle] = { punkte: punkte.filter((p) => p.repoTag === eigenerRepoTag) };
@@ -346,23 +346,25 @@ const fundRegel = (zeile, kontext, q) => {
 export function urteilZeile(zeile, kontext, { heute, bereich, repoTagAb = REPO_TAG_AB }) {
   const kopf = { id: zeile.id, bereich, messgroesse: zeile.messgroesse, parameter: zeile.parameter ?? null, pruefTermin: zeile.pruefTermin, toleranz: zeile.toleranz };
   if (heute < zeile.pruefTermin) return { ...kopf, urteil: "noch nicht fällig", grund: `fällig ab ${zeile.pruefTermin}`, messwert: null, basis: null, abweichung: null, kosten: null };
-  if (bereich === "bezieher" && (repoTagAb === null || repoTagAb > zeile.pruefTermin)) return luecke(kopf, BEZIEHER_GRUND);
+  // Die Kosten werden berichtet, auch wenn das Qualitätsurteil eine Lücke ist (sie zählen nie fürs Urteil).
+  const kosten = kostenMessung(zeile, kontext);
+  if (bereich === "bezieher" && (repoTagAb === null || repoTagAb > zeile.pruefTermin)) return luecke(kopf, BEZIEHER_GRUND, kosten);
   const q = qualitaetMessung(zeile, kontext);
-  if (q.grund) return luecke(kopf, q.grund);
+  if (q.grund) return luecke(kopf, q.grund, kosten);
   const sonder = zeile.toleranz.qualitaetsmass === "blocker-schwere-brille" ? fundRegel(zeile, kontext, q) : null;
-  if (sonder?.luecke) return luecke(kopf, sonder.luecke);
+  if (sonder?.luecke) return luecke(kopf, sonder.luecke, kosten);
   const urteil = sonder ? sonder.urteil : verletzt(zeile.toleranz, q.abweichung) ? "Verstoß" : "eingehalten";
-  return { ...kopf, urteil, vermerk: sonder?.vermerk ?? null, messwert: q.nach, basis: q.basis, abweichung: q.abweichung, kosten: kostenMessung(zeile, kontext) };
+  return { ...kopf, urteil, vermerk: sonder?.vermerk ?? null, messwert: q.nach, basis: q.basis, abweichung: q.abweichung, kosten };
 }
 
-const rolleVon = (z) => (MESSGROESSEN[z.messgroesse]?.parameter === "rolle" ? z.parameter : undefined);
-
-/** Pur: berühren die Fenster zweier Zeilen dieselbe Rolle oder Messgröße (samt Parameter oder gleiches Qualitätsmaß)? */
+/**
+ * Pur: berühren die Fenster zweier Zeilen dieselbe Rolle oder Messgröße? Die Rolle hängt im Katalog nur am Kostenmaß je Rolle: gleiche Rolle heißt
+ * gleiche Messgröße samt Parameter. Dazu zählt ein gleiches Qualitätsmaß (beide Zeilen prüfen dieselbe Toleranz).
+ */
 export const beruehren = (a, b) => {
   if (!(a.datum <= b.pruefTermin && b.datum <= a.pruefTermin)) return false;
-  const rolle = rolleVon(a) !== undefined && rolleVon(a) === rolleVon(b);
   const mass = a.messgroesse === b.messgroesse && a.parameter === b.parameter;
-  return rolle || mass || a.toleranz.qualitaetsmass === b.toleranz.qualitaetsmass;
+  return mass || a.toleranz.qualitaetsmass === b.toleranz.qualitaetsmass;
 };
 
 /** Pur: Gruppen sich berührender Zeilen (Ids sortiert, Gruppen ab zwei Ids) aus `zeilen`. */
@@ -381,16 +383,18 @@ export const ueberlappungen = (zeilen) => {
 const BEREICHE = ["fabrik", "bezieher"];
 const ausgewertet = (u) => u.urteil === "eingehalten" || u.urteil === "Verstoß";
 
-/** Pur: `{ heute, zeilen: [{ id, fabrik, bezieher }] }`; Überlappung nur unter fälligen, ausgewerteten Zeilen eines Bereichs. */
+/**
+ * Pur: `{ heute, zeilen: [{ id, fabrik, bezieher }] }`. Die Überlappungsgruppen bilden sich über alle Zeilen des Registers, deren Fenster sich berühren
+ * (auch nicht fällige und Lücken stehen in `mit`); zu `Überlappung` wird nur eine fällige, ausgewertete Zeile (Vorrang: noch nicht fällig und Lücke gehen vor).
+ */
 export function auswertung(register, exporte, { heute, eigenerRepoTag, repoTagAb = REPO_TAG_AB }) {
   const einzel = {};
   for (const bereich of BEREICHE) {
     const kontext = bereichKontext(exporte, bereich, { eigenerRepoTag, repoTagAb });
     einzel[bereich] = new Map(register.zeilen.map((z) => [z.id, urteilZeile(z, kontext, { heute, bereich, repoTagAb })]));
-    const berechtigt = register.zeilen.filter((z) => ausgewertet(einzel[bereich].get(z.id)));
-    for (const ids of ueberlappungen(berechtigt)) {
+    for (const ids of ueberlappungen(register.zeilen)) {
       const verstoss = ids.some((id) => einzel[bereich].get(id).urteil === "Verstoß");
-      for (const id of ids) {
+      for (const id of ids.filter((i) => ausgewertet(einzel[bereich].get(i)))) {
         const u = einzel[bereich].get(id);
         einzel[bereich].set(id, { ...u, einzel: u.urteil, urteil: "Überlappung", mit: ids, verstoss });
       }
