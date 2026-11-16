@@ -209,6 +209,11 @@ describe("Takt im Bezieher: Status-Ticket im eigenen Repo (factory#195)", () => 
     expect(r.fehler).toBe(false);
   });
 
+  test("Bezieher-Standard (factory#579): ohne statusTicket legt das Fixture mit Sync-Stand sein Status-Ticket an, mit nur-anlass und ohne Anlass nicht", () => {
+    expect(lauf().a.status).toHaveLength(1);
+    expect(lauf({ config: { ...bezieherConfig, langfuseWochenbericht: { statusTicket: "nur-anlass" } } }).a.status).toHaveLength(0);
+  });
+
   test("Negativfall Upstream: bezieher falsch, gleiche Config: Factory-Teil übersprungen wie bisher, kein Status-Ticket, keine Suche", () => {
     const { a, log, r } = lauf({ bezieher: false });
     expect(log).toContain(`Factory-Teil übersprungen: Factory-Board führt ${FABRIK}, der Takt dort pflegt Status- und Sammelticket`);
