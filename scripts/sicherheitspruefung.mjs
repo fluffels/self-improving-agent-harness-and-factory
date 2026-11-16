@@ -13,16 +13,13 @@ import { fileURLToPath } from "node:url";
 import { istDirektaufruf } from "./direktaufruf.mjs";
 import { fehlerMeldung, fehlerText, ghText } from "./gh-cli.mjs";
 import { pruefLauf } from "./harness-doctor-lib.mjs";
-import { bestaetigeAnlegen, inboxStart } from "./inbox-start-lib.mjs";
-import { labelAus, zielRepoFuer } from "./projekt-config-lib.mjs";
+import { bestaetigeAnlegen, frischeIssues, inboxStart, legeTaktTicket, offeneIssues } from "./inbox-start-lib.mjs";
 import { gleichesRepo, zerlegeRepo } from "./repo-form.mjs";
 import { WORKFLOW, pruefeDependabot } from "./sicherheitspruefung-dependabot.mjs";
 import { berichtText, berichtTitel, entscheide, filtere, istSprachen, istTicket, ladeSollListe, pruefeAlerts, pruefeCodeql } from "./sicherheitspruefung-lib.mjs";
-import { nutzerAus } from "./ticket-drift-lib.mjs";
 
 const WURZEL = fileURLToPath(new URL("..", import.meta.url));
 const SOLL_PFAD = ".github/sicherheitspruefung.json";
-const LIMIT = 1000;
 const TIMEOUT = 30000;
 
 const lesenStandard = (rel) => {
@@ -101,37 +98,6 @@ function ermittle(d) {
   return alle.filter((r) => !r.ok);
 }
 
-/** Offene Issues als `[{ number, title, body, user, labels }]` (fail-closed bei Limit). */
-function offeneIssues(gh, repo) {
-  const roh = JSON.parse(gh(["issue", "list", "--repo", repo, "--state", "open", "--limit", String(LIMIT), "--json", "number,title,body,author,labels"]));
-  if (!Array.isArray(roh) || roh.length >= LIMIT) throw new Error(`Issue-Liste unvollständig (${Array.isArray(roh) ? roh.length : "kein Array"} von höchstens ${LIMIT}): kein Ticket`);
-  return roh.map((i) => ({ number: i.number, title: i.title, body: i.body, user: nutzerAus(i.author), labels: (i.labels ?? []).map((l) => l.name) }));
-}
-
-/** Zweitabfrage vor dem Anlegen (REST, hinkt weniger als die Liste): offene Issues desselben Repos in der Normalform. */
-const frischeIssues = (gh, repo) =>
-  JSON.parse(gh(["api", "--paginate", "--slurp", `repos/${repo}/issues?state=open&per_page=100`]))
-    .flat()
-    .filter((i) => !i.pull_request)
-    .map((i) => ({ number: i.number, title: i.title, body: i.body, user: { login: i.user?.login, type: i.user?.type }, labels: (i.labels ?? []).map((l) => l.name) }));
-
-/** Legt das Ticket im eigenen Repo an (der einzige Schreibaufruf mit Inhalt) und sortiert es ans Ende der Todo-Spalte. */
-function lege(d, { titel, text }) {
-  const { repo, config, schreibe, log, env, libs } = d;
-  const label = labelAus(config, "dependabotInbox");
-  const mitLabel = gleichesRepo(zielRepoFuer([label], config), repo) ? ["--label", label] : [];
-  const url = schreibe(["issue", "create", "--repo", repo, "--title", titel, "--body-file", "-", ...mitLabel], text);
-  const nr = Number(/\/issues\/(\d+)\s*$/.exec(String(url))?.[1]);
-  if (!Number.isInteger(nr) || nr <= 0) throw new Error(`Ticket angelegt, Nummer nicht lesbar: ${String(url).slice(0, 200)}`);
-  log(`Sicherheitsprüfung: Ticket #${nr} angelegt.`);
-  if (!env.PROJECT_TOKEN) return log("::warning::PROJECT_TOKEN fehlt: das Ticket steht nicht im Board.");
-  try {
-    libs.platziereAmEnde(nr, env.PROJECT_TOKEN);
-  } catch (e) {
-    log(`::warning::Ticket #${nr} angelegt, aber nicht ans Ende der Todo-Spalte sortiert: ${fehlerText(e)}`);
-  }
-}
-
 /** Standard-Nähte des Einstiegs (Tests überschreiben sie über `deps`). */
 const STANDARD = { doctor: pruefLauf, schreibe: schreibenStandard, lese: lesenStandard, dateien: dateienStandard, env: process.env, log: console.log, err: console.error };
 
@@ -147,7 +113,7 @@ const aktiveAbwahlen = (soll) =>
 function ausfuehren({ trocken, e, titel, text }, io) {
   if (trocken) return io.log(`[dry-run] ${titel}\n${text}\n[dry-run] Entscheidung: ${e.aktion} (${e.grund})`);
   if (e.aktion === "nichts") return io.log(`Sicherheitsprüfung: nichts zu tun (${e.grund}).`);
-  return lege(io, { titel, text });
+  return legeTaktTicket(io, { titel, text, was: "Sicherheitsprüfung" });
 }
 
 /** Liest und prüft die Soll-Liste: `{ soll }` oder `{ fehler }` (Meldung samt Fix). */

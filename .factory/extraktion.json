@@ -1202,6 +1202,11 @@
       "grund": "Gegenstand ist Besitz"
     },
     {
+      "muster": "test/code-analyse*.test.ts",
+      "art": "kern-test",
+      "grund": "Gegenstand ist Besitz"
+    },
+    {
       "muster": "test/sicherheitspruefung*.test.ts",
       "art": "kern-test",
       "grund": "Gegenstand ist Besitz (Familie)"
@@ -1275,6 +1280,11 @@
       "muster": "test/harness/aenderungsregister.test.ts",
       "art": "projekt-test",
       "grund": "Prüft das Änderungsregister der Fabrik (.github/aenderungsregister.json, nicht im Besitz)"
+    },
+    {
+      "muster": "test/harness/regel-verfall.test.ts",
+      "art": "projekt-test",
+      "grund": "Prüft Verfall-Manifest und Sicherheits-Ausnahmeliste der Fabrik (factory#608, nicht im Besitz)"
     },
     {
       "muster": "test/aenderungsregister.test.ts",
