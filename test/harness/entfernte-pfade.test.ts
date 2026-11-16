@@ -51,7 +51,7 @@ import { describe, test } from "vitest";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { type Datei, type Rest, AUSNAHMEN, findeReste, getrackteTextdateien, meldungMitFix, REGEL_AUSNAHMEN, SCHNAPPSCHUSS_ENDE, SCHNAPPSCHUSS_START } from "../support/entfernte-pfade";
+import { type Ausnahme, type Datei, type Rest, AUSNAHMEN, findeReste, getrackteTextdateien, meldungMitFix, REGEL_AUSNAHMEN, SCHNAPPSCHUSS_ENDE, SCHNAPPSCHUSS_START } from "../support/entfernte-pfade";
 import { FREMD, projektConfig } from "../support/fremd-config";
 import { escapeRe as esc } from "../support/regex";
 
