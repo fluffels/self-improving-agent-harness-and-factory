@@ -103,6 +103,12 @@ const hatBelegAblauf = (modelRouting: string): boolean => {
   return a !== "" && /Probe-Lauf/.test(a) && /usageDetails/.test(a);
 };
 
+/** Der Fallback kennt den zweiten Fall: Probe lief, aber der Agentenlauf hat kein Secret-Key (Tracing aus). */
+const hatAgentenlaufFallback = (modelRouting: string): boolean => {
+  const z = modelRouting.split("\n").find((l) => l.startsWith("**Fallback:**")) ?? "";
+  return /Tracing im Agentenlauf aus/.test(z) && /langfuse-auftrag\.mjs/.test(z) && /Nachprüfung/.test(z);
+};
+
 /** Keine Doppelung: kein alter „Langfuse-Blick"-Abschnitt, die Checklistenpunkte nur in model-routing.md. */
 const hatKeineDoppelung = (
   modelRouting: string,
@@ -275,6 +281,13 @@ describe("Langfuse-Status und Erfassungsschutz (#1293)", () => {
     assert.ok(hatBelegAblauf(mr));
     assert.ok(!hatBelegAblauf(mr.replace(/### Langfuse-Erfassung belegen/, "### Anderes")));
     assert.ok(!hatBelegAblauf("### Langfuse-Erfassung belegen (#1293)\n\nnur Text"));
+  });
+
+  test("model-routing.md: Fallback nennt auch den Agentenlauf ohne Secret-Key (Nachliefer-Auftrag plus Nachprüfung)", () => {
+    assert.ok(hatAgentenlaufFallback(mr));
+    assert.ok(!hatAgentenlaufFallback(mr.replace("Tracing im Agentenlauf aus", "Anderes")));
+    assert.ok(!hatAgentenlaufFallback(mr.replaceAll("langfuse-auftrag.mjs", "x.mjs")));
+    assert.ok(!hatAgentenlaufFallback(mr.replaceAll("Nachprüfung", "Prüfung")));
   });
 
   test("keine Doppelung mit dem Sammelticket", () => {
