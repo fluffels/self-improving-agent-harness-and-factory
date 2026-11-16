@@ -7,7 +7,6 @@ import { leseMesspunkte } from "../scripts/aenderungsregister-lib.mjs";
 
 const ex = exportModul as unknown as {
   waechterDateien: (o: string, d: { wurzel: string; liste: (p: string) => string[] }) => string[];
-  trenneFlags: (a: string[]) => { ordner: string; rest: string[] };
   lauf: (a: string[], d: Record<string, unknown>) => { exitCode: number; text: string };
 };
 const lese = leseMesspunkte as (j: unknown, p: string) => { quelle: string; punkte: { parameter: string; wert: number; einheitId: string }[] };
@@ -70,11 +69,6 @@ describe("lauf", () => {
 });
 
 describe("Hilfen", () => {
-  test("trenneFlags nimmt --waechter-dir heraus und lässt den Rest unberührt", () => {
-    expect(ex.trenneFlags(["--von", "x", "--waechter-dir", "t", "--json"])).toEqual({ ordner: "t", rest: ["--von", "x", "--json"] });
-    expect(ex.trenneFlags(["--von", "x"])).toEqual({ ordner: "test/harness", rest: ["--von", "x"] });
-  });
-
   test("waechterDateien: nur Testdateien, mit / und relativ zur Wurzel, sortiert", () => {
     const liste = () => ["b.test.ts", "sub\\a.spec.mts", "hilfe.ts", "README.md"];
     expect(ex.waechterDateien("test/harness", { wurzel: "/w", liste })).toEqual(["test/harness/b.test.ts", "test/harness/sub/a.spec.mts"]);

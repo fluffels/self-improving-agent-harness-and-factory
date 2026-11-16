@@ -512,10 +512,10 @@ export const standardZugriffe = () => ({
 
 /**
  * Sammelt die Läufe: `{ exit }` bei Aufruf-Fehler (2) oder `gh`-Fehler (1), sonst `{ werte, fenster, satz, transkript, ci }` mit den Läufen je Quelle.
- * Die Zugriffe `d` kommen aus `standardZugriffe()`, der Aufrufer meldet Fehler über `d.err`.
+ * Die Zugriffe `d` kommen aus `standardZugriffe()`, der Aufrufer meldet Fehler über `d.err`; `zusatz` sind weitere Flags des Aufrufers (Form wie `OPTIONEN`, Werte in `werte`).
  */
-export function sammle(argv, d) {
-  const { werte, fehler } = flagsLesen(argv, OPTIONEN);
+export function sammle(argv, d, zusatz = {}) {
+  const { werte, fehler } = flagsLesen(argv, { ...OPTIONEN, ...zusatz });
   const fenster = fehler ? null : fensterAus(werte, d.jetzt());
   if (fehler || !fenster) {
     d.err(`${fehler?.text ?? "--von/--bis ist kein ISO-Zeitpunkt (JJJJ-MM-TT[THH:MM[:SS]][Z|±HH:MM])"}\n${AUFRUF}`);

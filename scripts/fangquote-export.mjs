@@ -30,13 +30,6 @@ export const waechterDateien = (ordner, { wurzel = WURZEL, liste = (p) => readdi
     .filter((p) => TESTDATEI.test(p))
     .sort();
 
-/** Trennt `--waechter-dir <ordner>` von den Flags des Kern-Skripts: `{ ordner, rest }`. */
-export function trenneFlags(argv) {
-  const i = argv.indexOf("--waechter-dir");
-  if (i < 0) return { ordner: STANDARD_ORDNER, rest: argv };
-  return { ordner: argv[i + 1], rest: [...argv.slice(0, i), ...argv.slice(i + 2)] };
-}
-
 /**
  * Ablauf ohne `process.exit` (testbar): `{ exitCode, text }`. `deps` (Tests): `bezieher`, `dateien`, plus die Zugriffe von `gate-fundquote.mjs`
  * (`pkg`, `findeSessions`, `ladeSession`, `gh`, `liesDatei`, `err`, `jetzt`).
@@ -44,11 +37,10 @@ export function trenneFlags(argv) {
 export function lauf(argv, deps = {}) {
   const bezieher = deps.bezieher ?? (istBezieher(WURZEL) || istBezieher(process.cwd()));
   if (bezieher) return { exitCode: 4, text: "Abbruch: fabrik-eigen. Der Fangquote-Export wird nie an Bezieher verteilt und läuft dort nie." };
-  const { ordner, rest } = trenneFlags(argv);
-  if (!ordner || ordner.startsWith("--")) return { exitCode: 2, text: "--waechter-dir braucht einen Ordner" };
   const fehler = [];
-  const s = sammle(rest, { ...standardZugriffe(), ...deps, err: (t) => fehler.push(t) });
+  const s = sammle(argv, { ...standardZugriffe(), ...deps, err: (t) => fehler.push(t) }, { "waechter-dir": { type: "string" } });
   if (s.exit !== undefined) return { exitCode: s.exit, text: fehler.join("\n") };
+  const ordner = s.werte["waechter-dir"] ?? STANDARD_ORDNER;
   const laeufe = [...s.transkript, ...s.ci.laeufe];
   const dateien = deps.dateien ?? waechterDateien(ordner);
   const punkte = waechterPunkte(laeufe, dateien);
