@@ -11,8 +11,10 @@ import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
 import { ladeProjektConfig } from "./projekt-config-lib.mjs";
 import { istBezieher } from "./sync-stand-lib.mjs";
 import { SICHERHEITS_SAMMELTICKET_TITEL } from "./sammelticket-titel.mjs";
+import { nutzerAus } from "./ticket-drift-lib.mjs";
 
 const WURZEL = fileURLToPath(new URL("..", import.meta.url));
+const LIMIT = 1000;
 
 /** Die Liste aus `.github/wiedervorlagen.json`: fehlt die Datei (ENOENT), ist es `[]`; ungültiges JSON und jeder andere Lesefehler werfen weiter. `lies` ist die Test-Naht. */
 export function ladeWiedervorlagen(pfad, lies = readFileSync) {
@@ -125,6 +127,20 @@ export function zielAktionen({ gh, libs, label, env = process.env }) {
 
 /** Der Owner, gegen den `istVertraut` prüft: der des Ziel-Repos (`kontext.owner` aus `ladeSammelKontext`), sonst der des eigenen Repos. Dort liegen die Tickets, ihr Autor ist der Token-Inhaber. Pur. */
 export const vertrauterOwner = (kontext, libs) => kontext.owner ?? libs.OWNER;
+
+/** Offene Issues als `[{ number, title, body, user, labels }]` (fail-closed bei Limit). */
+export function offeneIssues(gh, repo) {
+  const roh = JSON.parse(gh(["issue", "list", "--repo", repo, "--state", "open", "--limit", String(LIMIT), "--json", "number,title,body,author,labels"]));
+  if (!Array.isArray(roh) || roh.length >= LIMIT) throw new Error(`Issue-Liste unvollständig (${Array.isArray(roh) ? roh.length : "kein Array"} von höchstens ${LIMIT}): kein Ticket`);
+  return roh.map((i) => ({ number: i.number, title: i.title, body: i.body, user: nutzerAus(i.author), labels: (i.labels ?? []).map((l) => l.name) }));
+}
+
+/** Zweitabfrage vor dem Anlegen (REST, hinkt weniger als die Liste): offene Issues desselben Repos in der Normalform. */
+export const frischeIssues = (gh, repo) =>
+  JSON.parse(gh(["api", "--paginate", "--slurp", `repos/${repo}/issues?state=open&per_page=100`]))
+    .flat()
+    .filter((i) => !i.pull_request)
+    .map((i) => ({ number: i.number, title: i.title, body: i.body, user: { login: i.user?.login, type: i.user?.type }, labels: (i.labels ?? []).map((l) => l.name) }));
 
 /**
  * Zweitabfrage vor dem Anlegen (fail-closed, #101 L17): die REST-Liste hinkt bei frischen Tickets nach, ein zweites Ticket entstand so schon. Nur bei

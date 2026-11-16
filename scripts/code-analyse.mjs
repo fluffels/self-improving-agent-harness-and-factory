@@ -11,10 +11,9 @@ import { fileURLToPath } from "node:url";
 import { entscheide, istTicket, ticketText, titel } from "./code-analyse-lib.mjs";
 import { istDirektaufruf } from "./direktaufruf.mjs";
 import { fehlerMeldung, fehlerText, ghText } from "./gh-cli.mjs";
-import { bestaetigeAnlegen, inboxStart } from "./inbox-start-lib.mjs";
+import { bestaetigeAnlegen, frischeIssues, inboxStart, offeneIssues } from "./inbox-start-lib.mjs";
 import { labelAus, refactoringEinstellung, zielRepoFuer } from "./projekt-config-lib.mjs";
 import { gleichesRepo, zerlegeRepo } from "./repo-form.mjs";
-import { frischeIssues, offeneIssues } from "./sicherheitspruefung.mjs";
 import { istBezieher } from "./sync-stand-lib.mjs";
 
 const WURZEL = fileURLToPath(new URL("..", import.meta.url));

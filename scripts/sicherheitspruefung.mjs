@@ -13,16 +13,14 @@ import { fileURLToPath } from "node:url";
 import { istDirektaufruf } from "./direktaufruf.mjs";
 import { fehlerMeldung, fehlerText, ghText } from "./gh-cli.mjs";
 import { pruefLauf } from "./harness-doctor-lib.mjs";
-import { bestaetigeAnlegen, inboxStart } from "./inbox-start-lib.mjs";
+import { bestaetigeAnlegen, frischeIssues, inboxStart, offeneIssues } from "./inbox-start-lib.mjs";
 import { labelAus, zielRepoFuer } from "./projekt-config-lib.mjs";
 import { gleichesRepo, zerlegeRepo } from "./repo-form.mjs";
 import { WORKFLOW, pruefeDependabot } from "./sicherheitspruefung-dependabot.mjs";
 import { berichtText, berichtTitel, entscheide, filtere, istSprachen, istTicket, ladeSollListe, pruefeAlerts, pruefeCodeql } from "./sicherheitspruefung-lib.mjs";
-import { nutzerAus } from "./ticket-drift-lib.mjs";
 
 const WURZEL = fileURLToPath(new URL("..", import.meta.url));
 const SOLL_PFAD = ".github/sicherheitspruefung.json";
-const LIMIT = 1000;
 const TIMEOUT = 30000;
 
 const lesenStandard = (rel) => {
@@ -100,20 +98,6 @@ function ermittle(d) {
   if (env.GITHUB_ACTIONS === "true" && !env.PROJECT_TOKEN) alle.push(PROJEKT_TOKEN_ZEILE(repo));
   return alle.filter((r) => !r.ok);
 }
-
-/** Offene Issues als `[{ number, title, body, user, labels }]` (fail-closed bei Limit). */
-export function offeneIssues(gh, repo) {
-  const roh = JSON.parse(gh(["issue", "list", "--repo", repo, "--state", "open", "--limit", String(LIMIT), "--json", "number,title,body,author,labels"]));
-  if (!Array.isArray(roh) || roh.length >= LIMIT) throw new Error(`Issue-Liste unvollständig (${Array.isArray(roh) ? roh.length : "kein Array"} von höchstens ${LIMIT}): kein Ticket`);
-  return roh.map((i) => ({ number: i.number, title: i.title, body: i.body, user: nutzerAus(i.author), labels: (i.labels ?? []).map((l) => l.name) }));
-}
-
-/** Zweitabfrage vor dem Anlegen (REST, hinkt weniger als die Liste): offene Issues desselben Repos in der Normalform. */
-export const frischeIssues = (gh, repo) =>
-  JSON.parse(gh(["api", "--paginate", "--slurp", `repos/${repo}/issues?state=open&per_page=100`]))
-    .flat()
-    .filter((i) => !i.pull_request)
-    .map((i) => ({ number: i.number, title: i.title, body: i.body, user: { login: i.user?.login, type: i.user?.type }, labels: (i.labels ?? []).map((l) => l.name) }));
 
 /** Legt das Ticket im eigenen Repo an (der einzige Schreibaufruf mit Inhalt) und sortiert es ans Ende der Todo-Spalte. */
 function lege(d, { titel, text }) {
