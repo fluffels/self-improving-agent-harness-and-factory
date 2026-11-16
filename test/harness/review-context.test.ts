@@ -81,6 +81,8 @@ const nenntPatchDatei = (s: string) => /Patch-Datei/.test(s) && /\.patch/.test(s
 
 /** Verbietet der Text das erneute Vollöffnen der Kontextdateien und nennt Grep als Ersatz? */
 const haeltKontextDiaet = (s: string) => /bereits[\s\S]{0,60}Kontext[\s\S]{0,300}grepp/i.test(s);
+// Planer mit `omitClaudeMd: true` (factory#552): AGENTS.md liegt nicht im Kontext, Regeln kommen per grep.
+const holtRegelnPerGrep = (s: string) => /nicht[\s\S]{0,40}Kontext[\s\S]{0,300}grep/i.test(s) && /Regeln per grep aus `AGENTS\.md`/.test(s);
 
 /** Weist der Text an, Dateien gezielt statt vollständig zu öffnen? */
 const liestGezielt = (s: string) => /gezielt per Grep oder offset\/limit/.test(s) && /gezielt um die Hunk-Zeilen/.test(s);
@@ -152,9 +154,9 @@ describe("Kontext-Diät: AGENTS.md wird nicht erneut gelesen (#1034)", () => {
     // Maintainerin-Entscheidung zu #1034: der Planner (150k in der Messung) läuft im selben
     // Redundanz-Muster und wird mit einbezogen.
     assert.ok(
-      haeltKontextDiaet(planner),
-      "Der Planungs-Agent fordert AGENTS.md weiter zum Lesen an, obwohl Claude " +
-        "Code sie nativ und schon vollständig in seinen Kontext legt (#1034).",
+      holtRegelnPerGrep(planner),
+      "Der Planungs-Agent (omitClaudeMd: true, factory#552) muss sagen, dass AGENTS.md nicht im Kontext liegt " +
+        "und Regeln per grep aus AGENTS.md zu holen sind.",
     );
   });
 
@@ -238,6 +240,14 @@ describe("Erkennung greift wirklich (Red-Green, #1034)", () => {
     assert.ok(haeltKontextDiaet("AGENTS.md liegt bereits vollständig in deinem Kontext — greppe punktuell."));
     assert.ok(!haeltKontextDiaet("Lies AGENTS.md und CLAUDE.md vollständig."), "alte Fassung muss rot sein");
     assert.ok(!haeltKontextDiaet("Es liegt bereits im Kontext."), "ohne Grep-Anweisung nicht grün");
+  });
+
+  test("holtRegelnPerGrep fällt beim alten Text und ohne grep-Anweisung", () => {
+    assert.ok(holtRegelnPerGrep("`AGENTS.md` liegt **nicht** in deinem Kontext. Regeln per grep aus `AGENTS.md`: punktuell."));
+    assert.ok(!holtRegelnPerGrep("AGENTS.md liegt bereits vollständig in deinem Kontext — greppe punktuell."), "alter Text muss rot sein");
+    assert.ok(!holtRegelnPerGrep("`AGENTS.md` liegt nicht in deinem Kontext."), "ohne grep-Anweisung nicht grün");
+    assert.ok(!holtRegelnPerGrep("liegt bereits im Kontext. Regeln per grep aus `AGENTS.md`."), "ohne Hinweis auf den fehlenden Kontext nicht grün");
+    assert.ok(!holtRegelnPerGrep("liegt nicht in deinem Kontext, grep punktuell."), "ohne den Wortlaut „Regeln per grep aus AGENTS.md“ nicht grün");
   });
 
   test("hatRundenNummer und istDreiPunkt fallen bei Zwei-Punkt und fehlender Runde", () => {
