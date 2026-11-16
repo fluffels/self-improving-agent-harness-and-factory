@@ -660,7 +660,8 @@ describe("fixOrphans: Wiederholung und leerer gesperrter Ordner (#1411)", () => 
   test("bei nicht leerem Ordner nennt `halter` die möglichen Halter mit PID (nur Windows)", () => {
     const prozesse = [{ pid: 4711, ppid: 1, name: "python3.exe", commandLine: "python3 -m http.server", startMs: 2000 }];
     const base = { ...okDeps, rmSync: () => {}, existsSync: () => true, readdirSync: () => ["x"], statSync: () => ({ birthtimeMs: 1000 }), listProcesses: () => prozesse };
-    assert.equal((fix("/root", "/root/.claude/worktrees", [`${WTP}1`], { ...base, platform: "win32" }).halter[`${WTP}1`] as { pid: number }[])[0].pid, 4711);
+    assert.equal((fix("/root", "/root/.claude/worktrees", [`${WTP}1`], { ...base, platform: "win32", eigenePid: -1 }).halter[`${WTP}1`] as { pid: number }[])[0].pid, 4711);
+    assert.deepEqual(fix("/root", "/root/.claude/worktrees", [`${WTP}1`], { ...base, platform: "win32", eigenePid: 4711 }).halter[`${WTP}1`], [], "findeHalter respektiert deps.eigenePid");
     assert.deepEqual(fix("/root", "/root/.claude/worktrees", [`${WTP}1`], { ...base, platform: "linux" }).halter[`${WTP}1`], [], "nur Windows");
     const kaputt = { ...base, platform: "win32", listProcesses: () => { throw new Error("powershell fehlt"); } };
     assert.deepEqual(fix("/root", "/root/.claude/worktrees", [`${WTP}1`], kaputt).halter[`${WTP}1`], [], "fail-open");
