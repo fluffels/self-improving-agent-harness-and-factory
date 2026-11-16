@@ -112,7 +112,6 @@ Der verbindliche Ticket-Ablauf steht in [AGENTS.md › Das Wichtigste zuerst](..
 | Merge von `origin/main` auf verlorene Tests prüfen: Testtitel gegen beide Eltern, bei Konflikt vor dem Merge-Commit, sonst danach; Exit 1 = ein Test fehlt im Ergebnis, Exit 2 = kein Merge, nichts zu prüfen (quellprojekt#1579) | `node scripts/merge-testabgleich.mjs` |
 | Diff-Coverage-Wächter (geänderte Zeilen pro Slice getestet; **hart** für Domäne/Anwendung, Präsentation/Einstieg nur berichtend; läuft **NACH `test:coverage`**, quellprojekt#1021) | `npm run check:diffcoverage` |
 | `no-explicit-any`-Suppression-Ratchet (per-Datei-Baseline, quellprojekt#604) | `npm run check:anysuppress` (neu ziehen: `node scripts/check-any-suppressions.mjs --write`) |
-| Doku-Pflicht-Wächter (Verhaltens-Änderung ohne docs/ oder README, README-Verweise, factory#604) | `npm run check:dokupflicht` |
 | Lockfile-Integritäts-Wächter (package-lock.json ↔ package.json, gegen Lockfile-Drift, quellprojekt#593) | `npm run check:lockfile` |
 | Security-Audit (CI-Gate blockt bei high+, Wurzel plus `audit.verzeichnisse`, quellprojekt#396, factory#395) | `node scripts/audit-verzeichnisse.mjs --audit-level high` |
 

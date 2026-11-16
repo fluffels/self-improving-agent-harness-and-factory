@@ -218,7 +218,7 @@ describe("main: --dry-run über Deps (#1837)", () => {
       return angelegt.length;
     };
     expect(await lauf("fremd")).toBe(1);
-    expect(await lauf(FREMD.repo.split("/")[0] as string)).toBe(0);
+    expect(await lauf(FREMD.repo.split("/")[0])).toBe(0);
   });
   test("ohne Flag: legt an und sortiert ein, kein [dry-run]", async () => {
     vi.stubEnv("PROJECT_TOKEN", "t");
