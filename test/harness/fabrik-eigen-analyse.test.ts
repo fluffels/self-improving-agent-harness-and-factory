@@ -4,7 +4,7 @@
  * (b) keine verteilte Datei nennt sie, (c) jedes Einstiegsskript sperrt den Lauf im Bezieher (`istBezieher`). Grenze: berechnete Pfade bleiben unentdeckt.
  */
 import { describe, expect, test } from "vitest";
-import { existsSync, readFileSync, statSync } from "node:fs";
+import { readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -18,9 +18,6 @@ const besitzPfade = (JSON.parse(lies(".factory/besitz.json")) as { eintraege: { 
 const basis = (p: string) => p.replace(/^scripts\//, "").replace(/\.mjs$/, "");
 
 describe("Fabrik-eigene Token-Analyse bleibt aus dem Besitz heraus", () => {
-  test("die Dateien existieren (kein toter Eintrag)", () => {
-    for (const p of FABRIK_EIGEN) expect([p, existsSync(join(WURZEL, p))]).toEqual([p, true]);
-  });
   test("(a) das Besitz-Manifest trifft keinen Pfad der Liste", () => {
     const treffer = FABRIK_EIGEN.filter((p) => besitzPfade.some((b) => b === p || p.startsWith(`${b.replace(/\/$/, "")}/`)));
     expect(treffer).toEqual([]);

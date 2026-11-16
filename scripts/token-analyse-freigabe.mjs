@@ -29,7 +29,6 @@ import {
 } from "./token-analyse-freigabe-lib.mjs";
 
 const REPO_WURZEL = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const GROSSER_PUFFER = 64 * 1024 * 1024;
 
 /** Realpath, auch für einen Pfad, den es noch nicht gibt (nächster vorhandener Vorfahr plus Rest). */
 export function realMitVorfahr(pfad) {
@@ -59,7 +58,7 @@ export function liesGitConfig(wurzel) {
 
 /** Der einzige Prozessaufruf: ohne Shell, mit Schutz-Umgebung. Tests injizieren einen Mitschnitt. */
 export function standardRunner(argv, { cwd } = {}) {
-  const r = spawnSync(argv[0], argv.slice(1), { encoding: "utf8", shell: false, cwd, env: { ...process.env, ...SCHUTZ_UMGEBUNG }, maxBuffer: GROSSER_PUFFER, windowsHide: true });
+  const r = spawnSync(argv[0], argv.slice(1), { encoding: "utf8", shell: false, cwd, env: { ...process.env, ...SCHUTZ_UMGEBUNG }, maxBuffer: 64 * 1024 * 1024, windowsHide: true });
   return { status: r.status, stdout: r.stdout ?? "", stderr: r.stderr ?? "" };
 }
 
