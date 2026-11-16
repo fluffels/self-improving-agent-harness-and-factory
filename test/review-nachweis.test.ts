@@ -23,7 +23,7 @@ type Nachweis = {
   review: { head: string | null; runden: number; lenses: string[]; blocker: { lens: string; n: number }[] | null; sollte: { lens: string; n: number }[] | null; hinweis: { lens: string; n: number }[] | null; teilbrillen: { lens: string; n: number }[] | null; verdikt: string | null } | null;
   bedrohungen?: { zeile: string; teile: Record<string, string>; doppelt: string[]; unbekannt: string[]; ohneSchluessel: string[] } | null;
 };
-type Stufe = { stufe: 0 | 1 | 2; gruende: string[]; treffer: { pfad: string; muster: string; liste: string }[]; pfade: string[]; ausloeser?: string };
+type Stufe = { stufe: 0 | 1 | 2; gruende: string[]; treffer: { pfad: string; muster: string; liste: string }[]; pfade: string[]; ausloeser?: string; kombi?: { zulaessig: boolean; gruende: string[] } };
 type Risiko = { klasse: "hoch" | "normal" | "doku"; gruende: string[] };
 type Zeilen = { praefix: string; planer: string; plan: string; review: string; bedrohungen: string; reviewOverride: string; diffsizeOverride: string };
 type Mod = {
@@ -68,6 +68,8 @@ const NORMAL: Risiko = { klasse: "normal", gruende: ["kein Pfad trifft ein Risik
 /** Berechnete Risikostufen für die Bewertung (factory#526); die Bestandstests laufen mit Stufe 1. */
 const R1: Stufe = { stufe: 1, gruende: ["Produktionscode"], treffer: [], pfade: ["src/x.ts"], ausloeser: "src/x.ts" };
 const R0: Stufe = { stufe: 0, gruende: ["nur *.md ohne Leitplanken- oder Grundschutz-Pfad"], treffer: [], pfade: ["docs/a.md"] };
+/** Mit Kombi-Lens-Grenze unterschritten (`kombi.zulaessig`, factory#529): der einzige Rechenpfad für `lenses=kombiniert` (L4). */
+const KOMBI_JA = { zulaessig: true, gruende: ["unter der Grenze"] };
 const R2: Stufe = { stufe: 2, gruende: ["package.json trifft /package.json (basis:manifeste)"], treffer: [{ pfad: "package.json", muster: "/package.json", liste: "basis:manifeste" }], pfade: ["package.json"] };
 const DREI = "architektur,requirement-treue,test-adaequanz";
 const SHA = "a".repeat(40);
@@ -1407,7 +1409,18 @@ describe("Risikostufe: die Wächter rechnen nach (factory#526)", () => {
     const sicher = `${DREI},sicherheit`;
     rot(bew(text(`${PL} — skizze`, voll(2, sicher), true), R2, { stufe: "S" }), /Skizzen-Form ist entfernt/);
     rot(bew(text("ohne — klein: Tippfehler", voll(2, sicher), true), R2, { stufe: "S" }), /Klein-Form ist entfernt/);
-    rot(bew(text(PL, `${kombi.replace("lenses=kombiniert", "lenses=kombiniert,sicherheit")}`, true), R2, { stufe: "S" }), /berechnet aus dem Diff: KOMBI: ja, Risikostufe 2/);
+    rot(bew(text(PL, `${kombi.replace("lenses=kombiniert", "lenses=kombiniert,sicherheit")}`, true), { ...R2, kombi: { zulaessig: false, gruende: ["Risikostufe 2"] } }), /berechnet aus dem Diff: KOMBI: nein, Risikostufe 2/);
+    // L4: Größe S allein genügt nicht, nur risikostufe.kombi.zulaessig zählt (fail-closed: fehlt kombi, gilt nein)
+    rot(bew(text(PL, kombi), R2, { stufe: "S" }), /KOMBI: nein, Risikostufe 2/);
+    rot(bew(text(PL, kombi), R1, { stufe: "S" }), /KOMBI: nein, Risikostufe 1/);
+    assert.deepEqual(bew(text(PL, kombi), { ...R1, kombi: KOMBI_JA }, { stufe: "voll" }), []);
+  });
+  test("L4: kleiner Diff mit Stufe-2-Treffer (scripts/check-x.mjs), lenses=kombiniert: Meldung sagt KOMBI: nein, nie KOMBI: ja (Rechenpfad risikostufe.kombi)", () => {
+    const kombi = `head=${SHA} runden=2 lenses=kombiniert blocker=kombiniert:0 sollte=kombiniert:0 hinweis=kombiniert:0 teilbrillen=architektur:0,requirement-treue:0,test-adaequanz:0 verdikt=ok`;
+    const r = checkReviewNachweis({ runGit: fakeGit({ messages: text(PL, kombi, true), files: "scripts/check-x.mjs\n", numstat: "5\t1\tscripts/check-x.mjs\n" }), env: { FACTORY_DIFF_BASE: "base" } } as never) as { fehler: string[]; risikostufe: Stufe };
+    assert.equal(r.risikostufe.stufe, 2);
+    const f = r.fehler.join("\n");
+    assert.match(f, /kombiniert genügt nur unter der Kombi-Lens-Grenze.*KOMBI: nein, Risikostufe 2/);
   });
   test("Stufe-2-Pflicht über bewerteKlasseHoch: Risikostufe 2 allein genügt, Stufe 1 verlangt nichts", () => {
     const n = parseNachweis(text(PL, voll(2)));
