@@ -118,6 +118,12 @@ describe("L12: begriffeAus ohne Abschluss-Skill", () => {
     const b = besitz.begriffeAus({ ...config, skills: { abschluss: null } });
     expect(b.Skill).toBeUndefined();
   });
+  test("labels.refactoring: false (factory#594) wirft nicht und bleibt außerhalb des Label-Musters", () => {
+    const labels = { ...(config.labels as Record<string, string>), refactoring: false };
+    const b = besitz.begriffeAus({ ...config, labels });
+    expect(b.Label).toBeInstanceOf(RegExp);
+    expect("false").not.toMatch(b.Label);
+  });
   test("andere Skills bleiben, null wird übersprungen", () => {
     const b = besitz.begriffeAus({ ...config, skills: { abschluss: null, anders: "mein-skill" } });
     expect("ist null hier").not.toMatch(b.Skill);

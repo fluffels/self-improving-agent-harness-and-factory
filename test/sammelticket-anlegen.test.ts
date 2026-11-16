@@ -881,6 +881,10 @@ describe("main mit injizierten gh-/Board-Nähten (factory#189 L7): Verzweigung j
       err.mockClear();
       await M(["refactoring"], fakes({ ladeConfig: () => ({ ...FREMD, labels: { ...FREMD.labels, refactoring: "area:code" } }) }).deps);
       expect(err).not.toHaveBeenCalled();
+      // der Alias-Hinweis gilt nur für die Art refactoring: die Config trägt hier codequalitaet, harness und langfuse bleiben still
+      await M(["harness"], fakes().deps);
+      await M(["langfuse"], fakes().deps);
+      expect(err).not.toHaveBeenCalled();
     } finally {
       err.mockRestore();
     }

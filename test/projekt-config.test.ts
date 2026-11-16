@@ -360,6 +360,9 @@ describe("pruefeProjektConfig", () => {
     assert.deepEqual(mit("refactoring", false), []);
     assert.deepEqual(mit("refactoring", "area:code"), []);
     for (const schlecht of [true, "", 0, null]) assert.match(mit("refactoring", schlecht).join("\n"), /labels\.refactoring muss ein nicht-leerer String \(Label\) oder false sein[\s\S]*Fix:/);
+    // die false-Ausnahme gilt nur für refactoring, nie für Pflichtschlüssel
+    assert.match(mit("harness", false).join("\n"), /labels\.harness muss ein nicht-leerer String sein/);
+    assert.match(mit("forum", false).join("\n"), /labels\.forum muss ein nicht-leerer String sein/);
     assert.match(mit("refactoring", "area:werk").join("\n"), /labels\.refactoring "area:werk" führt nicht auf ein Produkt-Board/);
     assert.match(mit("codequalitaet", "area:werk").join("\n"), /labels\.codequalitaet "area:werk" führt nicht/);
     // ein gültiges refactoring verdeckt das Alias nicht: das wirksame ist refactoring
