@@ -68,6 +68,8 @@ const artName = (art) => (Object.hasOwn(ART_ALIAS, art) ? ART_ALIAS[art] : art);
 const SUCHTITEL = { harness: [SAMMELTICKET_TITEL], langfuse: [LANGFUSE_SAMMELTICKET_TITEL], refactoring: REFACTORING_TITEL_AKZEPTIERT };
 const ABGESCHALTET_TEXT = "labels.refactoring: false: Refactoring-Sammelticket abgeschaltet, nichts angelegt.";
 const FABRIK_TEXT = "Fabrik: kein Refactoring-Sammelticket ohne labels.refactoring (Code-Befunde der Fabrik sind Harness-Befunde), nichts angelegt.";
+/** Meldung je Grund, warum kein Refactoring-Sammelticket entsteht (`quelle` aus `refactoringEinstellung`). */
+const KEIN_TICKET_TEXT = { aus: ABGESCHALTET_TEXT, standard: FABRIK_TEXT };
 const PRUEF_VERSUCHE = 5;
 const PRUEF_PAUSE_MS = 3000;
 const NEU_SETZEN_MAX = 2;
@@ -208,6 +210,7 @@ export function zielFuerArt(config, art, { bezieher = false } = {}) {
 
 /** `zielFuerArt`, aber ein Konfigurationsfehler endet mit `✖`-Zeile und Exit 2 statt mit einem Stacktrace. */
 function zielOderAbbruch(config, art, bezieher) {
+  if (artName(art) === "refactoring") for (const h of projektConfigHinweise(config)) console.error(`Hinweis: ${h}`);
   try {
     return zielFuerArt(config, art, { bezieher });
   } catch (e) {
@@ -418,9 +421,8 @@ export async function main(argv = process.argv.slice(2), deps = {}) {
   const config = d.ladeConfig();
   // Zwei Boards (ADR 0022 F11): Harness-/Langfuse-Sammeltickets tragen das Harness-Label der Config und stehen laut Trennregel auf dem Factory-Board; Refactoring liegt auf dem Produkt-Board.
   // Langfuse im Bezieher (factory#195): das eigene Repo, ohne Harness-Label auf dem Produkt-Board (`zielFuerArt`).
-  if (args.art === "refactoring") for (const h of projektConfigHinweise(config)) console.error(`Hinweis: ${h}`);
   const { label, ziel, quelle } = zielOderAbbruch(config, args.art, d.bezieher);
-  if (ziel === null) return d.log(quelle === "aus" ? ABGESCHALTET_TEXT : FABRIK_TEXT); // abgeschaltet oder Fabrik ohne Schlüssel: kein Ticket, kein gh-Aufruf
+  if (ziel === null) return d.log(KEIN_TICKET_TEXT[quelle]); // abgeschaltet oder Fabrik ohne Schlüssel: kein Ticket, kein gh-Aufruf
   d.kontingent();
   const board = boardFuerRolle(ziel.rolle);
   const { repo } = ziel;

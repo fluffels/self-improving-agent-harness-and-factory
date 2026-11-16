@@ -24,6 +24,8 @@ import * as rawGlob from "../scripts/pfad-glob.mjs";
 
 interface Pc {
   pruefeProjektConfig(wert: unknown): string[];
+  refactoringEinstellung(config: unknown, o?: { bezieher?: boolean }): { an: boolean; label: string | null; quelle: string };
+  projektConfigHinweise(wert: unknown): string[];
   ladeProjektConfig(opt?: { rootDir?: string; pfad?: string; env?: Record<string, string | undefined> }): { repo: string };
   trenneConfigArg(argv: string[]): { args?: string[]; pfad?: string; fehler?: string };
   configAusAufruf(argv: string[], deps?: { lade?: (a: { pfad?: string }) => unknown }): { args: string[]; config?: unknown; fehler?: string };
