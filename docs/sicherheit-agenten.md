@@ -55,6 +55,10 @@ Spalten: Risiko, vorhandenes Gate, Lücke, Folge, Bezug zu den Agentic Applicati
 
 ASI-Namen der Spalte nach der Sekundärquelle (siehe Quellen). Die Gate-Angaben sind Ist-Stand, gegen den Code geprüft am 2026-11-12.
 
+## Code-Analyse als agentische Ergänzung
+
+Die Sicherheit des Repo-Codes deckt eine deterministische und eine agentische Schicht ab, beide ohne Modell in der CI (ADR 0034): `codeql.yml` (CodeQL-Alerts) und `sicherheitspruefung.yml` (Konfiguration des Repos) laufen automatisch; die monatliche [Code-Analyse](ticket-reihenfolge.md#code-analyse-monatslauf-factory596) legt nur ein Takt-Ticket an, das ein normaler Agentenlauf unter den Fremdtext- und Schreibgrenzen dieser Seite abarbeitet. Ein Fund wird ein Notfall-Issue `🔒 Security:` im eigenen Repo ohne Exploit-Details (SECURITY.md); offene CodeQL-Alerts werden referenziert, nicht dupliziert.
+
 ## Grenzen (ehrlich)
 
 - Der Cockpit-Server ist lokal ohne Anmeldung: ein lokaler Prozess derselben Nutzerin erreicht ihn ([ADR 0029](adr/0029-harness-cockpit.md) (e)). Escapen ist keine Inhaltsprüfung, Fremdtext bleibt lesbarer Text.
