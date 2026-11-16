@@ -80,7 +80,7 @@ const ZEILEN: Zeile[] = [
     skript: "token-baseline",
     exit: 2,
     erste: (m) => m,
-    aufruf: /^Aufruf: node scripts\/token-baseline\.mjs --session <id>/m,
+    aufruf: /^Aufruf: node scripts\/token-baseline\.mjs --session <id\|eindeutiger Präfix, ohne --langfuse>/m,
     faelle: { unbekannt: ["--bogus"], ohneWert: ["--session"], doppelt: ["--issue", "1", "--issue", "2"] },
     meldungen: { unbekannt: STD.unbekannt, ohneWert: "--session braucht einen Wert", doppelt: "--issue ist doppelt angegeben" },
   },
@@ -252,7 +252,7 @@ describe("Aufruf-Fehler der migrierten Skripte", () => {
   });
 
   const ZUSATZ: [string, string[], number, string][] = [
-    ["token-baseline", ["--json"], 2, "Aufruf: node scripts/token-baseline.mjs --session <id> [--issue <nr>] [--pr <nr>] [--from <ISO>] [--langfuse] [--json] [--config <pfad>]"],
+    ["token-baseline", ["--json"], 2, "Aufruf: node scripts/token-baseline.mjs --session <id|eindeutiger Präfix, ohne --langfuse> [--issue <nr>] [--pr <nr>] [--from <ISO>] [--langfuse] [--json] [--config <pfad>]"],
     ["factory-sync", ["--trocken"], 2, "factory-sync: --quelle <pfad> fehlt"],
     ["factory-kennzahlen", ["--bis", "2026-01-01"], 1, "--von und --bis brauchen je ein gültiges ISO-Datum."],
     ["claims-pruefen", ["x"], 2, "✖ claims-pruefen: unbekanntes Argument: x"],

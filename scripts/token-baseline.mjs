@@ -5,7 +5,7 @@
  * (Input / Cache-Write / Cache-Read / Output) plus Loop-Kennzahlen.
  * Aufruf, Phasen-Regeln und Baseline: [docs/model-routing.md › Messen](../docs/model-routing.md#messen).
  *
- *   node scripts/token-baseline.mjs --session <id> [--session <id>…] \
+ *   node scripts/token-baseline.mjs --session <id|eindeutiger Präfix, Präfix nur ohne --langfuse> [--session <id>…] \
  *        [--issue <nr>] [--pr <nr>] [--from <ISO-Zeit>] [--langfuse] [--json] [--config <pfad>]
  *
  * ZWEI Quellen, EINE Auswertung (`summarize` kennt die Quelle nicht):
@@ -43,6 +43,7 @@ import { callsDerSitzung, callsFromTranscript } from "./transkript-calls.mjs";
 import { fetchSessionObservations, langfuseZugang as zugangAus, usageAusObservation } from "./langfuse-api.mjs";
 import { fehlerArten, permissionGruende, pruefLaeufe, wiederlesen } from "./tool-metriken.mjs";
 import { factorySeiteIn } from "./factory-seite.mjs";
+import { sessionAufloesen } from "./langfuse-abgleich-kern.mjs";
 import { fileURLToPath } from "node:url";
 
 const WURZEL = fileURLToPath(new URL("..", import.meta.url));
@@ -381,7 +382,10 @@ function reviewDescriptions(ticketCalls, agenten) {
  * Sucht <id>.jsonl in allen Projektordnern unter ~/.claude/projects (Worktree-Sessions liegen in eigenen). Bewusst keine
  * Projektableitung: das ist ein Session-ID-Nachschlag, und `--sessions` muss auch Worktree-Sessions finden.
  */
-export function readTranscriptSession(sessionId, projectsRoot) {
+export function readTranscriptSession(angabe, projectsRoot) {
+  const aufl = sessionAufloesen({ projectsRoot, angabe });
+  if (aufl.fehler === "mehrdeutig") throw new Error(`Session-Präfix ${angabe} ist mehrdeutig: ${aufl.kandidaten.join(", ")}`);
+  const sessionId = aufl.id ?? angabe;
   const candidates = readdirSync(projectsRoot).map((d) => join(projectsRoot, d, `${sessionId}.jsonl`));
   const main = candidates.find((p) => existsSync(p));
   if (!main) throw new Error(`Kein Transkript für Session ${sessionId} unter ${projectsRoot}`);
@@ -597,7 +601,7 @@ export function langfuseZugang(env) {
   );
 }
 
-const AUFRUF = "Aufruf: node scripts/token-baseline.mjs --session <id> [--issue <nr>] [--pr <nr>] [--from <ISO>] [--langfuse] [--json] [--config <pfad>]";
+const AUFRUF = "Aufruf: node scripts/token-baseline.mjs --session <id|eindeutiger Präfix, ohne --langfuse> [--issue <nr>] [--pr <nr>] [--from <ISO>] [--langfuse] [--json] [--config <pfad>]";
 
 /** Argumente; ein Aufruf-Fehler wirft (`main` meldet ihn mit Aufrufzeile und Exit `AUFRUF_EXIT`). */
 export function parseArgs(argv) {
