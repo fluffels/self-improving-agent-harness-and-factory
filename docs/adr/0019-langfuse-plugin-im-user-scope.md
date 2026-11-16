@@ -1,7 +1,7 @@
 # ADR 0019: Das Langfuse-Plugin bleibt auch im User-Scope aktiv
 
 > Architecture Decision Record. Format: Kontext → Entscheidung → Konsequenzen.
-> Status: **akzeptiert** · Datum: 2026-10-07 · Ticket: #1411
+> Status: **akzeptiert, präzisiert durch ADR 0036** · Datum: 2026-10-07 · Ticket: #1411
 
 ## Status
 

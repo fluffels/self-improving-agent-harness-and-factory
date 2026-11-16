@@ -42,6 +42,8 @@ Bevor eine Grundsatzfrage neu diskutiert wird, erst hier nachsehen. Vollständig
 | [0032 Fabrik bleibt an GitHub gebunden](../adr/0032-git-host-bindung.md) | wenn ein anderer Git-Host als GitHub für Fabrik oder Bezieher erwogen wird, vor dem Anbinden (Auslöser: v1.0.0, Bedarf über die Meldestelle) |
 | [0033 Ticket-Drift als Monatslauf](../adr/0033-ticket-drift-lauf.md) | wenn offene Tickets maschinell gegen den Code vorgeprüft, der Ticket-Drift-Bericht oder `scripts/ticket-drift.mjs` angefasst oder ein Modell-Lauf für die Ticket-Pflege erwogen wird |
 | [0034 Kein KI-Reviewer in der CI](../adr/0034-kein-ki-reviewer-in-ci.md) | wenn ein KI-Reviewer in der CI, ein Managed-Review-Dienst oder ein weiteres Secret für Review erwogen wird |
+| [0035 Kontext-Vertrag Kern und Bezieher](../adr/0035-kontext-vertrag-kern-und-bezieher.md) | wenn der Kontext-Vertrag zwischen Kern und Bezieher (was in den Kontext geladen wird) geändert oder gemessen wird |
+| [0036 Ticket-Tag an jeder Generation](../adr/0036-ticket-tag-an-jeder-generation.md) | wenn Kosten je Ticket in Langfuse, ein Ticket-Tag an Generations, der Sender der Generations (Plugin oder Nachlieferer) oder Tags je Turn erwogen werden |
 
 ## 🌱 Evergreen — lebendes Wissen, im selben PR gepflegt
 
