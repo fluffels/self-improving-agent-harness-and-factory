@@ -35,7 +35,10 @@ export const HOOK_TABELLE: HookZeile[] = [
   { hook: "scripts/stop-verify-hook.mjs", modul: ["scripts/stop-verify-hook.mjs"], codex: null, grenze: "Stop und SubagentStop gibt es in Codex, unbelegt sind Rollenname in agent_type und Abschlussformat (last_assistant_message statt Handback); Waisen-Worktrees räumt man unter Codex von Hand (cleanup-worktrees.mjs --fix): factory#367, Übernahme factory#368" },
   { hook: "scripts/statusline.mjs", modul: ["scripts/statusline.mjs"], codex: null, grenze: "Die Codex-Statuszeile kennt nur eingebaute Elemente (tui.status_line), keinen Befehl: factory#368" },
 ];
-export const AGENTEN_AUSNAHMEN: Record<string, string> = {};
+export const AGENTEN_AUSNAHMEN: Record<string, string> = {
+  "analyse-extern": "Fabrik-eigener Agent der Token-Analyse (factory#518): nur unter Claude Code, nicht als Codex-Rolle gespiegelt",
+  "analyse-recherche": "Fabrik-eigener Agent der Token-Analyse (factory#518): nur unter Claude Code, nicht als Codex-Rolle gespiegelt",
+};
 export const CODEX_AGENTS_MAX_BYTES = 32768;
 
 export const v1 = (existiert: (p: string) => boolean): string[] => existiert("test/harness/skills-sync.test.ts") ? [] : ["V1: test/harness/skills-sync.test.ts fehlt"];

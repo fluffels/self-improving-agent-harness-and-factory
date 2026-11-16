@@ -392,6 +392,7 @@ flowchart TD
   merge["Merge (squash)"]
   cleanup["Aufräumen: Issue zu,<br/>Worktree weg"]
   alarm["Alarm-Issue: CI rot auf main"]
+  analyse["Token-Analyse (nur auf Auftrag, außerhalb des Ticketlaufs)<br/>token-analyse mit analyse-extern und analyse-recherche"]
 
   board --> claim --> plan --> epic
   epic -- ja --> kinder --> board
@@ -565,6 +566,7 @@ sequenceDiagram
   CI-->>U: grün: Merge, rot: Fix auf demselben Branch
   U-->>H: Bericht mit Ergebnis
   H-->>M: Zusammenfassung
+  Note over H,M: Außerhalb des Ticketlaufs (nur auf Auftrag): Skill token-analyse mit analyse-extern und analyse-recherche
 ```
 
 <!-- GEN:agenten-sequenz END -->

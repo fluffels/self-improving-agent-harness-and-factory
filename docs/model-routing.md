@@ -42,7 +42,7 @@ Modell und Effort je Teil des Skills [`token-analyse`](../.agents/skills/token-a
 
 **Begründung:** Zählen, Abgleichen, Suchen und Stichproben (1, 2, 5, 6) sind Fleißarbeit mit klarer Vorgabe: `sonnet` `medium`. Das Inventar (3) bewertet Regelwirkung und braucht `opus`, `medium` als Hauptknopf (Anbieter-Empfehlung wie bei Planer und Lens). Der externe Blick (4) hat keinen Kontext und soll Auffälliges selbst erkennen: `opus` `high`. Der Lauf hält ein Budget (`BUDGET_USD` im Skill); der Startwert ist ein konservativer Platzhalter (Lücke: Basis fehlt), die Wiedervorlage `token-analyse-budget-576` setzt ihn nach dem ersten echten Lauf.
 
-**Grenzen:** Die Analyse läuft nur unter Claude Code; Codex-Läufe zählen über Langfuse und Transkripte mit (`test/codex-setup.test.ts` spiegelt die Agenten nicht). `analyse-extern` hat keinen Lese-Hook: Lesen per absolutem Pfad ist nicht sperrbar, der Bericht listet die Lesepfade. **Erfassungsprobe, kein Messlauf** (Langfuse-Erfassung der zwei neuen Agenten): siehe PR von factory#576.
+**Grenzen:** Die Analyse läuft nur unter Claude Code; Codex-Läufe zählen über Langfuse und Transkripte mit (`test/harness/codex-setup.test.ts` spiegelt die Agenten nicht). `analyse-extern` hat keinen Lese-Hook: Lesen per absolutem Pfad ist nicht sperrbar, der Bericht listet die Lesepfade. **Erfassungsprobe, kein Messlauf** (Langfuse-Erfassung der zwei neuen Agenten): siehe PR von factory#576.
 
 ### Rollen je Risikostufe (factory#528)
 
