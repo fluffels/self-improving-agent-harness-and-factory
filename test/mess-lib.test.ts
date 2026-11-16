@@ -270,6 +270,22 @@ describe("claimNummer (#1616)", () => {
   });
 });
 
+describe("freigabeNummer und istMerge (factory#524)", () => {
+  const C = raw as unknown as { freigabeNummer: (cmd: string) => number | null; istMerge: (cmd: string) => boolean };
+  test("Freigabe-Zeile liefert die Ticketnummer, Claim und Ansehen nicht", () => {
+    expect(C.freigabeNummer("gh issue edit 524 --remove-assignee @me")).toBe(524);
+    expect(C.freigabeNummer("cd x && gh issue edit 12 --add-label a --remove-assignee @me")).toBe(12);
+    expect(C.freigabeNummer("gh issue edit 524 --add-assignee @me")).toBeNull();
+    expect(C.freigabeNummer("gh issue view 524")).toBeNull();
+    expect(C.freigabeNummer(undefined as unknown as string)).toBeNull();
+  });
+  test("gh pr merge ist ein Merge, pr view und Text nicht", () => {
+    expect(C.istMerge("gh pr merge 7 --squash --auto")).toBe(true);
+    expect(C.istMerge("gh pr view 7")).toBe(false);
+    expect(C.istMerge(undefined as unknown as string)).toBe(false);
+  });
+});
+
 describe("Ticketfilter aus flagsLesen-Werten (#1790)", () => {
   const T = raw as unknown as {
     TICKET_OPTIONEN: Record<string, { type: string; multiple: boolean }>;

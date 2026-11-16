@@ -152,6 +152,18 @@ export function claimNummer(command) {
   return nr ? Number(nr) : null;
 }
 
+const FREIGABE = /\bgh\s+issue\s+edit\s+(\d+)\b(?=[^\n]*--remove-assignee)/;
+const MERGE = /\bgh\s+pr\s+merge\b/;
+
+/** Ticketnummer einer Freigabe-Zeile (`gh issue edit <nr> … --remove-assignee`), sonst `null` (factory#524: beendet das Claim-Fenster). */
+export function freigabeNummer(command) {
+  const nr = FREIGABE.exec(String(command ?? ""))?.[1];
+  return nr ? Number(nr) : null;
+}
+
+/** Ist die Zeile ein `gh pr merge` (factory#524: beendet das Claim-Fenster, danach beginnt der Nachlauf)? */
+export const istMerge = (command) => MERGE.test(String(command ?? ""));
+
 /** Ein echter Modellname: nicht leer und nicht der Client-Platzhalter `<synthetic>`. */
 export const istEchtesModell = (m) => Boolean(m) && m !== "<synthetic>";
 

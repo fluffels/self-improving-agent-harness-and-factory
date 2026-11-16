@@ -8,10 +8,10 @@
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { istProjektOrdner } from "./transkript.mjs";
-import { escapeRegex } from "./regex-lib.mjs";
 import { callsDerSitzung } from "./transkript-calls.mjs";
 import { queryMetrics, usageAusObservation } from "./langfuse-api.mjs";
-import { beobachtungsId, traceIdVon } from "./langfuse-otlp.mjs";
+import { beobachtungsId, traceIdJeTicket } from "./langfuse-otlp.mjs";
+import { fensterAus, ticketFuer } from "./claim-fenster.mjs";
 
 /** Eine Session, deren Dateien jünger sind, läuft noch: ihre Calls sind noch nicht (vollständig) in Langfuse. */
 export const RUHEFRIST_MIN = 30;
@@ -83,27 +83,62 @@ export function ledgerLesen(datei) {
 
 // ── Soll (pur) ───────────────────────────────────────────────────────────────
 
-/** `<praefixe.worktree><nr>` aus dem Branch-Namen, sonst null. `worktree` ist `praefixe.worktree` der Projekt-Config (Pflicht, kein Standardwert). */
-export function ticketAusBranch(gitBranch, worktree) {
-  if (typeof worktree !== "string" || worktree === "") throw new Error("ticketAusBranch braucht das Worktree-Präfix (praefixe.worktree der Projekt-Config)");
-  const m = new RegExp(String.raw`(?<!\w)${escapeRegex(worktree)}(\d+)\b`).exec(String(gitBranch ?? ""));
-  return m ? `${worktree}${m[1]}` : null;
+const agentIdVon = (c) => (c.subagent ? c.subagent.id.replace(/\.jsonl$/, "").replace(/^agent-/, "") : null);
+const normAgent = (id) => (id ? String(id).replace(/^agent-/, "") : null);
+
+/**
+ * Das Ticket je Call aus dem Claim-Fenster der Session (factory#524, `claim-fenster.mjs`): `{ nr, grund }` je Call (gleiche Reihenfolge wie `calls`). Ein Subagent-Call erbt das Ticket
+ * der Startzeit seines Wurzel-Agenten (frühester Call des obersten Vorfahren in der `parentAgentId`-Kette), auch über das Fensterende hinaus.
+ */
+function fensterTickets(calls, sitzung) {
+  const fenster = fensterAus(sitzung);
+  const start = new Map();
+  const eltern = new Map();
+  for (const c of calls) {
+    const id = agentIdVon(c);
+    if (!id) continue;
+    eltern.set(id, normAgent(c.subagent.parentAgentId));
+    const t = Date.parse(c.ts);
+    if (Number.isFinite(t) && t < (start.get(id) ?? Infinity)) start.set(id, t);
+  }
+  const wurzel = (id) => {
+    let w = id;
+    for (let n = 0; n <= eltern.size; n++) {
+      const p = eltern.get(w);
+      if (!p || p === w || !eltern.has(p)) break;
+      w = p;
+    }
+    return w;
+  };
+  const wurzelStart = new Map();
+  const startVon = (id) => {
+    const w = wurzel(id);
+    if (!wurzelStart.has(w)) wurzelStart.set(w, start.get(w) ?? null);
+    return wurzelStart.get(w);
+  };
+  return calls.map((c) => {
+    const id = agentIdVon(c);
+    return ticketFuer(fenster, id ? startVon(id) : c.ts);
+  });
 }
 
 /**
  * Ergebnis von `ladeSessionDatei` → ein Eintrag je Message (`message.id`, Rückfall `uuid`) über Hauptdatei und Subagenten.
  * Eine Message in mehreren Dateien zählt einmal (Output = Maximum, der erste Fund bestimmt die Rolle). `worktree` (`praefixe.worktree` der Projekt-Config)
- * ist Pflicht: aus dem Branch-Namen jedes Calls entsteht das Ticket.
+ * ist Pflicht: aus dem Claim-Fenster der Session (`fensterTickets`) entsteht je Call das Ticket `<worktree><nr>` oder, ohne Fenster, `ticket: null` mit `ticketGrund`.
  */
 export function sollEintraege(sitzung, { session = sitzung.id, worktree } = {}) {
   if (typeof worktree !== "string" || worktree === "") throw new Error("sollEintraege braucht das Worktree-Präfix (praefixe.worktree der Projekt-Config)");
   // Dieselbe Zusammenführung wie die Kosten-Messung (token-baseline): `callsDerSitzung` setzt die Rolle als `subagent` an den Call.
   const { calls } = callsDerSitzung(sitzung);
-  return calls.map((c) => {
+  const tickets = fensterTickets(calls, sitzung);
+  return calls.map((c, i) => {
+    const z = tickets[i];
+    const ticket = z.nr == null ? null : `${worktree}${z.nr}`;
     const write1h = Math.min(c.cacheWrite1h, c.cacheWrite);
     return {
       id: beobachtungsId(session, c.messageId),
-      traceId: traceIdVon(session),
+      traceId: traceIdJeTicket(session, ticket),
       session,
       messageId: c.messageId,
       model: c.model ?? null,
@@ -112,7 +147,8 @@ export function sollEintraege(sitzung, { session = sitzung.id, worktree } = {}) 
       rolle: c.subagent
         ? { agentId: c.subagent.id.replace(/\.jsonl$/, "").replace(/^agent-/, ""), agentType: c.subagent.agentType, description: c.subagent.description, parentAgentId: c.subagent.parentAgentId }
         : null,
-      ticket: ticketAusBranch(c.gitBranch, worktree),
+      ticket,
+      ticketGrund: ticket ? null : z.grund,
     };
   });
 }

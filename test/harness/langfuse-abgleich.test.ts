@@ -41,7 +41,7 @@ type Fetch = (url: string, init?: { method?: string; headers?: Record<string, st
 // Der Kern (langfuse-abgleich-kern.mjs) trägt IDs, Soll, Sessions, Ist und Diff; der Einstieg Bewertung, Bericht und CLI.
 // Das Worktree-Präfix kommt aus der Projekt-Config; die Wrapper reichen es durch, damit die Tests ihre Eingaben wie bisher schreiben.
 const WORKTREE = FREMD.praefixe.worktree;
-const kernRoh = rawKern as unknown as { sollEintraege: (s: unknown, o: object) => unknown; ticketAusBranch: (b: unknown, w: string) => unknown };
+const kernRoh = rawKern as unknown as { sollEintraege: (s: unknown, o: object) => unknown };
 const einstiegRoh = rawAbgleichEinstieg as unknown as { pruefen: (a: unknown, d: object) => unknown };
 const A = {
   ...rawAbgleichEinstieg,
@@ -49,7 +49,6 @@ const A = {
   ...rawOtlp,
   pruefen: (a: unknown, d: object) => einstiegRoh.pruefen(a, { config: FREMD, ...d }),
   sollEintraege: (s: unknown, o?: object) => kernRoh.sollEintraege(s, { worktree: WORKTREE, ...o }),
-  ticketAusBranch: (b: unknown) => kernRoh.ticketAusBranch(b, WORKTREE),
 } as unknown as {
   RUHEFRIST_MIN: number;
   ROW_LIMIT: number;
@@ -59,7 +58,7 @@ const A = {
   endeGiltFuer: (eintrag: { beendet?: boolean; mtime?: number; groesse?: number | null } | null | undefined, s: { mtime: number; groesse: number | null }) => boolean;
   beobachtungsId: (s: string, m: string) => string;
   traceIdVon: (s: string) => string;
-  ticketAusBranch: (b: unknown) => string | null;
+  traceIdJeTicket: (s: string, t: string | null) => string;
   sollEintraege: (s: { id: string; main: Zeilen; subagents: { datei: string; meta: Record<string, unknown>; zeilen: Zeilen }[] }, o?: { session?: string }) => Eintrag[];
   findeSessions: (o: { projectsRoot: string; praefix: string; seitMs?: number; sessionId?: string | null; alleOrdner?: boolean }) => { id: string; pfad: string; mtime: number; groesse: number; ausserhalb?: boolean }[];
   sessionAufloesen: (o: { projectsRoot: string; angabe: string }) => { id?: string; fehler?: string; kandidaten?: string[] };
@@ -191,20 +190,13 @@ describe("Soll (pur)", () => {
 
   test("Felder: IDs, Modell, Ticket, getrennter Cache-Write, Rolle des Hauptchats null", () => {
     const [e] = A.sollEintraege({ id: "s1", main: [row(msg("m"))], subagents: [] });
-    expect(e).toMatchObject({ id: A.beobachtungsId("s1", "m"), traceId: A.traceIdVon("s1"), session: "s1", messageId: "m", model: "claude-opus-5-5", ticket: `${WORKTREE}1562`, rolle: null });
+    expect(e).toMatchObject({ id: A.beobachtungsId("s1", "m"), traceId: A.traceIdJeTicket("s1", null), session: "s1", messageId: "m", model: "claude-opus-5-5", ticket: null, ticketGrund: "vor-claim", rolle: null });
     expect(e.usage).toEqual({ input: 10, output: 5, cacheRead: 100, cacheWrite5m: 10, cacheWrite1h: 30 });
   });
 
   test("die 1h-Aufteilung wird auf die Summe gekappt", () => {
     const [e] = A.sollEintraege({ id: "s1", main: [row(msg("m", { cache_creation_input_tokens: 5, cache_creation: { ephemeral_1h_input_tokens: 50 } }))], subagents: [] });
     expect(e.usage).toMatchObject({ cacheWrite5m: 0, cacheWrite1h: 5 });
-  });
-
-  test("Ticket aus dem Branch; main und fehlender Branch ergeben null", () => {
-    expect(A.ticketAusBranch(`${FREMD.praefixe.branch}1562-x`)).toBe(`${WORKTREE}1562`);
-    expect(A.ticketAusBranch("main")).toBeNull();
-    expect(A.ticketAusBranch(undefined)).toBeNull();
-    expect(A.ticketAusBranch(`${FREMD.praefixe.branch}abc`)).toBeNull();
   });
 
   test("kaputtes meta.json ergibt Rolle ohne agentType, der Eintrag bleibt; kaputte und abgeschnittene Zeilen entfallen", () => {
@@ -1052,19 +1044,7 @@ describe("pruefen (Ablauf)", () => {
     expect(r.text).toMatch(/\| Session \| Ticket \| Status \| Calls T\/L/);
     expect(r.text).toMatch(/\*\*Summe:\*\*/);
     expect(r.text).toMatch(/Fehlende Calls s1/);
-    expect(r.text).toContain(`${WORKTREE}1562`);
-  });
-
-  test("ohne injizierte Config gilt die echte Projekt-Config (Standard von pruefen)", async () => {
-    const echt = projektConfig();
-    const root = mitSession([msg("a", {}, { gitBranch: `${echt.praefixe.branch}1562-x` })]);
-    const m = mock({ zaehlung: [{ sessionId: "s1", count_count: 1 }], observations: [] });
-    const r = await einstiegRoh.pruefen(args(), { env: ZUGANG, now: SPAET(), projectsRoot: root, repoRoot: REPO, fetchImpl: m.fetchImpl }) as { text: string };
-    expect(r.text).toContain(`${echt.praefixe.worktree}1562`);
-    // Gegenprobe unabhängig davon, ob echte Config und FREMD gleich sind: ein anderes Worktree-Präfix erkennt den Branch nicht.
-    const anders = { ...FREMD, praefixe: { ...FREMD.praefixe, worktree: `${echt.praefixe.worktree}x-` } };
-    const r2 = await einstiegRoh.pruefen(args(), { env: ZUGANG, now: SPAET(), projectsRoot: root, repoRoot: REPO, fetchImpl: m.fetchImpl, config: anders }) as { text: string };
-    expect(r2.text).not.toContain(`${echt.praefixe.worktree}1562`);
+    expect(r.text).toMatch(/\| s1 \| – \|/); // ohne Claim im Transkript: kein Ticket (Fenster statt Branch)
   });
 
   test("Bericht: vollständig, Score ausstehend; Ledger (nur gelesen) mit Ende hebt es auf; kaputtes Ledger bleibt unberührt; Hinweis nennt den Stichtag aus dem Kern", async () => {
