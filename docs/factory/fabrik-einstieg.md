@@ -1,8 +1,8 @@
-# Einstieg für Nutzer und Bezieher der Fabrik
+# Einstieg für Nutzer und Bezieher der Factory
 
 > 🧭 **Fachlich geprüft am: 2026-11-16.**
 
-> Wissensart: Verweisseite (Evergreen). Sie führt zusammen, wo welche Einstellung der Fabrik steht und wo die Regel dazu steht; sie wiederholt keinen Regeltext. Gilt für jedes Projekt, das die Fabrik per Sync bezieht, und für die Fabrik selbst; sie trägt weder Projekt- noch Personenbezug. Der Wächter `test/harness/fabrik-einstieg.test.ts` hält die Tabelle der Umgebungsvariablen vollständig.
+> Wissensart: Verweisseite (Evergreen). Sie führt zusammen, wo welche Einstellung der Factory steht und wo die Regel dazu steht; sie wiederholt keinen Regeltext. Gilt für jedes Projekt, das die Factory per Sync bezieht, und für die Factory selbst; sie trägt weder Projekt- noch Personenbezug. Ein Wächter-Test hält die Tabelle der Umgebungsvariablen vollständig.
 
 ## Ebenen der Konfiguration
 
@@ -10,15 +10,15 @@ Jede Einstellung gehört auf genau eine Ebene. Wer eine Einstellung ändern will
 
 | Ebene | Was dort steht | Ort | Wer ändert | Mehr |
 | --- | --- | --- | --- | --- |
-| Fabrik-Besitz | Skripte, Agenten, Skills, Workflows, Kern-Tests, Kern-Seiten, der Kern-Block der `AGENTS.md` | Besitz-Manifest `.factory/besitz.json`, geliefert vom Sync | nur die Fabrik (upstream); im Bezieher nie von Hand | [Erstbezug](../erstbezug.md) |
+| Factory-Besitz | Skripte, Agenten, Skills, Workflows, Kern-Tests, Kern-Seiten, der Kern-Block der `AGENTS.md` | Besitz-Manifest der Factory, geliefert vom Sync | nur die Quelle der Factory; im Bezieher nie von Hand | [Erstbezug](../erstbezug.md) |
 | Repo-Config | Repo, Boards, Präfixe, Agentennamen, Labels, Projekt-Block der `AGENTS.md`, projekteigene Gates | `.factory/projekt.json`, Projekt-Block in `AGENTS.md`, Projektdateien aus den Vorlagen | das Projekt, per Pull Request | [Erstbezug](../erstbezug.md), [Doku-Vorlagen](../referenz/doku-vorlagen.md) |
-| Nutzer-Konfiguration | persönliche Werte je Rechner: Umgebungsvariablen, lokale Einstellungen, Zugänge | Shell, `.claude/settings.local.json` (ungetrackt), Home-Dateien des Nutzers | die einzelne Nutzerin bzw. der einzelne Nutzer, nie ein Agent | [Sicherheit der Agenten](../sicherheit-agenten.md) |
+| Nutzer-Konfiguration | persönliche Werte je Rechner: Umgebungsvariablen, lokale Einstellungen, Zugänge | Shell, lokale Einstellungsdatei `settings.local.json` (ungetrackt), Home-Dateien des Nutzers | die einzelne Nutzerin bzw. der einzelne Nutzer, nie ein Agent | [Sicherheit der Agenten](../sicherheit-agenten.md) |
 
-Regeln, die für alle Ebenen gelten: ein Projektwort gehört nie in den Fabrik-Besitz (Leitfrage der `AGENTS.md`); Werte aus der Repo-Config setzt die Fabrik über die Platzhalter `<gruppe.schlüssel>` ein; Zugangsdaten (Keys, Tokens) trägt nur die Nutzerin selbst ein, nie ein Agent.
+Regeln, die für alle Ebenen gelten: ein Projektwort gehört nie in den Factory-Besitz (Leitfrage der `AGENTS.md`); Werte aus der Repo-Config setzt die Factory über die Platzhalter `<gruppe.schlüssel>` ein; Zugangsdaten (Keys, Tokens) trägt nur die Nutzerin selbst ein, nie ein Agent.
 
 ## Umgebungsvariablen
 
-Alle Variablen der Fabrik tragen das Präfix `FACTORY_`. Sie sind **optional**: ohne Wert gilt der Standard des jeweiligen Skripts. Gesetzt werden sie in der Shell oder unter `env` in `.claude/settings.local.json` (Nutzer-Konfiguration), in der CI im `env:` des Schritts. Die Spalte „Art“ nennt, wer sie setzt: Nutzer (persönlich, optional), CI (Workflow), Skript (setzt das Werkzeug für seinen Kindlauf selbst) oder nur Tests.
+Alle Variablen der Factory tragen das Präfix `FACTORY_`. Sie sind **optional**: ohne Wert gilt der Standard des jeweiligen Skripts. Gesetzt werden sie in der Shell oder unter `env` in der lokalen Einstellungsdatei `settings.local.json` (Nutzer-Konfiguration), in der CI im `env:` des Schritts. Die Spalte „Art“ nennt, wer sie setzt: Nutzer (persönlich, optional), CI (Workflow), Skript (setzt das Werkzeug für seinen Kindlauf selbst) oder nur Tests.
 
 | Variable | Art | Zweck | Mehr |
 | --- | --- | --- | --- |
@@ -29,7 +29,7 @@ Alle Variablen der Fabrik tragen das Präfix `FACTORY_`. Sie sind **optional**: 
 | `FACTORY_DIFF_BASE` | Nutzer | Basis für Diff-Gates, sonst Merge-Base mit `origin/main` | [Harness-Transfer](../harness-transfer.md) |
 | `FACTORY_DIFFSIZE_MAX_FILES` | Nutzer | Obergrenze der Dateien für `check:diffsize` | [Agent-Harness](../agent-harness.md) |
 | `FACTORY_DIFFSIZE_MAX_LINES` | Nutzer | Obergrenze der Zeilen für `check:diffsize` | [Agent-Harness](../agent-harness.md) |
-| `FACTORY_E2E_BROWSER` | Skript | Browser-Name, den die Fabrik an den e2e-Befehl des Projekts übergibt | [Schichten ohne Unit-Tests](schichten-ohne-unit-tests.md) |
+| `FACTORY_E2E_BROWSER` | Skript | Browser-Name, den die Factory an den e2e-Befehl des Projekts übergibt | [Schichten ohne Unit-Tests](schichten-ohne-unit-tests.md) |
 | `FACTORY_GH_ECHT` | nur Tests | schaltet die gh-Sperre der Testumgebung ab | [Agent-Harness](../agent-harness.md) |
 | `FACTORY_GH_KOSTEN_LOG` | Nutzer | Pfad des Kostenprotokolls der `gh`-Aufrufe (GitHub-API-Kontingent) | [Glossar](../harness-glossar.md) |
 | `FACTORY_MCP_AUSFALL_STAND` | Nutzer | Pfad der Stand-Datei der MCP-Ausfallmeldung | [Befehle](../referenz/befehle.md) |
@@ -50,17 +50,17 @@ Alle Variablen der Fabrik tragen das Präfix `FACTORY_`. Sie sind **optional**: 
 | `FACTORY_TEST_FEHLT` | nur Tests | nie gesetzt; Fixture für den Fehlerpfad der MCP-Ausfallmeldung | [Befehle](../referenz/befehle.md) |
 | `FACTORY_USER_SETTINGS` | nur Tests | Pfad der persönlichen Einstellungen, aus denen die Statusline gelesen wird | [Befehle](../referenz/befehle.md) |
 
-Eine neue Variable steht erst in der Fachseite und dann hier; ohne Zeile in dieser Tabelle ist `test/harness/fabrik-einstieg.test.ts` rot.
+Eine neue Variable steht erst in der Fachseite und dann hier; ohne Zeile in dieser Tabelle ist der Wächter-Test dieser Seite rot.
 
 ## Updates holen
 
-Ein Bezieher holt Updates der Fabrik selbst: der Wochenlauf `.github/workflows/factory-update.yml` legt das Issue „Factory-Update“ an, wenn ein neuerer Release-Tag da ist (der Workflow kommt mit dem Sync, nicht von Hand). Den Stand prüft `node scripts/factory-update-check.mjs`, übertragen wird mit `node scripts/factory-sync.mjs` (nur Besitz laut `.factory/besitz.json`, idempotent). Schrittfolge, Abgleich und Fehlerfälle: [Erstbezug](../erstbezug.md). Die Fabrik schreibt nie in ein Bezieher-Repo; ohne `.factory/sync-stand.json` ist ein Repo selbst upstream.
+Ein Bezieher holt Updates der Factory selbst: der Wochenlauf `.github/workflows/factory-update.yml` legt das Issue „Factory-Update“ an, wenn ein neuerer Release-Tag da ist (der Workflow kommt mit dem Sync, nicht von Hand). Den Stand prüft `node scripts/factory-update-check.mjs`, übertragen wird mit `node scripts/factory-sync.mjs` (nur Besitz laut Besitz-Manifest, idempotent). Schrittfolge, Abgleich und Fehlerfälle: [Erstbezug](../erstbezug.md).
 
 ## Einrichtung je Rechner und Laufzeit
 
 | Was | Wo beschrieben |
 | --- | --- |
-| Neues Repo auf die Fabrik umstellen (Ruleset, Projektdateien, Sync, Doctor) | [Erstbezug](../erstbezug.md) |
+| Neues Repo auf die Factory umstellen (Ruleset, Projektdateien, Sync, Doctor) | [Erstbezug](../erstbezug.md) |
 | Bestands-Repo übertragen (Reifestufen, Werkzeug je Sprache) | [Harness-Transfer](../harness-transfer.md) |
 | Voraussetzungen prüfen und einrichten | `node scripts/harness-doctor.mjs --pruefen` und `--einrichten` |
 | Langfuse (Plugin im User-Scope, Zugang) | [Erstbezug](../erstbezug.md), [Hook-Patch](../langfuse-hook-patch.md) |
@@ -68,7 +68,7 @@ Ein Bezieher holt Updates der Fabrik selbst: der Wochenlauf `.github/workflows/f
 | Sandbox, Berechtigungen, Secrets | [Sicherheit der Agenten](../sicherheit-agenten.md), [Sandbox anbinden](../sandbox-anbinden.md) |
 | Windows und Git-Bash | [FAQ](../agent-harness-faq.md) |
 
-Persönliche Werte je Rechner (Variablen oben, `.claude/settings.local.json`, Zugänge im Home) bleiben ungetrackt und stehen in keinem Commit. Beide Laufzeiten, Claude Code und Codex, folgen derselben `AGENTS.md`; ein Harness-Ticket berücksichtigt beide im selben Ticket.
+Persönliche Werte je Rechner (Variablen oben, `settings.local.json`, Zugänge im Home) bleiben ungetrackt und stehen in keinem Commit. Beide Laufzeiten, Claude Code und Codex, folgen derselben `AGENTS.md`; ein Harness-Ticket berücksichtigt beide im selben Ticket.
 
 ## Sammeltickets
 
@@ -80,7 +80,7 @@ Am Ticket-Ende pflegt der Agent selbst das Projekt-Brain (Regel → `AGENTS.md`,
 
 ## Regeln für Texte dieser Seite und anderer Kern-Seiten
 
-- `npm run <x>` nur für die Skripte der geschlossenen Liste `BEZIEHER_NPM_SKRIPTE` (Wächter `test/harness/besitz-abschnittsverweise.test.ts`); sonst `node scripts/<x>.mjs`.
-- Link-Anker nur auf verteilte Seiten oder auf die Liste `test/harness/kern-link-anker.json`.
+- `npm run <x>` nur für die Skripte der geschlossenen Liste `BEZIEHER_NPM_SKRIPTE` (Wächter `besitz-abschnittsverweise`); sonst `node scripts/<x>.mjs`.
+- Link-Anker nur auf verteilte Seiten oder auf die Liste `kern-link-anker`.
 - Ticketnummern mit Herkunft (`factory#<nr>`, `quellprojekt#<nr>`), nie nackt.
 - Kein Projektliteral und keine Personenangabe.

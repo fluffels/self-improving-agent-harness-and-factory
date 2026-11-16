@@ -204,7 +204,7 @@ describe("Tool-Mengen der Holdout-Agenten (#1754 K2)", () => {
   test("Dashboard-Kriterien: kein Dashboard-Tool (auch kein lesendes, der Langfuse-MCP bietet keines), stattdessen Hand-off (factory#583)", () => {
     assert.ok(!agentTools(abnahme).some((t) => /dashboard/i.test(t)), "kein Dashboard-Tool in der Whitelist");
     assert.ok(!ABNAHME_TOOLS.some((t) => /dashboard/i.test(t)));
-    assert.match(abnahme, /Dashboard[^\n]*nicht-pruefbar[^\n]*Maintainerin|Dashboard[^\n]*Hand-off[^\n]*Maintainerin/, "Der Agententext nennt den Hand-off für Dashboard-Kriterien");
+    assert.match(abnahme, /Dashboard-Kriterium[^\n]*ABNAHME-ABGEBROCHEN[^\n]*Hand-off[^\n]*Maintainerin/, "Der Agententext nennt den Hand-off für Dashboard-Kriterien");
     assert.deepEqual(toolAbweichungen(agentTools(abnahme.replace("mcp__langfuse__getMetricsSchema", "mcp__langfuse__getMetricsSchema, mcp__langfuse__createDashboard")), ABNAHME_TOOLS), ["zusätzliches Tool mcp__langfuse__createDashboard"]);
     assert.deepEqual(toolAbweichungen(agentTools(abnahme.replace("mcp__langfuse__getMetricsSchema", "mcp__langfuse__getMetricsSchema, mcp__langfuse__listDashboards")), ABNAHME_TOOLS), ["zusätzliches Tool mcp__langfuse__listDashboards"]);
   });

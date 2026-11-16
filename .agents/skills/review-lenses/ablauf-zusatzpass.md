@@ -1,6 +1,6 @@
 # Ablauf: Zusatzpässe nach dem Review-Cap
 
-Bedingte Datei von `SKILL.md` (Kern: `.agents/skills/review-lenses/SKILL.md`): lies sie, sobald nach dem Cap (2 Fix-Runden, höchstens 3 Pässe) noch Blocker bleiben. Werte für die Platzhalter `<gruppe.schlüssel>` stehen im Block darunter und werden wörtlich eingesetzt.
+Bedingte Datei von `SKILL.md` (Kern: `.agents/skills/review-lenses/SKILL.md`): lies sie, sobald nach dem Cap (2 Fix-Runden, höchstens 3 Pässe) noch Blocker bleiben. Platzhalter `<gruppe.schlüssel>`: Werte im Block darunter, wörtlich einsetzen.
 
 <!-- factory:projektwerte:start -->
 Projektwerte aus `.factory/projekt.json` (generiert von `node scripts/projektwerte.mjs --write`, nicht von Hand ändern).
@@ -25,7 +25,7 @@ Projektwerte aus `.factory/projekt.json` (generiert von `node scripts/projektwer
 
 Nach dem Cap fährt der Umsetzer **Zusatzpässe ohne Rückfrage** (Nachweis `zusatzpass=<n>:<ursache>`), höchstens 3 (Worktree `-lens-r4-` bis `-lens-r6-`), nur bei steigender Evidenz: der Vorpass meldet einen **belegten** `❌ blockierend`-Fund einer **neuen Blocker-Klasse** (Brille plus Prüfpunkt; neu = in keinem früheren Pass blockiert) und die Blockerzahl sinkt. `🔶 sollte` und Hinweise rechtfertigen nie einen Zusatzpass. **Belegt** heißt Repro oder Beleg an Test oder Doku; Architektur- und Requirement-Blocker sind nie belegt.
 
-**Erzwingung (factory#534, stufenabhängig seit factory#583):** Ein Auftrag mit Worktree `-lens-r<k>-` (den Pfad ab Pass 3 unter `.claude/worktrees/` im Prompt nennen), k über dem Cap (3, bei Risikostufe 1 nur 2: der Guard bestimmt die Stufe im Lens-Worktree selbst; unbestimmbar gilt 3, die CI fängt den Rest), trägt im Kopf `Zusatzpass: <Brille>:<Prüfpunkt> · Entscheidung: <X>, weil <Y>` (Brille: Schlüssel oder Name), sonst weist ihn der Lens-Auftrag-Guard ab (Delta-Worktrees `m/a/c` bleiben offen). Jeder Pass über dem Cap, auch Abnahme-Fix, CI-Fix- und Merge-Delta, braucht eine Commit-Zeile `<praefixe.commitZeile>Zusatzpass: R<k> <Ursache> — Entscheidung: <X>, weil <Y>` (Ursache `Zusatzpass`, `Abnahme-Fix`, `CI-Fix-Delta`, `Merge-Delta`; k ab Cap + 1; Stufe ≤ 1: 3), und `runden` ≥ höchste `Runde <n>:` + 1, sonst rot.
+**Erzwingung (factory#534, factory#583):** Ein Auftrag mit Worktree `-lens-r<k>-` (Pfad unter `.claude/worktrees/`), k über dem Cap (3, bei Risikostufe 1: 2; der Guard bestimmt die Stufe selbst, unbestimmbar gilt 3), trägt im Kopf `Zusatzpass: <Brille>:<Prüfpunkt> · Entscheidung: <X>, weil <Y>`, sonst weist ihn der Lens-Auftrag-Guard ab (`m/a/c` bleiben offen). Jeder Pass über dem Cap braucht eine Commit-Zeile `<praefixe.commitZeile>Zusatzpass: R<k> <Ursache> — Entscheidung: <X>, weil <Y>` (Ursache `Zusatzpass`, `Abnahme-Fix`, `CI-Fix-Delta`, `Merge-Delta`; k ab Cap + 1; Stufe ≤ 1: 3), und `runden` ≥ höchste `Runde <n>:` + 1, sonst rot.
 
 Ohne neue Klasse: **Hand-off** an den Hauptchat statt weiterer Runde: Label `labels.festgefahren` am Issue, ein konsolidierter Kommentar (Blocker, Versuche, Optionen), assigned bleiben.
 
