@@ -116,14 +116,24 @@ function lese(args, lies) {
   }
   const fehler = pruefeRegister(register?.zeilen);
   if (fehler.length > 0) throw new Error(`Register ungültig:\n${fehler.join("\n")}`);
-  const exporte = args.exporte.map((pfad) => {
+  const exporte = [];
+  const fehlend = [];
+  for (const pfad of args.exporte) {
+    let text;
     try {
-      return leseMesspunkte(JSON.parse(lies(pfad, "utf8")), pfad);
+      text = lies(pfad, "utf8");
+    } catch (e) {
+      if (e?.code !== "ENOENT") throw new Error(`--export ${pfad}: ${e.message}`, { cause: e });
+      fehlend.push(pfad); // eine angegebene, aber fehlende Datei ist eine Lücke „Export fehlt“, kein Abbruch
+      continue;
+    }
+    try {
+      exporte.push(leseMesspunkte(JSON.parse(text), pfad));
     } catch (e) {
       throw new Error(e.message.startsWith(pfad) ? e.message : `--export ${pfad}: ${e.message}`, { cause: e });
     }
-  });
-  return { register, exporte };
+  }
+  return { register, exporte, fehlend };
 }
 
 /** Je Gruppe: bestehendes Ticket nennen oder anlegen (`trocken`: nur nennen). Wirft bei gescheiterter Anlage. Nur ein Ticket mit vertrautem Autor (Repo-Owner) zählt als Dublette: ein fremdes Issue mit dem Marker darf kein Verstoß-Ticket unterdrücken. */
@@ -151,7 +161,7 @@ export function auswerten(args, deps = {}) {
     return { exitCode: 1, text: `Fehler: ${e.message}` };
   }
   const heute = args.heute ?? d.heute;
-  const ergebnis = auswertung(geladen.register, geladen.exporte, { heute, eigenerRepoTag: d.eigenerRepoTag });
+  const ergebnis = auswertung(geladen.register, geladen.exporte, { heute, eigenerRepoTag: d.eigenerRepoTag, fehlend: geladen.fehlend });
   const gruppen = ticketGruppen(ergebnis, geladen.register);
   if (gruppen.length > 0 && !args.trocken && args.nach === undefined) {
     return { exitCode: 3, text: `Verstoß bei ${gruppen.map((g) => g.ids.join("+")).join(", ")}: ohne --nach <nr> wird nichts angelegt.\n${renderMarkdown(ergebnis)}` };

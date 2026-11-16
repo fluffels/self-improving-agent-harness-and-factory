@@ -278,12 +278,13 @@ export const abweichung = (basis, nach, einheit) => {
 const luecke = (kopf, grund, kosten = null) => ({ ...kopf, urteil: "Lücke", grund, messwert: null, basis: null, abweichung: null, kosten });
 
 /** Pur: der Kontext je Bereich (`fabrik` | `bezieher`): Quelle → `{ punkte }` oder `{ grund }` (Lücke). */
-export const bereichKontext = (exporte, bereich, { eigenerRepoTag, repoTagAb = REPO_TAG_AB }) => {
+export const bereichKontext = (exporte, bereich, { eigenerRepoTag, repoTagAb = REPO_TAG_AB, fehlend = [] }) => {
+  const dateien = fehlend.length > 0 ? `; angegebene Datei fehlt: ${fehlend.join(", ")}` : "";
   const aus = {};
   for (const quelle of QUELLEN) {
     const punkte = exporte.filter((e) => e.quelle === quelle).flatMap((e) => e.punkte);
     if (bereich === "bezieher" && repoTagAb === null) aus[quelle] = { grund: BEZIEHER_GRUND };
-    else if (exporte.every((e) => e.quelle !== quelle)) aus[quelle] = { grund: `Export fehlt (Quelle ${quelle})` };
+    else if (exporte.every((e) => e.quelle !== quelle)) aus[quelle] = { grund: `Export fehlt (Quelle ${quelle}${dateien})` };
     else if (quelle !== "langfuse") aus[quelle] = bereich === "fabrik" ? { punkte } : { grund: "Quelle nur in der Fabrik" };
     else if (punkte.some((p) => p.repoTag === undefined)) aus[quelle] = { grund: "Repo-Tag fehlt im Export (Quelle langfuse)" };
     else if (bereich === "fabrik") aus[quelle] = { punkte: punkte.filter((p) => p.repoTag === eigenerRepoTag) };
@@ -387,10 +388,10 @@ const ausgewertet = (u) => u.urteil === "eingehalten" || u.urteil === "Verstoß"
  * Pur: `{ heute, zeilen: [{ id, fabrik, bezieher }] }`. Die Überlappungsgruppen bilden sich über alle Zeilen des Registers, deren Fenster sich berühren
  * (auch nicht fällige und Lücken stehen in `mit`); zu `Überlappung` wird nur eine fällige, ausgewertete Zeile (Vorrang: noch nicht fällig und Lücke gehen vor).
  */
-export function auswertung(register, exporte, { heute, eigenerRepoTag, repoTagAb = REPO_TAG_AB }) {
+export function auswertung(register, exporte, { heute, eigenerRepoTag, repoTagAb = REPO_TAG_AB, fehlend = [] }) {
   const einzel = {};
   for (const bereich of BEREICHE) {
-    const kontext = bereichKontext(exporte, bereich, { eigenerRepoTag, repoTagAb });
+    const kontext = bereichKontext(exporte, bereich, { eigenerRepoTag, repoTagAb, fehlend });
     einzel[bereich] = new Map(register.zeilen.map((z) => [z.id, urteilZeile(z, kontext, { heute, bereich, repoTagAb })]));
     for (const ids of ueberlappungen(register.zeilen)) {
       const verstoss = ids.some((id) => einzel[bereich].get(id).urteil === "Verstoß");

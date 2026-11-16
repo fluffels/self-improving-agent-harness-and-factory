@@ -293,8 +293,22 @@ describe("CLI", () => {
   it("Aufruffehler: unbekannte Flagge, falsches Datum, falsches --nach: Exit 2", () => {
     for (const a of [["--unbekannt"], ["--heute", "morgen"], ["--nach", "x"]]) expect(cli.auswerten(cli.parseArgs(a), basis).exitCode).toBe(2);
   });
-  it("Lesefehler: fehlende Exportdatei und ungültiges Register: Exit 1", () => {
-    expect(cli.auswerten(cli.parseArgs([...args, "--export", join(FIX, "gibt-es-nicht.json")]), basis).exitCode).toBe(1);
+  it("eine angegebene, aber fehlende Exportdatei ist eine Lücke mit Dateiname, der Lauf geht weiter (AK 8)", () => {
+    const fehlt = join(FIX, "fehlt.json");
+    const r = cli.auswerten(cli.parseArgs(["--register", join(FIX, "register.json"), "--export", join(FIX, "messpunkte-fabrik.json"), "--export", fehlt, "--json"]), basis);
+    expect(r.exitCode).toBe(0);
+    const z = JSON.parse(r.text).zeilen;
+    expect(z[0].fabrik.kosten.luecke).toContain(`angegebene Datei fehlt: ${fehlt}`);
+    expect(z[0].fabrik).toMatchObject({ urteil: "Überlappung" }); // die übrigen Zeilen werden weiter bewertet
+    expect(z[1].fabrik.urteil).toBe("noch nicht fällig");
+    const nur = JSON.parse(cli.auswerten(cli.parseArgs(["--register", join(FIX, "register.json"), "--export", fehlt, "--json"]), basis).text).zeilen[0].fabrik;
+    expect(nur).toMatchObject({ urteil: "Lücke", messwert: null });
+    expect(nur.grund).toContain("fehlt.json");
+  });
+  it("eine lesbare, aber kaputte Exportdatei bleibt Exit 1 (nie ein Teilwert)", () => {
+    expect(cli.auswerten(cli.parseArgs([...args]), { ...basis, lies: (p: string) => (p.endsWith("register.json") ? readFileSync(p, "utf8") : "{kaputt") }).exitCode).toBe(1);
+  });
+  it("Lesefehler: ungültiges Register: Exit 1", () => {
     const r = cli.auswerten(cli.parseArgs(args), { ...basis, lies: () => JSON.stringify({ zeilen: [{ id: "x" }] }) });
     expect(r.exitCode).toBe(1);
     expect(r.text).toContain("Register ungültig");
@@ -518,6 +532,27 @@ describe("Grenzen und Zweige", () => {
       expect(r.exitCode).toBe(0);
       expect(angelegt).toHaveLength(1);
     });
+  });
+});
+
+describe("Fixtures: Verstoß und Dedupe bei offenem Ticket (AK 8)", () => {
+  const argv = ["--register", join(FIX, "register-solo.json"), "--export", join(FIX, "messpunkte-verstoss.json"), "--nach", "5"];
+  const offen = JSON.parse(readFileSync(join(FIX, "tickets-offen.json"), "utf8")) as Z[];
+  const lauf = (tickets: Z[]) => {
+    const angelegt: Z[] = [];
+    const r = cli.auswerten(cli.parseArgs(argv), { bezieher: false, heute: "2026-11-16", eigenerRepoTag: "fix-fabrik", repo: "o/r", label: "x", schreibe: () => undefined, ladeTickets: () => tickets, legeAn: (a: Z) => (angelegt.push(a), "u/99") });
+    return { r, angelegt };
+  };
+  it("ohne Ticket: ein Verstoß legt genau eins an", () => {
+    const { r, angelegt } = lauf([]);
+    expect(r.exitCode).toBe(0);
+    expect(angelegt).toHaveLength(1);
+  });
+  it("mit dem offenen Ticket zur selben Id: kein zweites", () => {
+    const { r, angelegt } = lauf(offen);
+    expect(r.exitCode).toBe(0);
+    expect(angelegt).toEqual([]);
+    expect(r.text).toContain("Ticket #7 besteht (open)");
   });
 });
 
