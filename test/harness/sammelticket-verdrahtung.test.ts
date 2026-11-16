@@ -52,21 +52,21 @@ describe("Refactoring-Sammelticket ist in main verdrahtet (factory#156)", () => 
     return ab.slice(0, ab.search(/\n\}\n/));
   };
 
-  test("das Ziel wird aus dem Label der Art gewählt (Produkt-Board bei codequalitaet), nicht aus dem Harness-Label", () => {
+  test("das Ziel wird aus dem Label der Art gewählt (Produkt-Board bei refactoring), nicht aus dem Harness-Label", () => {
     const main = rumpf("export async function main(") + rumpf("async function legeNeuAn(");
-    expect(main).toMatch(/const \{ label, ziel \} = zielOderAbbruch\(config, args\.art, d\.bezieher\);/);
+    expect(main).toMatch(/const \{ label, ziel, quelle \} = zielOderAbbruch\(config, args\.art, d\.bezieher\);/);
     const zf = rumpf("export function zielFuerArt(");
     expect(zf).toMatch(/const label = sammelLabel\(config, art\);/);
     expect(zf).toMatch(/sammelZiel\(config, label\)/);
     expect(main).toMatch(/legeAn\(\{[^}]*harness: label\s*[,}][^}]*\}?\)/);
   });
 
-  test("setzeErstePosition platziert codequalitaet über codequalitaetPlan und läuft auch ohne --top", () => {
+  test("setzeErstePosition platziert refactoring über codequalitaetPlan und läuft auch ohne --top", () => {
     const f = rumpf("function setzeErstePosition(");
-    expect(f).toMatch(/if \(!top && art !== "codequalitaet"\) return;/);
-    expect(f).toMatch(/art === "codequalitaet" \? codequalitaetPlan\(items, nr\) : planFuerArgs\(/);
+    expect(f).toMatch(/if \(!top && art !== "refactoring"\) return;/);
+    expect(f).toMatch(/art === "refactoring" \? codequalitaetPlan\(items, nr\) : planFuerArgs\(/);
     const main = rumpf("export async function main(") + rumpf("async function legeNeuAn(");
-    expect(main).toMatch(/\} else setzeErstePosition\(\{ art: args\.art,/); // bedingungslos: codequalitaet braucht kein --top
+    expect(main).toMatch(/\} else setzeErstePosition\(\{ art: args\.art,/); // bedingungslos: refactoring braucht kein --top
     expect(main).not.toMatch(/if \(args\.top\)\s*setzeErstePosition/);
   });
 });

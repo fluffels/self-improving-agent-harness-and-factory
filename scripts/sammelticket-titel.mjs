@@ -7,7 +7,7 @@ export const SAMMELTICKET_TITEL = "Harness-Härtung (gesammelt)";
 /** Titel des Sammeltickets für Langfuse-Befunde (Mechanik: docs/ticket-reihenfolge.md). */
 export const LANGFUSE_SAMMELTICKET_TITEL = "Langfuse-Befunde (gesammelt)";
 
-/** Titel des freiwilligen Refactoring-Sammeltickets für Code-Befunde außerhalb des Slices (im eigenen Repo des Beziehers, nur mit `labels.codequalitaet`; Mechanik: docs/ticket-reihenfolge.md). Nur dieser Titel wird angelegt. */
+/** Titel des Refactoring-Sammeltickets für Code-Befunde außerhalb des Slices (im eigenen Repo des Beziehers, Standard an, abschaltbar mit `labels.refactoring: false`; Mechanik: docs/ticket-reihenfolge.md). Nur dieser Titel wird angelegt. */
 export const REFACTORING_SAMMELTICKET_TITEL = "Refactoring (gesammelt)";
 
 /** Titel, die als Refactoring-Sammelticket erkannt werden: der neue und im Übergang der alte „Codequalität (gesammelt)“ (nur erkennen, nie anlegen). */

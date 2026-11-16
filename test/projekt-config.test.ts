@@ -24,6 +24,8 @@ import * as rawGlob from "../scripts/pfad-glob.mjs";
 
 interface Pc {
   pruefeProjektConfig(wert: unknown): string[];
+  refactoringEinstellung(config: unknown, o?: { bezieher?: boolean }): { an: boolean; label: string | null; quelle: string };
+  projektConfigHinweise(wert: unknown): string[];
   ladeProjektConfig(opt?: { rootDir?: string; pfad?: string; env?: Record<string, string | undefined> }): { repo: string };
   trenneConfigArg(argv: string[]): { args?: string[]; pfad?: string; fehler?: string };
   configAusAufruf(argv: string[], deps?: { lade?: (a: { pfad?: string }) => unknown }): { args: string[]; config?: unknown; fehler?: string };
@@ -356,6 +358,52 @@ describe("pruefeProjektConfig", () => {
     assert.match(gleich, /labels\.codequalitaet "area:werk"/);
     assert.match(gleich, /Fix:/);
     assert.match(mitLabel("").join("\n"), /labels\.codequalitaet muss ein nicht-leerer String/);
+  });
+
+  test("labels.refactoring (factory#594): Label-String oder false; true, leer, Zahl ungültig; nie gleich labels.harness; Alias codequalitaet", () => {
+    const mit = (schluessel: string, wert: unknown): string[] => {
+      const c = gueltig();
+      (c.labels as Record<string, unknown>)[schluessel] = wert;
+      return pc.pruefeProjektConfig(c);
+    };
+    assert.deepEqual(mit("refactoring", false), []);
+    assert.deepEqual(mit("refactoring", "area:code"), []);
+    for (const schlecht of [true, "", 0, null]) assert.match(mit("refactoring", schlecht).join("\n"), /labels\.refactoring muss ein nicht-leerer String \(Label\) oder false sein[\s\S]*Fix:/);
+    // die false-Ausnahme gilt nur für refactoring, nie für Pflichtschlüssel
+    assert.match(mit("harness", false).join("\n"), /labels\.harness muss ein nicht-leerer String sein/);
+    assert.match(mit("forum", false).join("\n"), /labels\.forum muss ein nicht-leerer String sein/);
+    assert.match(mit("refactoring", "area:werk").join("\n"), /labels\.refactoring "area:werk" führt nicht auf ein Produkt-Board/);
+    assert.match(mit("codequalitaet", "area:werk").join("\n"), /labels\.codequalitaet "area:werk" führt nicht/);
+    // ein gültiges refactoring verdeckt das Alias nicht: das wirksame ist refactoring
+    const beide = gueltig();
+    Object.assign(beide.labels as Record<string, unknown>, { refactoring: "area:code", codequalitaet: "area:werk" });
+    assert.deepEqual(pc.pruefeProjektConfig(beide), []);
+  });
+
+  test("refactoringEinstellung (factory#594): false aus, Label an, Alias, refactoring vor Alias; ohne Schlüssel nur im Bezieher an", () => {
+    const e = (labels: Record<string, unknown>, bezieher = false) => pc.refactoringEinstellung({ labels }, { bezieher });
+    assert.deepEqual(e({}, true), { an: true, label: null, quelle: "standard" });
+    assert.deepEqual(e({}), { an: false, label: null, quelle: "standard" });
+    assert.deepEqual(e({ refactoring: "area:code" }), { an: true, label: "area:code", quelle: "refactoring" });
+    assert.deepEqual(e({ refactoring: false }, true), { an: false, label: null, quelle: "aus" });
+    assert.deepEqual(e({ codequalitaet: "area:alt" }), { an: true, label: "area:alt", quelle: "codequalitaet" });
+    assert.deepEqual(e({ refactoring: "area:neu", codequalitaet: "area:alt" }), { an: true, label: "area:neu", quelle: "refactoring" });
+    assert.deepEqual(e({ refactoring: false, codequalitaet: "area:alt" }, true), { an: false, label: null, quelle: "aus" });
+    assert.deepEqual(pc.refactoringEinstellung(undefined, { bezieher: true }), { an: true, label: null, quelle: "standard" });
+  });
+
+  test("projektConfigHinweise (factory#594): Alias gibt einen Hinweis mit Fix, sonst keiner; kein Fehler in pruefeProjektConfig", () => {
+    const mit = (labels: Record<string, unknown>) => {
+      const c = gueltig();
+      Object.assign(c.labels as Record<string, unknown>, labels);
+      return c;
+    };
+    assert.deepEqual(pc.projektConfigHinweise(gueltig()), []);
+    assert.deepEqual(pc.projektConfigHinweise(mit({ refactoring: false })), []);
+    assert.match(pc.projektConfigHinweise(mit({ codequalitaet: "area:code" })).join("\n"), /labels\.codequalitaet ist veraltet[\s\S]*Fix: in labels\.refactoring umbenennen/);
+    assert.match(pc.projektConfigHinweise(mit({ codequalitaet: "area:code", refactoring: "area:code" })).join("\n"), /wird ignoriert[\s\S]*Fix: labels\.codequalitaet aus der Projekt-Config entfernen/);
+    assert.deepEqual(pc.pruefeProjektConfig(mit({ codequalitaet: "area:code" })), []);
+    assert.deepEqual(pc.projektConfigHinweise(null), []);
   });
 
   test("boards[].repo (ADR 0022 F10): optional, owner/name; boardRepo fällt auf das Repo der Config zurück", () => {

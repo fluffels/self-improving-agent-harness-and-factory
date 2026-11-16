@@ -155,7 +155,7 @@ export function voraussetzungenAus({ config, workflows, spiegel, besitz }) {
   const variablen = new Set();
   const labels = new Map();
   const merke = (name) => {
-    if (name && !labels.has(name.toLowerCase())) labels.set(name.toLowerCase(), name);
+    if (typeof name === "string" && name && !labels.has(name.toLowerCase())) labels.set(name.toLowerCase(), name);
   };
   for (const wert of Object.values(config.labels ?? {})) merke(wert);
   for (const { text } of workflows) {

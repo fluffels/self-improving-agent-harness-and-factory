@@ -547,7 +547,7 @@ export function begriffeAus(config) {
   // Env (#1824): der Commit-Zeilen-Präfix mit Unterstrich als Umgebungsvariablen-Präfix; die Wortgrenze davor schließt `VITE_<PRAEFIX>_…` und `__<PRAEFIX>_…__` aus.
   const envPraefix = altEnvPraefix(config);
   if (envPraefix !== null) out.Env = new RegExp("\\b" + escapeRegex(envPraefix) + "(?=[A-Z0-9])", "g");
-  const labels = Object.values(config.labels).filter((l) => l.includes(":"));
+  const labels = Object.values(config.labels).filter((l) => typeof l === "string" && l.includes(":")); // `labels.refactoring` darf `false` sein (factory#594)
   if (labels.length > 0) out.Label = new RegExp(alternative(labels), "g");
   out.Agent = new RegExp(alternative(Object.values(config.agenten)), "g");
   const skills = Object.values(config.skills ?? {}).filter((s) => typeof s === "string");

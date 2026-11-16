@@ -38,13 +38,14 @@ import { labelAus } from "./projekt-config-lib.mjs";
 import { PROFIL_ORDNER, WERKZEUG_HINWEIS, profilNamen, teile, vergleicheTags } from "./release-tag-lib.mjs";
 import { HAKEN_ZEILE } from "./sammelticket-titel.mjs";
 import { commitZeilenAus } from "./slice-override.mjs";
+import { ENTFERNTE_EXPORTE_PRAEFIX, TAG_MARKER } from "./ticket-drift-lib.mjs";
 import { factorySeiteIn } from "./factory-seite.mjs";
 import { geschlosseneMilestones, geschlossenSeit, titelBereinigt } from "./milestone-lib.mjs";
 import { fileURLToPath } from "node:url";
 
 const WURZEL = fileURLToPath(new URL("..", import.meta.url));
 
-export const TAG_MARKER = "🏷️ Tag ";
+export { TAG_MARKER };
 export const MIN_PRS = 3;
 export const MAX_ALTER_TAGE = 7;
 const MAX_ZEILEN = 50;
@@ -260,7 +261,7 @@ export function tagBody({ tag, letzterTag, sha, prs, aeltestes, ausloeser, ci, e
     `- Vorgeschlagener Tag: \`${tag}\` (Basis ${letzterTag}, Vorschlag nach Conventional Commits)`,
     `- Älteste ungetaggte Änderung: ${aeltestes.datum.slice(0, 10)} (${aeltestes.sha.slice(0, 7)})`,
     `- main-Commit: \`${sha}\``,
-    ...entfernt.map((x) => `- Entfernte Exporte (Breaking): \`${x.datei}\`: ${x.namen.join(", ")}`),
+    ...entfernt.map((x) => `- ${ENTFERNTE_EXPORTE_PRAEFIX} \`${x.datei}\`: ${x.namen.join(", ")}`),
     `- CI-Status dieses Commits: ${CI_TEXT[ci.zustand] ?? CI_TEXT.unbekannt}${ci.url ? ` ([Lauf](${ci.url}))` : ""}`,
     "",
     `Besitz-PRs seit ${letzterTag} (${prs.length}):`,

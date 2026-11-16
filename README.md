@@ -13,6 +13,8 @@ Ein Regelwerk samt Werkzeugen, mit dem Coding-Agenten Tickets von der Auswahl bi
 
 Menschliche Stopps gibt es nur bei Irreversiblem und bei Außenwirkung. Das Zielbild heißt Dark Factory; der Harness strebt sie an und ist noch keine.
 
+Befehle: [docs/referenz/befehle.md](docs/referenz/befehle.md); Einstiegsseiten des Projekt-Brains: [docs/referenz/anlaufstellen.md](docs/referenz/anlaufstellen.md).
+
 Einstieg für Nutzer und Bezieher (Konfigurationsebenen, Umgebungsvariablen, Updates, Einrichtung): [docs/factory/fabrik-einstieg.md](docs/factory/fabrik-einstieg.md).
 
 ## Voraussetzungen
