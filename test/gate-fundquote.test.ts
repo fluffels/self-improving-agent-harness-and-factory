@@ -1,5 +1,7 @@
 /* Gate-Fundquote (factory#39): Verhalten von scripts/gate-fundquote.mjs. Fixtures mit synthetischem Paket, IO ist injiziert. */
-import { readFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, expect, test, vi } from "vitest";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as gfModule from "../scripts/gate-fundquote.mjs";
@@ -588,5 +590,254 @@ describe("main", () => {
     const b = basis({ findeSessions: () => [sessionMit([alt, neu])] });
     gf.main(["--json"], b.deps);
     expect(json(b.log.mock.calls[0][0]).quellen.transkript.gezaehlt).toBe(1);
+  });
+});
+
+// ── Wächter-Fänge (factory#607, Regel 7) ────────────────────────────────────
+
+type Waechter = { faenge: string[]; ausgeschlossen: { datei: string; grund: string }[] };
+const wf = gfModule as {
+  faengeAusText: (z: string[]) => { vitest: boolean; faenge: string[]; ausgeschlossen: { datei: string; grund: string }[] };
+  waechterPunkte: (l: (Lauf & { ts: number; waechter?: Waechter })[], d: string[]) => { datei: string; einheitId: string; ts: number; wert: number }[];
+  waechterLuecke: (l: Lauf[]) => string;
+  waechterExport: (p: { datei: string; einheitId: string; ts: number; wert: number }[], luecke: string) => Record<string, unknown>;
+  waechterDateien: (o: string, liste?: (p: string) => string[]) => string[];
+};
+const A = "test/harness/a.test.ts";
+const B = "test/harness/b.test.ts";
+const summe = ["", " Test Files  1 failed | 3 passed (4)", "      Tests  1 failed (9)"];
+
+describe("faengeAusText", () => {
+  test("FAIL-Zeile mit Assertion ist ein Fang; mehrere Tests derselben Datei zählen einmal", () => {
+    const z = [` FAIL  ${A} > Suite > eins`, "AssertionError: expected 1 to be 2", ` FAIL  ${A} > Suite > zwei`, "AssertionError: x", ...summe];
+    expect(wf.faengeAusText(z)).toEqual({ vitest: true, faenge: [A], ausgeschlossen: [] });
+  });
+  test("Workspace-Projekt |name| vor dem Pfad und Backslash-Pfade werden erkannt", () => {
+    const z = [` FAIL  |unit| ${A} > x`, " FAIL  test\\harness\\b.test.ts > y", ...summe];
+    expect(wf.faengeAusText(z).faenge).toEqual([A, B]);
+  });
+  test("Negativfall: Zeitlimit, Signal-Abbruch und Infrastruktur sind kein Fang", () => {
+    const z = [
+      ` FAIL  ${A} > t`, "Error: Test timed out in 5000ms.",
+      ` FAIL  ${B} > t`, "Error: getaddrinfo ENOTFOUND registry.example",
+      " FAIL  test/harness/c.test.ts > t", "Killed by SIGTERM",
+      ...summe,
+    ];
+    expect(wf.faengeAusText(z)).toEqual({
+      vitest: true,
+      faenge: [],
+      ausgeschlossen: [{ datei: A, grund: "Zeitlimit" }, { datei: B, grund: "Infrastruktur" }, { datei: "test/harness/c.test.ts", grund: "Abbruch" }],
+    });
+  });
+  test("ein Zeitlimit in einem Test schließt einen echten Fang derselben Datei nicht aus", () => {
+    const z = [` FAIL  ${A} > t1`, "Error: Test timed out in 5000ms.", ` FAIL  ${A} > t2`, "AssertionError: x", ...summe];
+    expect(wf.faengeAusText(z)).toEqual({ vitest: true, faenge: [A], ausgeschlossen: [] });
+  });
+  test("der Ausschlussgrund eines Blocks greift nicht auf den nächsten Test über", () => {
+    const z = [` FAIL  ${A} > t1`, "AssertionError: x", ` FAIL  ${B} > t2`, "Error: Test timed out in 5000ms."];
+    expect(wf.faengeAusText(z)).toMatchObject({ faenge: [A], ausgeschlossen: [{ datei: B, grund: "Zeitlimit" }] });
+  });
+  test("ohne Vitest-Summe ist vitest falsch; grüne Ausgabe hat keine Fänge", () => {
+    expect(wf.faengeAusText([" ✓ test/harness/a.test.ts (3 tests)"])).toEqual({ vitest: false, faenge: [], ausgeschlossen: [] });
+    expect(wf.faengeAusText([" Test Files  4 passed (4)"])).toMatchObject({ vitest: true, faenge: [] });
+  });
+});
+
+describe("Wächter-Fänge in den Läufen", () => {
+  const rot = [` FAIL  ${A} > t`, "AssertionError: x", ...summe];
+  test("CI-Log: der rote Schritt trägt waechter, ein Schritt ohne Vitest-Summe nicht", () => {
+    const z = (sek: number, text: string) => `Tests\tVerify\t2026-11-01T10:00:${String(sek).padStart(2, "0")}.1Z ${text}`;
+    const text = [z(0, "##[group]Run npm test"), z(1, "> beispiel@1.0.0 test"), ...rot.map((t, i) => z(2 + i, t)), z(9, "##[error]Process completed with exit code 1.")].join("\n");
+    const l = gf.laeufeAusCiLog(text, { id: "90", ctx }) as unknown as { waechter?: Waechter }[];
+    expect(l[0].waechter).toEqual({ faenge: [A], ausgeschlossen: [] });
+    const ohne = [z(0, "##[group]Run npm run lint"), z(1, "> beispiel@1.0.0 lint"), z(2, "fertig")].join("\n");
+    expect((gf.laeufeAusCiLog(ohne, { id: "91", ctx }) as unknown as { waechter?: Waechter }[])[0].waechter).toBeUndefined();
+  });
+  test("Transkript: Exit 1 mit FAIL-Zeile trägt waechter", () => {
+    const l = laeufe([{ command: "npm test", text: `Exit code 1\n${kopf("test")}${rot.join("\n")}`, fehler: true }]) as unknown as { waechter?: Waechter }[];
+    expect(l[0].waechter).toEqual({ faenge: [A], ausgeschlossen: [] });
+  });
+});
+
+describe("waechterPunkte und waechterLuecke", () => {
+  const lauf = (id: string, waechter: Waechter | undefined, extra: Record<string, unknown> = {}) => ({ quelle: "ci", id, ts: T0, gezaehlt: true, gates: [], waechter, ...extra });
+  test("1 für einen Fang, 0 für einen Lauf ohne Fang, kein Punkt bei ausgeschlossenem Rot", () => {
+    const l = [lauf("1", { faenge: [A], ausgeschlossen: [] }), lauf("2", { faenge: [], ausgeschlossen: [{ datei: B, grund: "Zeitlimit" }] })];
+    const p = wf.waechterPunkte(l, [A, B]);
+    expect(p.map((x) => [x.einheitId.split(":")[1], x.datei, x.wert])).toEqual([["1", A, 1], ["1", B, 0], ["2", A, 0]]);
+  });
+  test("nicht gezählte Läufe und Läufe ohne Vitest-Ausgabe liefern keine Punkte (nie eine 0)", () => {
+    const l = [lauf("1", undefined), lauf("2", { faenge: [A], ausgeschlossen: [] }, { gezaehlt: false, grund: "abgebrochen" })];
+    expect(wf.waechterPunkte(l, [A])).toEqual([]);
+    expect(wf.waechterLuecke([])).toMatch(/keine Logs im Fenster/);
+    expect(wf.waechterLuecke(l)).toMatch(/2 Läufe, davon 1 nicht gezählt/);
+  });
+  test("die Einheit-Id ist je Lauf eindeutig, auch bei gleicher Session", () => {
+    const l = [lauf("s", { faenge: [], ausgeschlossen: [] }, { ts: T0 }), lauf("s", { faenge: [], ausgeschlossen: [] }, { ts: T0 + 1 })];
+    expect(new Set(wf.waechterPunkte(l, [A]).map((x) => x.einheitId)).size).toBe(2);
+  });
+});
+
+describe("Messpunkte-Export der Wächter-Fänge", () => {
+  const basis = (extra: Record<string, unknown> = {}) => {
+    const log = vi.fn<(t: string) => void>();
+    const err = vi.fn<(t: string) => void>();
+    return { log, err, deps: { pkg, findeSessions: () => [], ladeSession: () => ({ id: "s", main: [], subagents: [] }), gh: () => "[]", liesDatei: lies, log, err, jetzt: () => T0 + 86_400_000, ...extra } };
+  };
+  const z = (sek: number, text: string) => `Tests\tVerify\t2026-11-01T10:00:${String(sek).padStart(2, "0")}.1Z ${text}`;
+  const log = (block: string[]) =>
+    [z(0, "##[group]Run npm test"), z(1, "> beispiel@1.0.0 test"), ...block.map((t, i) => z(2 + i, t)), z(30, " Test Files  1 failed | 1 passed (2)"), z(31, "##[error]Process completed with exit code 1.")].join("\n");
+  const argv = ["--von", "2026-11-01", "--bis", "2026-11-02", "--ci-log", "x.txt", "--waechter-dir", "test/harness"];
+  const lauf = (text: string, dateien: string[] = [A, B]) => {
+    const b = basis({ liesDatei: () => text, waechterDateien: () => dateien });
+    return { exit: gf.main(argv, b.deps), out: b.log.mock.calls.map((c) => c[0]) };
+  };
+  type Export = { art: string; quelle: string; luecke?: string; punkte: { parameter: string; wert: number; einheitId: string; zeitpunkt: string }[] };
+
+  test("ein roter Wächter ergibt 1, der grüne daneben 0, je Lauf eine Einheit-Id", () => {
+    const r = lauf(log([` FAIL  ${A} > t`, "AssertionError: x"]));
+    const e = JSON.parse(r.out[0]) as Export;
+    expect(r.exit).toBe(0);
+    expect([e.art, e.quelle]).toEqual(["fangquote-messpunkte", "gate-fundquote"]);
+    expect(e.punkte.map((p) => [p.parameter, p.wert])).toEqual([[A, 1], [B, 0]]);
+    expect(new Set(e.punkte.map((p) => p.einheitId)).size).toBe(1);
+    expect(e).not.toHaveProperty("luecke");
+  });
+
+  test("Negativfall: ein Zeitlimit ist kein Fang, die Datei bekommt in diesem Lauf keinen Punkt", () => {
+    const e = JSON.parse(lauf(log([` FAIL  ${A} > t`, "Error: Test timed out in 5000ms."])).out[0]) as Export;
+    expect(e.punkte.map((p) => [p.parameter, p.wert])).toEqual([[B, 0]]);
+  });
+
+  test("Negativfall: ohne Logs keine Punkte, die Lücke nennt den Grund (nie eine 0)", () => {
+    const e = JSON.parse(lauf("").out[0]) as Export;
+    expect(e.punkte).toEqual([]);
+    expect(e.luecke).toMatch(/keine Logs im Fenster/);
+  });
+
+  test("Läufe ohne Vitest-Ausgabe liefern ebenfalls eine Lücke, keine Nullen", () => {
+    const e = JSON.parse(lauf([z(0, "##[group]Run npm run lint"), z(1, "> beispiel@1.0.0 lint"), z(2, "fertig")].join("\n")).out[0]) as Export;
+    expect(e.punkte).toEqual([]);
+    expect(e.luecke).toMatch(/keine gezählten Läufe mit Vitest-Ausgabe/);
+  });
+
+  test("ohne Testdateien unter dem Ordner ist es eine Lücke mit dem Ordnernamen", () => {
+    const e = JSON.parse(lauf(log([]), []).out[0]) as Export;
+    expect(e).toMatchObject({ punkte: [], luecke: "keine Testdateien unter test/harness" });
+  });
+
+  test("ohne --waechter-dir bleibt es beim Bericht; --waechter-dir ohne Wert ist Exit 2", () => {
+    const b = basis({ liesDatei: () => log([]) });
+    expect(gf.main(["--von", "2026-11-01", "--bis", "2026-11-02", "--ci-log", "x.txt"], b.deps)).toBe(0);
+    expect(b.log.mock.calls[0][0]).toMatch(/^Gate-Fundquote/);
+    expect(gf.main(["--waechter-dir"], basis().deps)).toBe(2);
+  });
+
+  test("waechterDateien: nur Testdateien, mit / und relativ, sortiert; waechterExport trägt luecke nur ohne Punkte", () => {
+    expect(wf.waechterDateien("test/harness", () => ["b.test.ts", "sub\\a.spec.mts", "hilfe.ts", "README.md"])).toEqual(["test/harness/b.test.ts", "test/harness/sub/a.spec.mts"]);
+    expect(wf.waechterExport([], "g")).toMatchObject({ luecke: "g", punkte: [] });
+    expect(wf.waechterExport([{ datei: A, einheitId: "e", ts: 0, wert: 1 }], "g")).not.toHaveProperty("luecke");
+  });
+});
+
+// ── Runde 1: Nachschärfung der Wächter-Fänge (Lens-Funde) ───────────────────
+
+describe("faengeAusText: Muster und Grenzen", () => {
+  const ESC = String.fromCharCode(27);
+  const lauf = (...z: string[]) => wf.faengeAusText([...z, ...summe]);
+
+  test("Farbcodes vor FAIL und Summe stören nicht (gh-Log mit ESC-Sequenzen)", () => {
+    const z = [`${ESC}[41m${ESC}[1m FAIL ${ESC}[22m${ESC}[49m ${A}${ESC}[2m > ${ESC}[22mx`, `${ESC}[2m Test Files ${ESC}[22m ${ESC}[31m1 failed${ESC}[39m`];
+    expect(wf.faengeAusText(z)).toEqual({ vitest: true, faenge: [A], ausgeschlossen: [] });
+  });
+
+  test.each([
+    ["Hook timed out", "Error: Hook timed out in 10000ms.", "Zeitlimit"],
+    ["Timeout of exceeded", "Error: Timeout of 5000 ms exceeded", "Zeitlimit"],
+    ["Großschreibung", "ERROR: TEST TIMED OUT IN 5000MS", "Zeitlimit"],
+    ["SIGKILL", "Process exited with SIGKILL", "Abbruch"],
+    ["SIGINT", "received SIGINT", "Abbruch"],
+    ["Terminated", "Terminated", "Abbruch"],
+    ["ECONNRESET", "Error: read ECONNRESET", "Infrastruktur"],
+    ["ECONNREFUSED", "connect ECONNREFUSED 127.0.0.1:1", "Infrastruktur"],
+    ["ETIMEDOUT", "connect ETIMEDOUT", "Infrastruktur"],
+    ["EAI_AGAIN", "getaddrinfo EAI_AGAIN host", "Infrastruktur"],
+    ["ENOSPC", "ENOSPC: no space left on device", "Infrastruktur"],
+    ["socket hang up", "Error: socket hang up", "Infrastruktur"],
+  ])("Negativfall %s ist kein Fang", (_n, text, grund) => {
+    expect(lauf(` FAIL  ${A} > t`, text)).toEqual({ vitest: true, faenge: [], ausgeschlossen: [{ datei: A, grund }] });
+  });
+
+  test("ein Wort wie Terminated mitten im Satz ist kein Abbruch", () => {
+    expect(lauf(` FAIL  ${A} > t`, "AssertionError: Terminated early expected").faenge).toEqual([A]);
+  });
+
+  test("FAIL-Zeile: nur am Zeilenanfang, Pfad endet am Zeilenende oder Leerzeichen, spec und mjs zählen", () => {
+    expect(lauf("x FAIL  test/harness/a.test.ts > t").faenge).toEqual([]);
+    expect(lauf(" FAIL  test/harness/a.test.ts.snap > t").faenge).toEqual([]);
+    expect(lauf(" FAIL  test/harness/a.spec.mjs").faenge).toEqual(["test/harness/a.spec.mjs"]);
+    expect(lauf(" FAIL  test/harness/a.test.tsx > t").faenge).toEqual(["test/harness/a.test.tsx"]);
+    expect(lauf(" FAIL  test/harness/a.test.jsx > t").faenge).toEqual(["test/harness/a.test.jsx"]);
+  });
+
+  test("die Vitest-Summe braucht eine Zahl", () => {
+    expect(wf.faengeAusText(["Test Files"]).vitest).toBe(false);
+    expect(wf.faengeAusText(["Test Files  3 passed"]).vitest).toBe(true);
+  });
+
+  test("Blockgrenze: ein Ausschlussgrund in der 25. Zeile des Blocks zählt, in der 26. nicht", () => {
+    const fuell = (n: number) => Array.from({ length: n }, () => "zeile");
+    const ab = (n: number) => wf.faengeAusText([` FAIL  ${A} > t`, ...fuell(n), "Error: Test timed out in 5ms."]);
+    expect(ab(23).ausgeschlossen).toHaveLength(1);
+    expect(ab(24).faenge).toEqual([A]);
+  });
+});
+
+describe("Wächter-Fänge: Transkript und persistierte Ausgabe", () => {
+  const rot = [` FAIL  ${A} > t`, "AssertionError: x", ...summe].join("\n");
+  const marker = "<persisted-output>\nOutput too large (84.7KB). Full output saved to: /x/proj/sess1/tool-results/abc.txt\n\nPreview (first 2KB):\n";
+
+  test("die persistierte Ausgabe liefert die Fänge", () => {
+    const l = laeufe([{ command: "npm test", text: `Exit code 1\n${marker}`, fehler: true }], { liesDatei: () => `${kopf("test")}${rot}` }) as unknown as { waechter?: Waechter }[];
+    expect(l[0].waechter).toEqual({ faenge: [A], ausgeschlossen: [] });
+  });
+
+  test("Transkript-Läufe fließen in den Export (ohne CI-Quelle)", () => {
+    const log = vi.fn<(t: string) => void>();
+    const aufruf = { command: "npm test", text: `Exit code 1\n${kopf("test")}${rot}`, fehler: true, ts: T0 };
+    const deps = { pkg, findeSessions: () => [{ id: "s", main: zeilen([aufruf]), subagents: [] }], gh: () => "[]", liesDatei: lies, log, err: vi.fn(), jetzt: () => T0 + 86_400_000, waechterDateien: () => [B, A] };
+    expect(gf.main(["--waechter-dir", "test/harness"], deps)).toBe(0);
+    const e = JSON.parse(log.mock.calls[0][0]) as { punkte: { parameter: string; wert: number }[] };
+    expect(e.punkte.map((p) => [p.parameter, p.wert])).toEqual([[B, 0], [A, 1]]);
+  });
+
+  test("sammle ohne zusätzliche Flags lehnt ein fremdes Flag ab, mit zusatz nimmt es an", () => {
+    const sammle = (gfModule as { sammle: (a: string[], d: Record<string, unknown>, z?: Record<string, unknown>) => { exit?: number; werte?: Record<string, unknown> } }).sammle;
+    const d = { pkg, findeSessions: () => [], gh: () => "[]", liesDatei: lies, err: vi.fn(), jetzt: () => T0 };
+    expect(sammle(["--extra", "1"], d).exit).toBe(2);
+    expect(sammle(["--extra", "1"], d, { extra: { type: "string" } }).werte?.extra).toBe("1");
+  });
+});
+
+describe("waechterDateien: Produktionsweg", () => {
+  test("liest einen echten Ordner rekursiv, sortiert, nur Testdateien", () => {
+    const wurzel = mkdtempSync(join(tmpdir(), "gf-"));
+    try {
+      mkdirSync(join(wurzel, "sub"));
+      for (const f of ["z.test.ts", "sub/a.test.ts", "hilfe.ts", "sub/b.test.ts.snap"]) writeFileSync(join(wurzel, f), "");
+      const ordner = wurzel.replace(/\\/g, "/");
+      expect((gfModule as { waechterDateien: (o: string) => string[] }).waechterDateien(ordner)).toEqual([`${ordner}/sub/a.test.ts`, `${ordner}/z.test.ts`]);
+    } finally {
+      rmSync(wurzel, { recursive: true, force: true });
+    }
+  });
+
+  test("die Standard-Zugriffe von main tragen den echten waechterDateien", () => {
+    const z = (gfModule as { standardZugriffe: () => { waechterDateien: unknown } }).standardZugriffe();
+    expect(z.waechterDateien).toBe((gfModule as { waechterDateien: unknown }).waechterDateien);
+  });
+
+  test("Eingabe in umgekehrter Reihenfolge kommt sortiert heraus", () => {
+    expect(wf.waechterDateien("t", () => ["b.test.ts", "a.test.ts"])).toEqual(["t/a.test.ts", "t/b.test.ts"]);
   });
 });

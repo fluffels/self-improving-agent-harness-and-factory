@@ -8,7 +8,7 @@
  */
 
 /** Erlaubte Quellen einer Messgröße. */
-export const QUELLEN = ["langfuse", "transkript", "lauf-ergebnis", "factory-kennzahlen"];
+export const QUELLEN = ["langfuse", "transkript", "lauf-ergebnis", "factory-kennzahlen", "gate-fundquote"];
 
 /** Art einer Messgröße: Kostenmaß oder Qualitätsmaß (die Toleranz verlangt ein Qualitätsmaß). */
 export const ARTEN = ["kosten", "qualitaet"];
@@ -19,6 +19,9 @@ export const PARAMETER = {
   brille: ["architektur", "requirement-treue", "test-adaequanz", "sicherheit", "doku"],
 };
 
+/** Parameter mit freiem Text statt fester Liste: `ziel` ist der Pfad eines Wächters oder der Anker einer Regel (factory#607). */
+export const FREIE_PARAMETER = ["ziel"];
+
 /** Messgrößen-Katalog (Startumfang): Schlüssel → { titel, quelle, art, parameter? }. */
 export const MESSGROESSEN = {
   "kosten-je-ticket": { titel: "Median Kosten je Ticket (gesamt)", quelle: "langfuse", art: "kosten" },
@@ -26,6 +29,7 @@ export const MESSGROESSEN = {
   "nacharbeit-quote": { titel: "Nacharbeit-Quote (Revert oder `Folge #` binnen 14 Tagen)", quelle: "lauf-ergebnis", art: "qualitaet" },
   "ci-fix-runden": { titel: "CI-Fix-Runden je PR", quelle: "lauf-ergebnis", art: "qualitaet" },
   "blocker-schwere-brille": { titel: "Blocker nach Schwere je Brille", quelle: "lauf-ergebnis", art: "qualitaet", parameter: "brille" },
+  fangquote: { titel: "Fangquote je Wächter oder Regel (Anteil der Testläufe mit rotem Wächter)", quelle: "gate-fundquote", art: "qualitaet", parameter: "ziel" },
 };
 
 export const RICHTUNGEN = ["steigt", "faellt"];
@@ -109,6 +113,7 @@ const pruefeMessgroesse = (z, p) => {
   if (!eintrag) return [`${p}messgroesse: unbekannte Messgröße ${String(z.messgroesse)}`];
   if (!eintrag.parameter) return z.parameter === undefined ? [] : [`${p}parameter: ${z.messgroesse} hat keinen Parameter`];
   if (z.parameter === undefined) return [`${p}parameter: ${z.messgroesse} verlangt den Parameter ${eintrag.parameter}`];
+  if (FREIE_PARAMETER.includes(eintrag.parameter)) return istText(z.parameter) ? [] : [`${p}parameter: nicht leerer Text erwartet (${eintrag.parameter})`];
   return PARAMETER[eintrag.parameter].includes(z.parameter) ? [] : [`${p}parameter: ${String(z.parameter)} nicht in ${eintrag.parameter} (${PARAMETER[eintrag.parameter].join(", ")})`];
 };
 
@@ -140,9 +145,51 @@ const pruefeObjekte = (z, p) => {
   return f;
 };
 
+/** Pflichtfelder der Zeilenart `verfall` (factory#607); `durch` ist optional und nur bei Regeln erlaubt. */
+export const VERFALL_PFLICHTFELDER = ["id", "art", "ziel", "aufgenommen", "ablauf", "messgroesse"];
+
+/** Pur: ist `ziel` eine Regel (Anker mit `#`) und kein Wächter (Pfad)? */
+export const istRegelZiel = (ziel) => typeof ziel === "string" && ziel.includes("#");
+
+const pruefeVerfallDurch = (z, p) => {
+  if (z.durch === undefined) return [];
+  if (!istRegelZiel(z.ziel)) return [`${p}durch: nur bei Regeln erlaubt (ziel mit Anker #), ein Wächter hat kein durch`];
+  const ok = Array.isArray(z.durch) && z.durch.length > 0 && z.durch.every((d) => typeof d === "string" && /^[a-z0-9-]+$/.test(d));
+  return ok ? [] : [`${p}durch: nicht leere Liste von Ids (nur [a-z0-9-]) erwartet`];
+};
+
+const pruefeVerfallFelder = (z, p) => {
+  const f = [];
+  for (const feld of VERFALL_PFLICHTFELDER) if (z[feld] === undefined) f.push(`${p}Pflichtfeld ${feld} fehlt`);
+  const unbekannt = Object.keys(z).filter((k) => !VERFALL_PFLICHTFELDER.includes(k) && k !== "durch");
+  if (unbekannt.length > 0) f.push(`${p}unbekannte Felder ${unbekannt.join(", ")}`);
+  return f;
+};
+
+const pruefeVerfall = (z, p) => {
+  const f = pruefeVerfallFelder(z, p);
+  if (z.id !== undefined && !(typeof z.id === "string" && /^[a-z0-9-]+$/.test(z.id))) f.push(`${p}id: nur [a-z0-9-] erwartet`);
+  if (z.ziel !== undefined && !istText(z.ziel)) f.push(`${p}ziel: Pfad oder Anker (nicht leerer Text) erwartet`);
+  for (const feld of ["aufgenommen", "ablauf"]) if (z[feld] !== undefined && !istDatum(z[feld])) f.push(`${p}${feld}: Datum JJJJ-MM-TT erwartet`);
+  if (istDatum(z.aufgenommen) && istDatum(z.ablauf) && z.ablauf <= z.aufgenommen) f.push(`${p}ablauf: muss nach aufgenommen liegen`);
+  if (z.messgroesse !== undefined && z.messgroesse !== "fangquote") f.push(`${p}messgroesse: bei art verfall nur fangquote erwartet`);
+  return [...f, ...pruefeVerfallDurch(z, p)];
+};
+
+/** Jede Id in `durch` nennt eine Verfall-Zeile mit Wächter-Ziel (Pfad ohne Anker). */
+const pruefeDurchVerweise = (zeilen) => {
+  const verfall = zeilen.filter((z) => istObjekt(z) && z.art === "verfall");
+  return verfall.flatMap((z) =>
+    (Array.isArray(z.durch) ? z.durch : [])
+      .filter((id) => !verfall.some((w) => w.id === id && istText(w.ziel) && !istRegelZiel(w.ziel)))
+      .map((id) => `Verfall ${String(z.id)}: durch ${String(id)} nennt keinen Wächter (Verfall-Zeile mit Pfad als ziel)`),
+  );
+};
+
 const pruefeZeile = (z, i) => {
   const p = `Zeile ${i + 1}${istText(z?.id) ? ` (${z.id})` : ""}: `;
   if (!istObjekt(z)) return [`${p}Objekt erwartet`];
+  if (z.art === "verfall") return pruefeVerfall(z, p);
   const f = [];
   for (const feld of PFLICHTFELDER) if (z[feld] === undefined) f.push(`${p}Pflichtfeld ${feld} fehlt`);
   const unbekannt = Object.keys(z).filter((k) => !PFLICHTFELDER.includes(k) && !OPTIONALE_FELDER.includes(k));
@@ -153,7 +200,7 @@ const pruefeZeile = (z, i) => {
 /** Pur: Schema des Registers (Liste der Zeilen). Doppelte Ids sind rot. */
 export const pruefeRegister = (zeilen) => {
   if (!Array.isArray(zeilen)) return ["zeilen: Liste erwartet"];
-  const fehler = zeilen.flatMap(pruefeZeile);
+  const fehler = [...zeilen.flatMap(pruefeZeile), ...pruefeDurchVerweise(zeilen)];
   const gesehen = new Set();
   for (const z of zeilen) {
     if (!istObjekt(z) || typeof z.id !== "string") continue;
@@ -230,12 +277,15 @@ const tageZu = (datum, n) => {
 /** Pur: Marker im Ticket-Body, über den die Anlage dedupliziert (alle Zustände). */
 export const markerFuer = (id) => `<!-- aenderungsregister:${id} -->`;
 
+/** Erlaubte `art` eines Messpunkte-Exports; `fangquote-messpunkte` ist die Kennung des Kern-Skripts `gate-fundquote.mjs` (Quelle `gate-fundquote`). */
+export const EXPORT_ARTEN = ["aenderungsregister-messpunkte", "fangquote-messpunkte"];
+
 /** Pur: ein Messpunkte-Export `{ art: "aenderungsregister-messpunkte", quelle, punkte[] }` → `{ quelle, punkte }`; wirft bei jeder Formabweichung (nie ein Teilwert). */
 export const leseMesspunkte = (json, pfad) => {
   const wirf = (text) => {
     throw new Error(`${pfad}: ${text}`);
   };
-  if (!istObjekt(json) || json.art !== "aenderungsregister-messpunkte") wirf('art "aenderungsregister-messpunkte" erwartet');
+  if (!istObjekt(json) || !EXPORT_ARTEN.includes(json.art)) wirf(`art "${EXPORT_ARTEN[0]}" erwartet (Quelle gate-fundquote auch "${EXPORT_ARTEN[1]}")`);
   if (!QUELLEN.includes(json.quelle)) wirf(`quelle: ${QUELLEN.join(" | ")} erwartet`);
   if (!Array.isArray(json.punkte)) wirf("punkte: Liste erwartet");
   json.punkte.forEach((p, i) => {
@@ -390,7 +440,9 @@ const ausgewertet = (u) => u.urteil === "eingehalten" || u.urteil === "Verstoß"
  * Pur: `{ heute, zeilen: [{ id, fabrik, bezieher }] }`. Die Überlappungsgruppen bilden sich über alle Zeilen des Registers, deren Fenster sich berühren
  * (auch nicht fällige und Lücken stehen in `mit`); zu `Überlappung` wird nur eine fällige, ausgewertete Zeile (Vorrang: noch nicht fällig und Lücke gehen vor).
  */
-export function auswertung(register, exporte, { heute, eigenerRepoTag, repoTagAb = REPO_TAG_AB, fehlend = [] }) {
+export function auswertung(registerRoh, exporte, { heute, eigenerRepoTag, repoTagAb = REPO_TAG_AB, fehlend = [] }) {
+  // Verfall-Zeilen (factory#607) tragen keine Toleranz und gehören nicht in die Wirkungsprüfung.
+  const register = { ...registerRoh, zeilen: registerRoh.zeilen.filter((z) => z.art !== "verfall") };
   const einzel = {};
   for (const bereich of BEREICHE) {
     const kontext = bereichKontext(exporte, bereich, { eigenerRepoTag, repoTagAb, fehlend });
@@ -476,3 +528,28 @@ export function renderMarkdown(ergebnis, tickets = []) {
   const t = tickets.length ? ["", "## Tickets", ...tickets.map((x) => `- ${x}`)] : [];
   return ["# Änderungsregister: Wirkungsprüfung", "", `Stand: ${ergebnis.heute}`, "", "| Zeile | Bereich | Urteil | Messung |", "| --- | --- | --- | --- |", ...z, ...t].join("\n");
 }
+
+// ---------------------------------------------------------------------------------------------------------------------
+// Fangquote (factory#607, Teil 1/4 von factory#517): Quote je Wächter und Regel aus den Messpunkten der Quelle gate-fundquote.
+// ---------------------------------------------------------------------------------------------------------------------
+
+/**
+ * Pur: Fangquote einer Verfall-Zeile aus Messpunkten (`leseMesspunkte`-Form) im Fenster aufgenommen bis ablauf: `{ wert, laeufe, faenge }` oder `{ luecke: grund }`.
+ * Eine Regel wird über ihre erzwingenden Wächter (`durch`) gemessen (Fang = mindestens einer rot); ohne `durch` ist sie eine Lücke, nie 0. Ohne Messpunkte ebenfalls Lücke.
+ */
+export const fangquote = (zeile, zeilen, punkte) => {
+  let ziele = [zeile.ziel];
+  if (istRegelZiel(zeile.ziel)) {
+    if (!Array.isArray(zeile.durch) || zeile.durch.length === 0) return { luecke: "kein erzwingender Wächter (durch)" };
+    ziele = zeile.durch.map((id) => zeilen.find((z) => z.art === "verfall" && z.id === id)?.ziel);
+    if (ziele.some((z) => typeof z !== "string" || istRegelZiel(z))) return { luecke: "durch nennt keinen Wächter des Registers" };
+  }
+  const laeufe = new Map();
+  for (const p of punkte) {
+    if (p.messgroesse !== "fangquote" || !ziele.includes(p.parameter) || tagVon(p.zeitpunkt) < zeile.aufgenommen || tagVon(p.zeitpunkt) > zeile.ablauf) continue;
+    laeufe.set(p.einheitId, laeufe.get(p.einheitId) === true || p.wert > 0);
+  }
+  if (laeufe.size === 0) return { luecke: "keine Messpunkte im Fenster (Logs fehlen)" };
+  const faenge = [...laeufe.values()].filter(Boolean).length;
+  return { wert: faenge / laeufe.size, laeufe: laeufe.size, faenge };
+};
