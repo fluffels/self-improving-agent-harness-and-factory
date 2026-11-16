@@ -9,8 +9,7 @@
  * MCP-Verbindung der Session (factory#323 L1/L7/L18): der Langfuse-MCP verbindet nur beim Session-Start, Health allein sagt darüber nichts. Nach grüner Health (Standard- und --json-Modus, nicht bei --sessionstart: Race beim Start) wertet das Skript
  * die Logs `mcp-logs-langfuse` der letzten 24 h aus (Lib mcp-log-lib.mjs): getrennt (letzter Verbindungsversuch fehlgeschlagen) → Exit 1 mit Hinweis `/mcp` → langfuse neu verbinden oder Session neu starten; bei abweichender MCP-URL (Host/Port) nennt der Hinweis das.
  * Die Session-ID wechselt nach /clear oder Resume (Prozess und Log-Datei bleiben), Sub-Agenten teilen sie: Ohne eigenen `Starting connection` zählt die Log-Datei mit eigenen Zeilen (`prozess`); ohne jede eigene Zeile der jüngste Versuch im Projekt (Rückfall auf eine fremde Session: getrennt bleibt getrennt, verbunden wird nicht prüfbar). Nur unter Claude Code (`CLAUDECODE=1`); sonst, ohne Log oder bei Lesefehler steht „nicht prüfbar (Grund)“ auf stderr, Exit 0. `--json` bekommt additiv das Feld `mcp` und behält den Exit der Health-Prüfung (Cockpit-Vertrag).
- * Adresse: `LANGFUSE_BASE_URL` (Umgebung, sonst Plugin-Optionen der User-Settings via `basisUrlAus` aus langfuse-zugang.mjs, nie Secret-Dateien), sonst http://localhost:3000. Datenschutz (ADR 0019): zeigt die Basis-URL nicht auf Loopback (localhost, *.localhost, 127.0.0.1, ::1), steht „Datenschutz: LANGFUSE_BASE_URL zeigt auf <host> (nicht lokal, ADR 0019)“ (nur der Host) auf stderr, bei --sessionstart in der systemMessage, bei --json als Feld `basisLokal`; der Exit ändert sich nie (Cockpit-Vertrag). Unparsebar gilt als nicht lokal.
- * Reines Node-Skript (nur Builtins); die Bewertung ist pur, fetch wird injiziert. */
+ * Adresse: `LANGFUSE_BASE_URL` (Umgebung, sonst Plugin-Optionen der User-Settings via `basisUrlAus` aus langfuse-zugang.mjs, nie Secret-Dateien), sonst http://localhost:3000. Reines Node-Skript (nur Builtins); die Bewertung ist pur, fetch wird injiziert. */
 import { homedir } from "node:os";
 import { AUFRUF_EXIT, flagsLesen } from "./flag-lib.mjs";
 import { istDirektaufruf } from "./direktaufruf.mjs";
@@ -19,24 +18,6 @@ import { istArbeitsplatzGeladen, leseLogDateien, logBasis, mcpVerbindung, server
 import { FRIST_MS, pruefeLangfuse } from "./langfuse-health.mjs";
 
 const HINWEIS = "Langfuse aus, bitte starten (lokal: Rancher Desktop prüfen, notfalls `rdctl shutdown` und `rdctl start`, FAQ „Langfuse lokal aus“).";
-
-/** Host einer Basis-URL, unparsebar: `null`. Pur. */
-function hostVon(url) {
-  try {
-    return new URL(url).hostname;
-  } catch {
-    return null;
-  }
-}
-
-/** Zeigt die Basis-URL auf Loopback (localhost, *.localhost, 127.0.0.1, ::1)? Unparsebar: false (fail-closed). Pur. */
-export function basisUrlLokal(url) {
-  const host = hostVon(url);
-  return host !== null && (host === "localhost" || host.endsWith(".localhost") || host === "127.0.0.1" || host === "[::1]");
-}
-
-/** Datenschutz-Hinweis für ein nicht lokales Ziel (nur Host, nie Pfad, Query oder Keys). Pur. */
-const datenschutzHinweis = (url) => `Datenschutz: LANGFUSE_BASE_URL zeigt auf ${hostVon(url) ?? "ein unbekanntes Ziel"} (nicht lokal, ADR 0019)`;
 
 const MCP_FENSTER_MS = 24 * 3600 * 1000;
 
@@ -88,11 +69,9 @@ function mcpAbschluss(u, json, err) {
 
 /** MCP-Prüfung bei erreichbarem Langfuse: Urteil, bei `--json` als Feld `mcp`, Exit nach `mcpAbschluss`. `mcpZeilen` und `jetzt` sind Naht für Tests. */
 function mcpLauf({ env, home, baseUrl, json, out, err, mcpZeilen, jetzt = Date.now() }) {
-  const basisLokal = basisUrlLokal(baseUrl);
   const lesen = mcpZeilen ?? (() => langfuseZeilen({ env, home, jetzt, wurzel: env.CLAUDE_PROJECT_DIR || process.cwd() }));
   const mcp = mcpUrteil({ env, basisUrl: baseUrl, lesen, jetzt });
-  if (json) out(JSON.stringify({ erreichbar: true, grund: null, basisLokal, mcp }));
-  if (!json && !basisLokal) err(datenschutzHinweis(baseUrl));
+  if (json) out(JSON.stringify({ erreichbar: true, grund: null, mcp }));
   return mcpAbschluss(mcp, json, err);
 }
 
@@ -105,27 +84,6 @@ function aufrufLesen(argv) {
   return text ? { fehler: `${text}. ${USAGE}` } : { sessionstart: werte.sessionstart === true, json: werte.json === true };
 }
 
-/** Ausgabe und Exit ohne MCP-Prüfung (Ausfall, `--json`, `--sessionstart`): Exit 0 erreichbar, 1 aus (`--sessionstart` immer 0); der Datenschutz-Hinweis ändert den Exit nie. */
-function ausgabe({ urteil, baseUrl, sessionstart, json, out, err }) {
-  const basisLokal = basisUrlLokal(baseUrl);
-  if (json) {
-    out(JSON.stringify({ erreichbar: urteil.ok, grund: urteil.ok ? null : urteil.grund, basisLokal }));
-    return urteil.ok ? 0 : 1;
-  }
-  const datenschutz = basisLokal ? "" : datenschutzHinweis(baseUrl);
-  if (sessionstart) {
-    const teile = [urteil.ok ? "" : `WARNUNG Langfuse-Vorbedingung: ${urteil.grund}. ${HINWEIS} Ohne Langfuse startet kein Ticket.`, datenschutz].filter(Boolean);
-    if (teile.length === 0) return 0;
-    const warnung = teile.join(" ");
-    out(JSON.stringify({ systemMessage: warnung, hookSpecificOutput: { hookEventName: "SessionStart", additionalContext: warnung } }));
-    return 0;
-  }
-  if (urteil.ok) return 0;
-  err(`${urteil.grund}. ${HINWEIS}`);
-  if (datenschutz) err(datenschutz);
-  return 1;
-}
-
 export async function main(argv = process.argv.slice(2), env = process.env, out = console.log, err = console.error, { fetchImpl = fetch, fristMs = FRIST_MS, home = homedir(), lies, ...mcpOptionen } = {}) {
   const aufruf = aufrufLesen(argv);
   if (aufruf.fehler) {
@@ -136,7 +94,19 @@ export async function main(argv = process.argv.slice(2), env = process.env, out 
   const baseUrl = langfuseBasisUrl({ LANGFUSE_BASE_URL: basisUrlAus(env, home, lies) });
   const urteil = await pruefeLangfuse({ baseUrl, fetchImpl, fristMs });
   if (urteil.ok && !sessionstart) return mcpLauf({ env, home, baseUrl, json, out, err, ...mcpOptionen });
-  return ausgabe({ urteil, baseUrl, sessionstart, json, out, err });
+  if (json) {
+    out(JSON.stringify({ erreichbar: urteil.ok, grund: urteil.ok ? null : urteil.grund }));
+    return urteil.ok ? 0 : 1;
+  }
+  if (urteil.ok) return 0;
+  const text = `${urteil.grund}. ${HINWEIS}`;
+  if (sessionstart) {
+    const warnung = `WARNUNG Langfuse-Vorbedingung: ${text} Ohne Langfuse startet kein Ticket.`;
+    out(JSON.stringify({ systemMessage: warnung, hookSpecificOutput: { hookEventName: "SessionStart", additionalContext: warnung } }));
+    return 0;
+  }
+  err(text);
+  return 1;
 }
 
 if (istDirektaufruf(import.meta.url)) process.exitCode = await main();
