@@ -1220,6 +1220,21 @@
       "muster": "test/harness/aenderungsregister.test.ts",
       "art": "projekt-test",
       "grund": "Prüft das Änderungsregister der Fabrik (.github/aenderungsregister.json, nicht im Besitz)"
+    },
+    {
+      "muster": "test/aenderungsregister.test.ts",
+      "art": "projekt-test",
+      "grund": "Prüft die Wirkungsprüfung der Fabrik (scripts/aenderungsregister.mjs, nicht im Besitz, factory#572)"
+    },
+    {
+      "muster": "test/harness/fabrik-eigen-analyse.test.ts",
+      "art": "projekt-test",
+      "grund": "Belegt, dass Fabrik-eigene Analyse-Dateien nie verteilt werden und im Bezieher abbrechen (factory#572)"
+    },
+    {
+      "muster": "test/fixtures/aenderungsregister/*.json",
+      "art": "fixture",
+      "grund": "Fixtures der Wirkungsprüfung (factory#572), nur von projekt-test genutzt"
     }
   ]
 }
