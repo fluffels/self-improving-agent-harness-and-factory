@@ -158,11 +158,16 @@ const pruefeVerfallDurch = (z, p) => {
   return ok ? [] : [`${p}durch: nicht leere Liste von Ids (nur [a-z0-9-]) erwartet`];
 };
 
-const pruefeVerfall = (z, p) => {
+const pruefeVerfallFelder = (z, p) => {
   const f = [];
   for (const feld of VERFALL_PFLICHTFELDER) if (z[feld] === undefined) f.push(`${p}Pflichtfeld ${feld} fehlt`);
   const unbekannt = Object.keys(z).filter((k) => !VERFALL_PFLICHTFELDER.includes(k) && k !== "durch");
   if (unbekannt.length > 0) f.push(`${p}unbekannte Felder ${unbekannt.join(", ")}`);
+  return f;
+};
+
+const pruefeVerfall = (z, p) => {
+  const f = pruefeVerfallFelder(z, p);
   if (z.id !== undefined && !(typeof z.id === "string" && /^[a-z0-9-]+$/.test(z.id))) f.push(`${p}id: nur [a-z0-9-] erwartet`);
   if (z.ziel !== undefined && !istText(z.ziel)) f.push(`${p}ziel: Pfad oder Anker (nicht leerer Text) erwartet`);
   for (const feld of ["aufgenommen", "ablauf"]) if (z[feld] !== undefined && !istDatum(z[feld])) f.push(`${p}${feld}: Datum JJJJ-MM-TT erwartet`);
