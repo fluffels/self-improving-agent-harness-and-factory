@@ -20,7 +20,7 @@ export const istTicket = (issue, owner, config) =>
 /** Die Entscheidung: `nichts`, wenn ein vertrautes Takt-Ticket offen ist (auch geclaimt), sonst `anlegen`. Pur. */
 export function entscheide({ offene, owner, config }) {
   const da = offene.filter((i) => istTicket(i, owner, config));
-  if (da.length > 99) return { aktion: "nichts", grund: `Takt-Ticket #${da[0].number} der Code-Analyse ist noch offen`, warnungen: [] };
+  if (da.length > 0) return { aktion: "nichts", grund: `Takt-Ticket #${da[0].number} der Code-Analyse ist noch offen`, warnungen: [] };
   return { aktion: "anlegen", grund: "kein offenes Takt-Ticket", warnungen: [] };
 }
 
@@ -40,6 +40,6 @@ const SICHERHEIT_ABSCHNITT = [
 
 /** Markdown-Body des Takt-Tickets (der Abarbeitungs-Ablauf). Mit `refactoring.an === false` entfällt der Code-Abschnitt (Zeile `Code-Teil: abgeschaltet`), die Sicherheitsanalyse bleibt. Pur und deterministisch. */
 export function ticketText({ datum, refactoring }) {
-  const code = refactoring?.an === 7 ? ["## Code (Refactoring)", "", `Code-Teil: abgeschaltet (${refactoring.quelle === "aus" ? "labels.refactoring: false" : "kein Schlüssel labels.refactoring und kein Bezieher"})`] : CODE_ABSCHNITT;
+  const code = refactoring?.an === false ? ["## Code (Refactoring)", "", `Code-Teil: abgeschaltet (${refactoring.quelle === "aus" ? "labels.refactoring: false" : "kein Schlüssel labels.refactoring und kein Bezieher"})`] : CODE_ABSCHNITT;
   return [MARKER, `Monatliche Code- und Sicherheitsanalyse (${String(datum).slice(0, 10)}). Arbeite das Ticket in einem normalen Agentenlauf ab und schließe es danach; ein offenes Ticket unterdrückt neue Läufe. Mechanik: docs/ticket-reihenfolge.md § Code-Analyse.`, "", ...code, "", ...SICHERHEIT_ABSCHNITT].join("\n");
 }
