@@ -71,6 +71,10 @@ describe("refactoringPunkt", () => {
     expect(r.nichtPruefbar).toBe(true);
     expect(aufrufe).toEqual([]);
   });
+  test("Null-Einträge in einer Seite werfen nicht, der Treffer zählt", () => {
+    const { lesen } = lesenOk([[null, issue("Refactoring (gesammelt)")]]);
+    expect(lib.refactoringPunkt({ config, rootDir: "x", lesen, bezieher: ja })[0].ok).toBe(true);
+  });
   test("Paginierung: Treffer auf Seite 2 → gut", () => {
     const { lesen } = lesenOk([[issue("a")], [issue("Refactoring (gesammelt)")]]);
     expect(lib.refactoringPunkt({ config, rootDir: "x", lesen, bezieher: ja })[0].ok).toBe(true);
@@ -83,5 +87,13 @@ describe("mitRefactoring", () => {
     const davor: Ergebnis = { punkt: "Davor", ok: true };
     const f = lib.mitRefactoring(() => [davor], { lesen, bezieher: ja });
     expect(f({ rootDir: "x", config }).map((e) => e.punkt)).toEqual(["Davor", "Refactoring-Sammelticket"]);
+  });
+  test("vorAbbruch wird durchgereicht: nicht prüfbar mit Grund „Config nicht geladen“, kein Aufruf", () => {
+    const { aufrufe, lesen } = lesenOk([]);
+    const f = lib.mitRefactoring(() => [], { lesen, bezieher: ja }) as unknown as (a: { rootDir: string; config: unknown; vorAbbruch: boolean }) => Ergebnis[];
+    const [r] = f({ rootDir: "x", config: undefined, vorAbbruch: true });
+    expect(r.nichtPruefbar).toBe(true);
+    expect(r.befund).toContain("Config nicht geladen");
+    expect(aufrufe).toEqual([]);
   });
 });

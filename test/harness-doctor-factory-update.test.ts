@@ -392,12 +392,16 @@ describe("dateienStandard (Verdrahtung von harness-doctor.mjs)", () => {
     writeFileSync(join(bezieher, ".factory", "sync-stand.json"), "{}");
     mkdirSync(join(bezieher, ".github", "workflows"), { recursive: true });
     writeFileSync(join(bezieher, ".github", "workflows", "factory-update.yml"), "name: x\n");
-    const { lesen } = lesenMit({ state: "disabled_inactivity" });
+    const { aufrufe, lesen } = lesenMit({ state: "disabled_inactivity" });
     const f = doctor.dateienStandard({ env: {}, lesen, pruefe: () => [{ punkt: "Eins", ok: true }] });
     expect(f({ rootDir: fabrik, config }).map((p) => p.punkt)).toEqual(["Eins"]);
     const e = f({ rootDir: bezieher, config });
     expect(e.map((p) => p.punkt)).toEqual(["Eins", "Factory-Update", "Dependabot-Ausschluss", "Refactoring-Sammelticket"]);
     expect(e[1]).toMatchObject({ ok: false });
+    // `lesen` kommt am Punkt an: eine Lücke (kein Ticket in der Antwort), nicht `nichtPruefbar` (lesen fehlte) und nicht gut.
+    expect(e[3]).toMatchObject({ ok: false });
+    expect(e[3]).not.toHaveProperty("nichtPruefbar");
+    expect(aufrufe.some((a) => a.some((s) => s.startsWith("repos/acme/proj/issues?state=open")))).toBe(true);
   });
 });
 
