@@ -23,7 +23,7 @@ Das ist selbst ein **Architekturziel** („eine KI ändert das billig **und** si
 |---|---|---|
 | Prüfschritte in `verify` | 15 | eigene Schritte der Kette `verify` in package.json, verschachtelte Ketten aufgelöst, je Schritt einmal |
 | Skripte | ≥ 240 | Dateien `.mjs`/`.cjs` unter `scripts/` (rekursiv), ab 10 auf Zehner abgerundet |
-| Wächter-Tests | ≥ 140 | `*.test.ts` unter `test/harness/` (rekursiv) mit dem Marker `@harness-waechter` im Kopf, ab 10 auf Zehner abgerundet |
+| Wächter-Tests | ≥ 150 | `*.test.ts` unter `test/harness/` (rekursiv) mit dem Marker `@harness-waechter` im Kopf, ab 10 auf Zehner abgerundet |
 | CI-Workflows | 20 | `*.yml`/`*.yaml` direkt unter `.github/workflows/` |
 | ADRs | 24 | `NNNN-*.md` unter `docs/adr/` (ohne `README.md`), nach `adr-liste` |
 
@@ -392,6 +392,7 @@ flowchart TD
   merge["Merge (squash)"]
   cleanup["Aufräumen: Issue zu,<br/>Worktree weg"]
   alarm["Alarm-Issue: CI rot auf main"]
+  analyse["Token-Analyse (nur auf Auftrag, außerhalb des Ticketlaufs)<br/>token-analyse mit analyse-extern und analyse-recherche"]
 
   board --> claim --> plan --> epic
   epic -- ja --> kinder --> board
@@ -565,6 +566,7 @@ sequenceDiagram
   CI-->>U: grün: Merge, rot: Fix auf demselben Branch
   U-->>H: Bericht mit Ergebnis
   H-->>M: Zusammenfassung
+  Note over H,M: Außerhalb des Ticketlaufs (nur auf Auftrag): Skill token-analyse mit analyse-extern und analyse-recherche
 ```
 
 <!-- GEN:agenten-sequenz END -->
