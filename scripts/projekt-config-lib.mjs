@@ -20,7 +20,7 @@ import { QUELL_VERZEICHNIS, ZEIGER_WURZEL } from "./skill-pfade.mjs";
 import { gleichesRepo, istRepoForm, zerlegeRepo } from "./repo-form.mjs";
 import { modulFormFehler } from "./modul-wahl-lib.mjs";
 import { DATEN_STANDARD_ENDUNGEN } from "./quellwurzeln-lib.mjs";
-import { istObjekt, istText, pruefeAudit, pruefeAusnahmen, pruefeBerechtigungen, pruefeDatengroesse, pruefeE2e, pruefeEscapeKopien, pruefeFactoryLinks, pruefeGates, pruefeLabels, pruefeLangfuseWochenbericht, pruefeLiterale, pruefeRisiko, pruefeSammelChecks, pruefeSandbox, pruefeSkills, pruefeSprache, pruefeStruktur, pruefeVorpruefung } from "./projekt-config-bloecke.mjs";
+import { istObjekt, istText, pruefeAudit, pruefeAusnahmen, pruefeBerechtigungen, pruefeDatengroesse, pruefeDokuPflicht, pruefeE2e, pruefeEscapeKopien, pruefeFactoryLinks, pruefeGates, pruefeLabels, pruefeLangfuseWochenbericht, pruefeLiterale, pruefeRisiko, pruefeSammelChecks, pruefeSandbox, pruefeSkills, pruefeSprache, pruefeStruktur, pruefeVorpruefung } from "./projekt-config-bloecke.mjs";
 import { pruefeDesign } from "./design-lib.mjs";
 import { pruefeBefehle } from "./gate-befehl-lib.mjs";
 import { istBezieher } from "./sync-stand-lib.mjs";
@@ -391,7 +391,7 @@ export function pruefeProjektConfig(wert) {
   if (wert.berechtigungen !== undefined) fehler.push(...pruefeBerechtigungen(wert.berechtigungen));
   if (wert.sandbox !== undefined) fehler.push(...pruefeSandbox(wert.sandbox));
   fehler.push(...pruefeVorpruefung(wert.vorpruefung), ...pruefeLangfuseWochenbericht(wert.langfuseWochenbericht), ...pruefeRisiko(wert.risiko), ...pruefeAudit(wert.audit), ...pruefeSammelChecks(wert.sammelChecks));
-  fehler.push(...pruefeDesign(wert.design));
+  fehler.push(...pruefeDesign(wert.design), ...pruefeDokuPflicht(wert.dokuPflicht));
   fehler.push(...pruefeBefehle(wert.befehle), ...pruefeE2e(wert.e2e, wert.befehle));
   fehler.push(...internalrefsMaengel(wert.internalrefs));
   fehler.push(...modulFormFehler(wert));

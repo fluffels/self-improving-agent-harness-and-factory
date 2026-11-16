@@ -29,6 +29,7 @@ interface Zeilen {
   diffsizeOverride: string;
   diffcovOverride: string;
   lockfileOverride: string;
+  dokuOverride: string;
   syncDringlich: string;
   bezieherMigration: string;
 }
@@ -68,6 +69,7 @@ describe("commitZeilen (#1741): alle Schlüssel aus dem Präfix, kein Standardwe
       diffsizeOverride: "AB-Diffsize-Override",
       diffcovOverride: "AB-Diffcov-Override",
       lockfileOverride: "AB-Lockfile-Override",
+      dokuOverride: "AB-Doku-Override",
       syncDringlich: "AB-Sync-Dringlich",
       bezieherMigration: "AB-Bezieher-Migration",
       budgetBeleg: "AB-Budget-Beleg",

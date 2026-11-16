@@ -3,7 +3,7 @@
 /**
  * Slice-Override per Commit-Zeile (#1269, #1309) — das gemeinsame Modul der Gate-Skripte.
  *
- * Fünf Wächter lassen einen Slice mit Pflicht-Begründung durch (Diffsize-, Diffcov-, Lockfile-, Review- und Abnahme-Override, Schlüssel aus
+ * Sechs Wächter lassen einen Slice mit Pflicht-Begründung durch (Diffsize-, Diffcov-, Lockfile-, Doku-, Review- und Abnahme-Override, Schlüssel aus
  * `commitZeilen`, Präfix aus der Projekt-Config): eine Zeile `<KEY>: #<nr> <warum>` am Zeilenanfang einer
  * Commit-Message im Slice (`<basis>..HEAD`, als Betreff oder Body-Zeile). Parser, Slice-Lesen und die Ausgabe-Texte liegen hier genau
  * einmal, damit lokal, im PR und auf main dasselbe gilt und kein Wächter eine eigene Variante pflegt.
@@ -35,6 +35,7 @@ export function commitZeilen(praefix, planer) {
     diffsizeOverride: `${praefix}Diffsize-Override`,
     diffcovOverride: `${praefix}Diffcov-Override`,
     lockfileOverride: `${praefix}Lockfile-Override`,
+    dokuOverride: `${praefix}Doku-Override`,
     syncDringlich: `${praefix}Sync-Dringlich`,
     bezieherMigration: `${praefix}Bezieher-Migration`,
     budgetBeleg: `${praefix}Budget-Beleg`,
