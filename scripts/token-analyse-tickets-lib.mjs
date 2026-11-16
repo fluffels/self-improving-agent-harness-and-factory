@@ -145,7 +145,7 @@ export function urteileJeTeil(plan, review) {
 /** Entschärft einen Quelltext (Webrecherche, Teilberichte) für ein öffentliches Ticket: keine @-Erwähnung, kein Link, kein Codeblock-Ausbruch, jedes Zeilenende (auch ein einzelnes CR, NEL, LS, PS) und jedes Steuerzeichen wird Leerzeichen, Ticket-Verweise (`#n`) verlieren das `#`. Pur. */
 export const entschaerfe = (t) =>
   String(t)
-    .replace(/[\s\u0000-\u001f\u0085\u2028\u2029]+/g, " ")
+    .replace(/[\s\p{Cc}\u2028\u2029]+/gu, " ")
     .replace(/https?:\/\/\S+/gi, "[Link entfernt]")
     .replace(/@/g, "")
     .replace(/#(?=\d)/g, "Nr. ")
