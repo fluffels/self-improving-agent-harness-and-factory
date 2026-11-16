@@ -1968,6 +1968,14 @@
       "aufgenommen": "2026-11-16",
       "ablauf": "2026-12-16",
       "messgroesse": "fangquote"
+    },
+    {
+      "id": "verfall-vertrauensgrenzen-risiko",
+      "art": "verfall",
+      "ziel": "test/harness/vertrauensgrenzen-risiko.test.ts",
+      "aufgenommen": "2026-11-16",
+      "ablauf": "2026-12-16",
+      "messgroesse": "fangquote"
     }
   ]
 }

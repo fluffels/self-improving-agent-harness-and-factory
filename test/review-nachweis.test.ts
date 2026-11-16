@@ -1421,6 +1421,14 @@ describe("Risikostufe: die Wächter rechnen nach (factory#526)", () => {
     assert.equal(r.risikostufe.stufe, 2);
     const f = r.fehler.join("\n");
     assert.match(f, /kombiniert genügt nur unter der Kombi-Lens-Grenze.*KOMBI: nein, Risikostufe 2/);
+    assert.equal((r as unknown as { stufe: string }).stufe, "voll"); // Anzeige aus risikostufe.kombi, nicht aus der Größe
+  });
+  test("L4: zulässige Kombi-Lens genügt nur mit lenses=kombiniert und nur bei Code-Diff; Hinweis nennt dann KOMBI: ja", () => {
+    // Satz unvollständig ohne kombiniert: auch bei zulässiger Kombi-Lens rot (kombi && kombiOk, nicht kombiOk allein)
+    rot(bew(text(PL, voll(2, "architektur")), { ...R1, kombi: KOMBI_JA }), /lenses fehlt requirement-treue, test-adaequanz/);
+    // Doku-Diff (eine Pflicht-Brille): kombiniert genügt nicht (pflicht.length > 1); die Meldung zeigt den berechneten Wert KOMBI: ja
+    const kombi = `head=${SHA} runden=1 lenses=kombiniert blocker=kombiniert:0 sollte=kombiniert:0 hinweis=kombiniert:0 teilbrillen=architektur:0,requirement-treue:0,test-adaequanz:0 verdikt=ok`;
+    rot(bew(text(PL, kombi), { ...R1, kombi: KOMBI_JA }, { dateien: ["docs/a.md"] }), /berechnet aus dem Diff: KOMBI: ja, Risikostufe 1/);
   });
   test("Stufe-2-Pflicht über bewerteKlasseHoch: Risikostufe 2 allein genügt, Stufe 1 verlangt nichts", () => {
     const n = parseNachweis(text(PL, voll(2)));

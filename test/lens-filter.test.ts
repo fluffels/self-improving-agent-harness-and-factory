@@ -273,9 +273,16 @@ describe("liesEingabe (factory#622 L10): kein unbegrenztes Warten auf stdin", ()
     return s;
   };
   test("TTY: sofort Fehler mit Umleitungs-Hinweis", async () => {
-    const p = R.liesEingabe({ stdin: strom(true), fristMs: 20 });
-    await expect(p).rejects.toThrow(/< berichte\.md/);
-    await expect(R.liesEingabe({ stdin: strom(true), fristMs: 20 })).rejects.toBeInstanceOf(R.FilterFehler);
+    // große Frist: nur die sofortige TTY-Ablehnung kann vor dem Testende rejecten (sonst wäre die Frist-Meldung vom selben Text)
+    const p = R.liesEingabe({ stdin: strom(true), fristMs: 60_000 });
+    await expect(p).rejects.toThrow(/keine Eingabe \(TTY\).*< berichte\.md/);
+    await expect(R.liesEingabe({ stdin: strom(true), fristMs: 60_000 })).rejects.toBeInstanceOf(R.FilterFehler);
+  });
+  test("Strom-Fehler wird durchgereicht", async () => {
+    const s = strom();
+    const p = R.liesEingabe({ stdin: s, fristMs: 60_000 });
+    s.emit("error", new Error("kaputt"));
+    await expect(p).rejects.toThrow("kaputt");
   });
   test("kein Byte innerhalb der Frist: Fehler mit Hinweis, Strom zerstört", async () => {
     const s = strom();
