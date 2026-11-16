@@ -10,11 +10,11 @@
  *
  * Dazu (factory#569): der Kern-Text nennt keinen bestimmten privaten Skill. Der Scan (`abschlussNamenFunde`) prüft eine geschlossene Dateiliste (AGENTS.md, Skills, Agenten, docs/ ohne docs/historie/ und docs/adr/, beide historisch und nie umgeschrieben) auf
  * (a) den Platzhalter für den Abschluss-Skill außerhalb des Projektwerte-Blocks, (b) einen Skill-Aufruf mit festem Namen, (c) einen Namen in der Fabrik-Config (nur upstream) und (d) den Wert der lokalen Variable.
- * Bewusste Grenze: eine freie Nennung ohne diese Muster findet der Scan nicht; die CI kennt keinen Nutzernamen, (d) wirkt nur lokal.
+ * Bewusste Grenze: eine freie Nennung ohne diese Muster findet der Scan nicht (der Aufruf nur in der Schreibweise `Skill({ skill: "…" })`); (d) trifft nur den Namen als ganzes Token; die CI kennt keinen Nutzernamen, (d) wirkt nur lokal.
  */
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { describe, expect, test } from "vitest";
-import { projektConfig } from "../support/fremd-config";
+import { escapeRe } from "../support/regex";
 import { liesMitProjektwerten, TICKET_ABLAUF } from "../support/ticket-ablauf";
 
 const norm = (t: string) => t.replace(/\s+/g, " ");
@@ -129,11 +129,13 @@ function kernTextDateien(): { pfad: string; text: string }[] {
       if (p.endsWith(".md") && !p.startsWith("docs/historie/") && !p.startsWith("docs/adr/")) pfade.push(p);
     }
   }
-  return pfade.map((pfad) => ({ pfad, text: rohLesen(pfad) }));
+  return pfade.map((pfad) => ({ pfad, text: readFileSync(new URL(`../../${pfad}`, import.meta.url), "utf8") }));
 }
 
 const PROJEKTWERTE_BLOCK = /<!-- factory:projektwerte:start -->[\s\S]*?<!-- factory:projektwerte:end -->/g;
 const PLATZHALTER = "<skills.abschluss>";
+/** Der Name der lokalen Variable als ganzes Token (nicht als Teilwort eines anderen Worts), außerhalb des Projektwerte-Blocks. */
+const privatImText = (text: string, name: string): boolean => new RegExp(`(?<![\\w-])${escapeRe(name)}(?![\\w-])`).test(text);
 const SKILL_AUFRUF = /Skill\(\{ skill: "([^"]*)" \}\)/g;
 
 /** Funde des Kern-Text-Scans: Platzhalter, fester Skill-Name im Aufruf, Config-Wert der Fabrik (nur upstream) und Wert der lokalen Variable. */
@@ -144,14 +146,14 @@ function abschlussNamenFunde(dateien: { pfad: string; text: string }[], opt: { k
     const ohneBlock = d.text.replace(PROJEKTWERTE_BLOCK, "");
     if (ohneBlock.includes(PLATZHALTER)) funde.push(`(a) ${d.pfad}: Platzhalter für den Abschluss-Skill`);
     for (const m of ohneBlock.matchAll(SKILL_AUFRUF)) if (!/^<[^>]+>$/.test(m[1])) funde.push(`(b) ${d.pfad}: Skill-Aufruf mit festem Namen „${m[1]}“`);
-    if (opt.privat && opt.privat !== "aus" && d.text.includes(opt.privat)) funde.push(`(d) ${d.pfad}: Wert von FACTORY_ABSCHLUSS_SKILL`);
+    if (opt.privat && opt.privat !== "aus" && privatImText(ohneBlock, opt.privat)) funde.push(`(d) ${d.pfad}: Wert von FACTORY_ABSCHLUSS_SKILL`);
   }
   return funde;
 }
 
 describe("Kern-Text nennt keinen bestimmten privaten Abschluss-Skill (factory#569)", () => {
   const upstream = !existsSync(new URL("../../.factory/sync-stand.json", import.meta.url));
-  const opt = { konfigWert: projektConfig().skills.abschluss as string | null | undefined, upstream, privat: process.env.FACTORY_ABSCHLUSS_SKILL };
+  const opt = { konfigWert: (JSON.parse(readFileSync(new URL("../../.factory/projekt.json", import.meta.url), "utf8")) as { skills: { abschluss: string | null } }).skills.abschluss as string | null | undefined, upstream, privat: process.env.FACTORY_ABSCHLUSS_SKILL };
 
   test("der echte Kern-Text ist frei von Platzhalter, festem Skill-Aufruf, Config-Wert und lokalem Namen", () => {
     const dateien = kernTextDateien();
@@ -169,6 +171,8 @@ describe("Kern-Text nennt keinen bestimmten privaten Abschluss-Skill (factory#56
     const o = { ...opt, privat: undefined, upstream: false };
     expect(abschlussNamenFunde([{ pfad: "x.md", text: 'Skill({ skill: "<wirksamer Name>" })' }], o)).toEqual([]);
     expect(abschlussNamenFunde([{ pfad: "x.md", text: 'Skill({ skill: "mein-skill" })' }], o).length).toBe(1);
+    expect(abschlussNamenFunde([{ pfad: "x.md", text: 'Skill({ skill: "x<a>" })' }], o).length).toBe(1);
+    expect(abschlussNamenFunde([{ pfad: "x.md", text: 'Skill({ skill: "<a>x" })' }], o).length).toBe(1);
   });
 
   test("Gegenbeispiel (c): ein Config-Wert ungleich null wird upstream gefunden, bei Beziehern nicht", () => {
@@ -178,10 +182,12 @@ describe("Kern-Text nennt keinen bestimmten privaten Abschluss-Skill (factory#56
   });
 
   test("Gegenbeispiel (d): der Wert der Variable wird gefunden, `aus` und leer nicht", () => {
-    const d = [{ pfad: "x.md", text: "nutzt privat-system" }];
+    const d = [{ pfad: "x.md", text: "nutzt privat-system aus" }];
     const o = { konfigWert: null, upstream: false };
     expect(abschlussNamenFunde(d, { ...o, privat: "privat-system" }).length).toBe(1);
     expect(abschlussNamenFunde(d, { ...o, privat: "aus" })).toEqual([]);
+    expect(abschlussNamenFunde(d, { ...o, privat: "privat" })).toEqual([]); // Teilwort von privat-system
+    expect(abschlussNamenFunde(d, { ...o, privat: "system" })).toEqual([]);
     expect(abschlussNamenFunde(d, { ...o, privat: "" })).toEqual([]);
     expect(abschlussNamenFunde(d, { ...o, privat: undefined })).toEqual([]);
   });

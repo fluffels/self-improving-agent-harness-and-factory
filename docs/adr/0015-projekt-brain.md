@@ -53,4 +53,6 @@ Ein Brain lohnt sich nur, wenn es Tokens **spart**: weniger Suchen, weniger fals
 - Die Shell-Lesezugriffe auf `docs/` sinken nach der Prompt-Konvention (#1099) nicht unter die Baseline in model-routing.md §5: dann den Guard aus Option D bewerten.
 - Das Brain wächst über 60 Seiten (Trigger aus ADR 0013).
 
+## Weitere Fortschreibungen (als Dateien)
+
 Neue Fortschreibungen dieses ADR stehen als Datei unter [`fortschreibungen/`](fortschreibungen/0015-569-repo-abschluss.md) (Konvention: [README](README.md#format)); dort die erste: Repo-Abschluss statt privatem Abschluss-Skill.

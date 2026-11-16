@@ -40,7 +40,7 @@ Klassen wie in [ADR 0025 › Fortschreibung #1827](../0025-sandbox-als-austausch
 
 ## Abweichung: persönliche Skills mit Präfix
 
-In der Compose-Sandbox heißen die persönlichen Skills des Agenten `personal-<name>` (etwa `personal-<name>`); daneben gibt es Projektskills mit anderem Präfix und einen Ordner `synced`. Ein privater Abschluss-Skill (Name aus `node scripts/projekt-config.mjs abschluss`) existiert dort unpräfixiert nicht; `Skill({ skill: "<name>" })` läuft im Container ins Leere. Abhilfe: `FACTORY_ABSCHLUSS_SKILL=<präfixierter Name>` im Container-ENV (factory#139, Wert `aus` schaltet den Abschluss-Skill ab); `projekt-config.mjs abschluss` zeigt danach den wirksamen Namen. Das ist eine Abweichung der Variante, keine Vertragszeile, und steht in [Sandbox anbinden](../../sandbox-anbinden.md#eigene-container-sandbox-anbinden).
+In der Compose-Sandbox heißen die persönlichen Skills des Agenten `personal-<name>` (etwa `personal-brain-input`); daneben gibt es Projektskills mit anderem Präfix und einen Ordner `synced`. Der Abschluss-Skill aus `skills.abschluss` (`brain-input`) existiert dort unpräfixiert nicht, `node scripts/projekt-config.mjs abschluss` liefert aber weiter diesen Namen; `Skill({ skill: "brain-input" })` läuft im Container ins Leere. Abhilfe: `FACTORY_ABSCHLUSS_SKILL=<präfixierter Name>` im Container-ENV (factory#139, Wert `aus` schaltet den Abschluss-Skill ab); `projekt-config.mjs abschluss` zeigt danach den wirksamen Namen. Das ist eine Abweichung der Variante, keine Vertragszeile, und steht in [Sandbox anbinden](../../sandbox-anbinden.md#eigene-container-sandbox-anbinden).
 
 ## Lücken und Folgetickets
 
