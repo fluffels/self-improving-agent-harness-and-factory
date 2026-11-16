@@ -108,7 +108,8 @@ describe("Umgebungsvariablen-Inventar gegen den Code", () => {
   });
   test("der Ring jeder Inventarzeile stimmt mit dem Besitz-Manifest überein", () => {
     const ringe = sammleInventar(readFileSync(join(WURZEL, BEFEHLE), "utf8"));
-    const besitz = new Set<string>((JSON.parse(readFileSync(join(WURZEL, ".factory/besitz.json"), "utf8")).eintraege as { pfad: string }[]).map((e) => e.pfad));
+    const manifest = JSON.parse(readFileSync(join(WURZEL, ".factory/besitz.json"), "utf8")) as { eintraege: { pfad: string }[] };
+    const besitz = new Set<string>(manifest.eintraege.map((e) => e.pfad));
     expect(pruefeRing(sammleJeDatei(join(WURZEL, "scripts")), besitz, ringe)).toEqual([]);
   });
 });

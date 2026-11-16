@@ -942,7 +942,7 @@ describe("check-review-nachweis CLI mit --config (#1741)", { timeout: 60_000 }, 
     assert.match(r.stderr, /Fix:/);
   });
 
-  test("arm= prüft die Ticketnummer mit dem Branch-Präfix der --config (factory#532), nicht der Repo-Config", () => {
+  test("arm= prüft die Ticketnummer mit dem Branch-Präfix der --config (factory#532), nicht der Projekt-Config", () => {
     const d = mkdir();
     const git = (...a: string[]) => execFileSync("git", ["-c", "user.name=t", "-c", "user.email=t@example.org", "-c", "commit.gpgsign=false", ...a], { cwd: d, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
     git("init", "-q", "-b", "main");
