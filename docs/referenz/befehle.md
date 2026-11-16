@@ -114,6 +114,7 @@ Der verbindliche Ticket-Ablauf steht in [AGENTS.md › Das Wichtigste zuerst](..
 | Diff-Coverage-Wächter (geänderte Zeilen pro Slice getestet; **hart** für Domäne/Anwendung, Präsentation/Einstieg nur berichtend; läuft **NACH `test:coverage`**, quellprojekt#1021) | `npm run check:diffcoverage` |
 | `no-explicit-any`-Suppression-Ratchet (per-Datei-Baseline, quellprojekt#604) | `npm run check:anysuppress` (neu ziehen: `node scripts/check-any-suppressions.mjs --write`) |
 | Lockfile-Integritäts-Wächter (package-lock.json ↔ package.json, gegen Lockfile-Drift, quellprojekt#593) | `npm run check:lockfile` |
+| Doku-Pflicht-Wächter (`check-doku-pflicht`, Diff gegen die Merge-Base, factory#604) | `npm run check:dokupflicht` |
 | Security-Audit (CI-Gate blockt bei high+, Wurzel plus `audit.verzeichnisse`, quellprojekt#396, factory#395) | `node scripts/audit-verzeichnisse.mjs --audit-level high` |
 
 
@@ -123,7 +124,7 @@ Welche Umgebungsvariable ein Werkzeug liest (quellprojekt#1824, [ADR 0022](../ad
 
 | Name | Ring | Wer setzt ihn | Wer liest ihn |
 | --- | --- | --- | --- |
-| `FACTORY_DIFF_BASE` | Kern | Workflow `ci.yml` (Schritt „Diff-Basis bestimmen“); lokal optional die Maintainerin; in Tests `test/diffsize.test.ts`, `test/diffcoverage.test.ts`, `test/review-nachweis.test.ts`, `test/abnahme-nachweis.test.ts`, `test/slice-override.test.ts` | `resolveBase` (`scripts/check-basis.mjs`): `check-diffsize`, `check-diffcoverage`, `check-lockfile`, `check-review-nachweis`, `check-abnahme-nachweis`, `verify-lauf` |
+| `FACTORY_DIFF_BASE` | Kern | Workflow `ci.yml` (Schritt „Diff-Basis bestimmen“); lokal optional die Maintainerin; in Tests `test/diffsize.test.ts`, `test/diffcoverage.test.ts`, `test/review-nachweis.test.ts`, `test/abnahme-nachweis.test.ts`, `test/slice-override.test.ts` | `resolveBase` (`scripts/check-basis.mjs`): `check-diffsize`, `check-diffcoverage`, `check-lockfile`, `check-doku-pflicht`, `check-review-nachweis`, `check-abnahme-nachweis`, `verify-lauf` |
 | `FACTORY_ABSCHLUSS_SKILL` | Kern | die Nutzerin bzw. der Nutzer (Shell oder `env` in `.claude/settings.local.json`; privater Zusatz-Skill, nie in der Projekt-Config; ein unbekannter Name wird als Hinweis gemeldet); Testskripte `test/projekt-config.test.ts`, `test/hauptchat-zerlegung.test.ts` | `projekt-config-lib` (`wirksamerAbschluss`: der Name geht vor `skills.abschluss`, `aus` heißt kein Abschluss-Skill): `projekt-config` (`abschluss`), `hauptchat-zerlegung` |
 | `FACTORY_DIFFSIZE_MAX_FILES` | Kern | Testskript `test/diffsize.test.ts` | `check-diffsize` |
 | `FACTORY_DIFFSIZE_MAX_LINES` | Kern | Testskript `test/diffsize.test.ts` | `check-diffsize` |
