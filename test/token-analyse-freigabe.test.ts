@@ -3,7 +3,9 @@ import { describe, expect, test } from "vitest";
 import { existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, symlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { fixture } from "./support/tmp-fixture";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawLib from "../scripts/token-analyse-freigabe-lib.mjs";
+// @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawCli from "../scripts/token-analyse-freigabe.mjs";
 
 type Pruefung = { ok: boolean; grund: string };
@@ -23,6 +25,7 @@ const lib = rawLib as unknown as {
 };
 type Ergebnis = { code: number; zeilen: string[]; freigegeben?: { k: number; wurzel: string }[] };
 const cli = rawCli as unknown as {
+  realMitVorfahr: (p: string) => string;
   cli: (argv: string[], env: Record<string, string | undefined>, deps: Record<string, unknown>) => Ergebnis;
   pruefen: (env: Record<string, string | undefined>, deps: Record<string, unknown>) => Ergebnis;
   fuehreFreigegebenAus: (k: number, argv: string[], f: { k: number; wurzel: string }[], d: Record<string, unknown>) => Record<string, unknown>;
@@ -75,7 +78,7 @@ describe("Freigabeliste und Remote-Eigentümer", () => {
 });
 
 describe("Allowlist lesender Befehle", () => {
-  const real = rawCli.realMitVorfahr as (p: string) => string;
+  const real = cli.realMitVorfahr;
   const aufbau = () => {
     const s = welt((w) => `${w.alpha}\n`);
     const wurzel = s.w.alpha;
