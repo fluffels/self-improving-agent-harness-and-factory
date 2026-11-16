@@ -141,6 +141,7 @@
         "Teil-Akzeptanzkriterien"
       ],
       "nachMerge": "Nach dem Merge:",
+      "pfade": "Pfade",
       "blocker": "blockiert durch",
       "abhaengigkeit": [
         "folgt nach #",

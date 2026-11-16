@@ -35,7 +35,7 @@ function musterMaengel(w, k) {
 }
 
 /**
- * Pur: die Mängel von `sprache.spezifikation` (Meldungen auf den Schlüsselpfaden `sprache.spezifikation.<k>`; leer = gültig). SSOT der Pflichtschlüssel:
+ * Pur: die Mängel von `sprache.spezifikation` (Meldungen auf den Schlüsselpfaden `sprache.spezifikation.<k>`; leer = gültig). SSOT der Pflichtschlüssel (`pfade`, der Name des Ticket-Abschnitts mit der Pfadliste, ist optional):
  * `wortschatz` wirft bei jedem Mangel, die Projekt-Config-Prüfung (`pruefeSprache`) meldet dieselben Texte.
  */
 export function spracheMaengel(sp) {
@@ -51,6 +51,7 @@ export function spracheMaengel(sp) {
   if (!Array.isArray(sp.abhaengigkeit) || sp.abhaengigkeit.length === 0 || !sp.abhaengigkeit.every((s) => istText(s) && s.split("#").length === 2)) {
     maengel.push("sprache.spezifikation.abhaengigkeit muss eine nicht-leere Liste von Sätzen mit genau einem „#“ als Platz der Ticketnummer sein");
   }
+  if (sp.pfade !== undefined && !istText(sp.pfade)) maengel.push("sprache.spezifikation.pfade muss ein nicht-leerer String sein");
   for (const k of ["negativfall", "begrenzung", "allquantor"]) maengel.push(...musterMaengel(sp[k], k));
   return maengel;
 }

@@ -232,8 +232,9 @@ describe("Prognose aus Pfaden", () => {
   });
 });
 
+const libTyp = lib;
 describe("pfadeAusTicket (K4)", () => {
-  const lib = { pfadeAusTicket: (b: string, name = "Pfade") => libRaw.pfadeAusTicket(b, name) };
+  const lib = { pfadeAusTicket: (b: string, name = "Pfade") => libTyp.pfadeAusTicket(b, name) };
   const body = (abschnitt: string) => `## Ziel\nText\n\n## Pfade\n${abschnitt}\n\n## Akzeptanzkriterien\n1. x\n`;
   test("Backtick-Pfad mit Beschreibung, erstes Wort, nummerierte Liste, führender Schrägstrich", () => {
     expect(lib.pfadeAusTicket(body("- `scripts/a.mjs` neu\n* docs/b.md, kurz\n1. /src/c.ts\n2) ./d.ts\n- [ ] e.ts"))).toEqual({ pfade: ["scripts/a.mjs", "docs/b.md", "src/c.ts", "d.ts", "e.ts"], fehler: null });
@@ -251,14 +252,14 @@ describe("pfadeAusTicket (K4)", () => {
     expect(lib.pfadeAusTicket(b)).toEqual({ pfade: ["a.md", "c.md", "e.md"], fehler: null });
   });
   test("der Abschnittsname kommt aus der Config (L5): `Paths` liest `## Paths`, `## Pfade` ist dann kein Eingang", () => {
-    expect(libRaw.pfadeAusTicket("## Paths\n- a.md\n", "Paths")).toEqual({ pfade: ["a.md"], fehler: null });
-    expect(libRaw.pfadeAusTicket("## Pfade\n- a.md\n", "Paths").fehler).toMatch(/„Paths“ fehlt/);
+    expect(lib.pfadeAusTicket("## Paths\n- a.md\n", "Paths")).toEqual({ pfade: ["a.md"], fehler: null });
+    expect(lib.pfadeAusTicket("## Pfade\n- a.md\n", "Paths").fehler).toMatch(/„Paths“ fehlt/);
   });
   test("ohne Namen: Fehler samt Fix, Stufe 2", () => {
     for (const n of [undefined, "", "  ", 3]) {
-      const r = libRaw.pfadeAusTicket("## Pfade\n- a.md\n", n as unknown as string);
+      const r = libTyp.pfadeAusTicket("## Pfade\n- a.md\n", n as string);
       expect(r.pfade).toEqual([]);
-      expect(r.fehler).toMatch(/sprache\.spezifikation\.pfade fehlt .*projekt\.json/);
+      expect(r.fehler).toMatch(/sprache\.spezifikation\.pfade fehlt .*Projekt-Config/);
     }
   });
   test.each([
