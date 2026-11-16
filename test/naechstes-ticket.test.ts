@@ -469,7 +469,7 @@ describe("Datumssperre (factory#629)", () => {
     expect(r.ticket?.nr).toBe(2);
     expect(r.uebersprungen[0]).toMatchObject({ nr: 1, grund: "Datumssperre bis 2026-11-30" });
     expect(frei([item(1, { body: ZEILE })], { heute: new Date("2026-11-30T00:00:00Z") }).ticket?.nr).toBe(1);
-    const m = frei([item(1, { body: "Frühestens: 2026-11-01\nFrühestens: 2026-12-24" })], { heute: HEUTE });
+    const m = frei([item(1, { body: "Frühestens: 2026-11-30\nFrühestens: 2026-12-24\nFrühestens: 2026-11-01" })], { heute: HEUTE });
     expect(m.uebersprungen[0].grund).toBe("Datumssperre bis 2026-12-24");
     expect(frei([item(1, { body: "Frühestens: kaputt" }), item(2)], { heute: HEUTE }).uebersprungen[0].grund).toBe(UNLESBAR);
     expect(frei([item(1, { body: "im Fließtext `Frühestens: 2099-01-01` genannt" })], { heute: HEUTE }).ticket?.nr).toBe(1);
