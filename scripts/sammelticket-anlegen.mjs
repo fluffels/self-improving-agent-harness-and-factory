@@ -6,7 +6,7 @@
  *
  *   node scripts/sammelticket-anlegen.mjs harness [--vorgaenger <nr>] [--dry-run]   # Harness-Sammelticket auf der Position laut AGENTS.md
  *   node scripts/sammelticket-anlegen.mjs langfuse [--top] [--dry-run]              # Langfuse-Sammelticket (mit --top an die Spitze)
- *   node scripts/sammelticket-anlegen.mjs codequalitaet [--vorgaenger <nr>] [--dry-run]   # Refactoring-Sammelticket im eigenen Repo (factory#156)
+ *   node scripts/sammelticket-anlegen.mjs refactoring [--vorgaenger <nr>] [--dry-run]   # Refactoring-Sammelticket im eigenen Repo (factory#156; `codequalitaet` gilt als Alias)
  *
  * Idempotent: gibt es schon ein ungeclaimtes Sammelticket dieser Art, legt das Skript nichts an (bei `harness` prüft es nur die
  * Position). Sonst: Issue per REST anlegen (Harness-Label der Config, kein Assignee, kein Such-Index), ins Board holen (Status Todo),
@@ -17,8 +17,8 @@
  * Ticket stand noch als offen und ungeclaimt darin, Evidenz #1560/#1561). Nach dem Anlegen und nach der Positions-Schleife läuft ein Dubletten-Check:
  * gibt es ein älteres offenes ungeclaimtes Ticket gleichen Titels, schließt das Skript das eigene (Kommentar, `not planned`, Exit 0; ein Item, das schon im Board stand, bleibt dort geschlossen liegen); hat das eigene
  * schon Kommentare, warnt es nur.
- * `codequalitaet` ist freiwillig: nur mit `labels.codequalitaet` in der Projekt-Config (Label, das auf das Produkt-Board des eigenen Repos führt); ohne
- * Label meldet das Skript „nichts angelegt“ (Exit 0, ohne gh-Aufruf). Das Ticket kommt hinter den Kopf des Produkt-Boards (ohne Klemmung hinter andere Sammeltickets, factory#162).
+ * `refactoring` ist im Bezieher standardmäßig an (ohne Schlüssel, ohne Label, Erkennung über den Titel); `labels.refactoring: false` schaltet es ab, ein Label-String (Alias `labels.codequalitaet`)
+ * legt es mit diesem Label an (muss auf das Produkt-Board des eigenen Repos führen). Abgeschaltet und in der Fabrik ohne Schlüssel (ADR 0031) meldet das Skript „nichts angelegt“ (Exit 0, ohne gh-Aufruf). Das Ticket kommt hinter den Kopf des Produkt-Boards (ohne Klemmung hinter andere Sammeltickets, factory#162).
  * Mit `--vorgaenger <nr>` nennt der Body den Vorgänger; `blockiert durch #<nr>` steht nur drin, solange er offen ist.
  *
  * Nur Node-Builtins und board-lib.mjs, analog zu board-place.mjs.
@@ -50,7 +50,7 @@ import {
   todoItem,
 } from "./board-lib.mjs";
 import { fehlendeLabels, fehlerText, schreibrechtText, tokenFuerZiel } from "./gh-cli.mjs";
-import { boardRolleFuer, labelAus, ladeProjektConfig, langfuseZiel, optionalesLabel, spracheAus, zielRepoFuer } from "./projekt-config-lib.mjs";
+import { boardRolleFuer, labelAus, ladeProjektConfig, langfuseZiel, projektConfigHinweise, refactoringEinstellung, spracheAus, zielRepoFuer } from "./projekt-config-lib.mjs";
 import { istBezieher as istBezieherWurzel } from "./sync-stand-lib.mjs";
 import { zerlegeRepo } from "./repo-form.mjs";
 import { blockerZeile } from "./spezifikation-lib.mjs";
@@ -60,10 +60,14 @@ import { fileURLToPath } from "node:url";
 
 const WURZEL = fileURLToPath(new URL("..", import.meta.url));
 
-const TITEL = { harness: SAMMELTICKET_TITEL, langfuse: LANGFUSE_SAMMELTICKET_TITEL, codequalitaet: REFACTORING_SAMMELTICKET_TITEL };
+const TITEL = { harness: SAMMELTICKET_TITEL, langfuse: LANGFUSE_SAMMELTICKET_TITEL, refactoring: REFACTORING_SAMMELTICKET_TITEL };
+/** Alte Art-Namen, auf die `parseArgs` und die Funktionen abbilden (Übergang, factory#594). */
+const ART_ALIAS = { codequalitaet: "refactoring" };
+const artName = (art) => (Object.hasOwn(ART_ALIAS, art) ? ART_ALIAS[art] : art);
 /** Titel, unter denen ein vorhandenes ungeclaimtes Ticket der Art erkannt wird (Anlage nur mit `TITEL`; der alte Codequalität-Titel gilt im Übergang weiter). */
-const SUCHTITEL = { harness: [SAMMELTICKET_TITEL], langfuse: [LANGFUSE_SAMMELTICKET_TITEL], codequalitaet: REFACTORING_TITEL_AKZEPTIERT };
-const KEIN_LABEL_TEXT = "labels.codequalitaet ist in der Projekt-Config nicht gesetzt: kein Refactoring-Sammelticket in diesem Projekt, nichts angelegt.";
+const SUCHTITEL = { harness: [SAMMELTICKET_TITEL], langfuse: [LANGFUSE_SAMMELTICKET_TITEL], refactoring: REFACTORING_TITEL_AKZEPTIERT };
+const ABGESCHALTET_TEXT = "labels.refactoring: false: Refactoring-Sammelticket abgeschaltet, nichts angelegt.";
+const FABRIK_TEXT = "Fabrik: kein Refactoring-Sammelticket ohne labels.refactoring (Code-Befunde der Fabrik sind Harness-Befunde), nichts angelegt.";
 const PRUEF_VERSUCHE = 5;
 const PRUEF_PAUSE_MS = 3000;
 const NEU_SETZEN_MAX = 2;
@@ -72,14 +76,14 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 /**
  * Argumente → `{ art, vorgaenger, top, dry }` oder null bei falscher Benutzung (unbekanntes, fehlendes, doppeltes Flag, Art nicht als
- * erstes Positionsargument). `--vorgaenger` gilt für `harness` und `codequalitaet`, `--top` nur für `langfuse`. Pur.
+ * erstes Positionsargument). `--vorgaenger` gilt für `harness` und `refactoring` (Alias `codequalitaet`), `--top` nur für `langfuse`. Pur.
  */
 export function parseArgs(argv) {
   const { werte, positionale, tokens, fehler } = flagsLesen(argv, { "dry-run": { type: "boolean" }, vorgaenger: { type: "string" }, top: { type: "boolean" } }, { positionale: true });
   if (fehler) return null;
   const ohneDry = tokens.filter((t) => !(t.kind === "option" && t.name === "dry-run"));
   if (ohneDry[0]?.kind !== "positional" || positionale.length !== 1) return null;
-  const art = positionale[0] ?? "";
+  const art = artName(positionale[0] ?? "");
   if (!Object.hasOwn(TITEL, art)) return null;
   const basis = { art, vorgaenger: null, top: false, dry: werte["dry-run"] === true };
   if (art === "langfuse") return werte.vorgaenger === undefined ? { ...basis, top: werte.top === true } : null;
@@ -119,14 +123,15 @@ const ANHAENGEN = "Befunde als Kommentar anhängen, je Zeile `- [ ] …` (Fließ
 const BODY_ZEILE = {
   harness: () => `Sammelticket für Harness-Befunde (AGENTS.md › Harness-Befunde sind Zeilen, keine Tickets). ${ANHAENGEN}`,
   langfuse: () => `Sammelticket für Befunde aus Langfuse-Daten (${factorySeiteIn(WURZEL, "docs/ticket-reihenfolge.md", "langfuse-befunde-gesammelt")}). ${ANHAENGEN}`,
-  codequalitaet: () => `Refactoring-Sammelticket für Code-Befunde außerhalb des Slices: fehlender Test, zu lange oder umständliche Funktion, doppeltes Muster (${factorySeiteIn(WURZEL, "docs/ticket-reihenfolge.md", "refactoring-gesammelt")}). Im Slice des Tickets behebt der Umsetzer sofort, hier steht nur, was außerhalb liegt. ${ANHAENGEN}`,
+  refactoring: () => `Refactoring-Sammelticket für Code-Befunde außerhalb des Slices: fehlender Test, zu lange oder umständliche Funktion, doppeltes Muster (${factorySeiteIn(WURZEL, "docs/ticket-reihenfolge.md", "refactoring-gesammelt")}). Im Slice des Tickets behebt der Umsetzer sofort, hier steht nur, was außerhalb liegt. ${ANHAENGEN}`,
 };
 
 /**
  * Body des neuen Sammeltickets (Vorlage wie die der früheren Tickets). Blocker-Zeile `<blocker> #N` (Wort aus `sprache.spezifikation.blocker`, Pflicht dann) bei jedem offenen (auch unlesbaren) Vorgänger, mit dem Zusatz,
  * dass die Sperre nur gilt, solange er offen ist (die Zeile bleibt nach dessen Merge stehen); „(dort in Arbeit)“ nur bei `in-arbeit`. Pur.
  */
-export function sammelticketBody({ art, vorgaenger = null, vorgaengerZustand = "zu", blocker }) {
+export function sammelticketBody({ art: artRoh, vorgaenger = null, vorgaengerZustand = "zu", blocker }) {
+  const art = artName(artRoh);
   if (!Object.hasOwn(TITEL, art)) throw new Error(`Unbekannte Art: ${String(art)}`);
   const zeilen = [BODY_ZEILE[art]()];
   if (vorgaenger !== null) zeilen[0] += ` Nachfolger von #${vorgaenger}${ZUSATZ[vorgaengerZustand] ?? ""}.`;
@@ -152,12 +157,12 @@ export function dublettenEntscheidung({ eigenNr, titel, eigenKommentare, andere,
 }
 
 /**
- * Pur (factory#156): das Label, mit dem das Sammelticket der Art angelegt wird: `harness`/`langfuse` tragen `labels.harness`, `codequalitaet` das freiwillige
- * `labels.codequalitaet` der Config; fehlt oder leer ist es → `null` (kein Refactoring-Sammelticket in diesem Projekt, es wird nichts angelegt).
+ * Pur (factory#156): das Label, mit dem das Sammelticket der Art angelegt wird: `harness`/`langfuse` tragen `labels.harness`, `refactoring` das `labels.refactoring` (Alias `labels.codequalitaet`)
+ * der Config; fehlt oder leer (oder `false`) ist es → `null` (ohne Label, oder abgeschaltet: `refactoringEinstellung` unterscheidet).
  */
 export function sammelLabel(config, art) {
-  if (art !== "codequalitaet") return labelAus(config, "harness");
-  return optionalesLabel(config, "codequalitaet");
+  if (artName(art) !== "refactoring") return labelAus(config, "harness");
+  return refactoringEinstellung(config).label;
 }
 
 /**
@@ -170,7 +175,7 @@ export function codequalitaetPlan(items, nr) {
 }
 
 /**
- * Pur (#76, ADR 0022 F10): wohin das Sammelticket gehört. Harness und Langfuse tragen das Harness-Label und liegen laut Trennregel auf dem Factory-Board; `codequalitaet` (Label aus `sammelLabel`)
+ * Pur (#76, ADR 0022 F10): wohin das Sammelticket gehört. Harness und Langfuse tragen das Harness-Label und liegen laut Trennregel auf dem Factory-Board; `refactoring` (Label aus `sammelLabel`)
  * liegt auf dem Produkt-Board des eigenen Repos. Ziel ist das Repo, dessen Issues das Board der Rolle führt (`boards[].repo`, ohne Schlüssel das eigene Repo). Liefert `{ rolle, repo, owner }`; `owner` ist
  * der Besitzer des Ziel-Repos (Vertrauensgrenze der Einzelabrufe).
  */
@@ -181,16 +186,24 @@ export function sammelZiel(config, label = labelAus(config, "harness")) {
 }
 
 /**
- * Pur (factory#195): Label und Ziel des Sammeltickets der Art `art`. `harness` und `codequalitaet` wie bisher (`sammelLabel`, `sammelZiel`; ohne Label für `codequalitaet` `{ label: null, ziel: null }`);
- * `langfuse` folgt `langfuseZiel` (im Bezieher das eigene Repo, `label` darf dort `null` sein: kein Label beim Anlegen). Wirft wie `langfuseZiel`. Liefert `{ label, ziel }`.
+ * Pur (factory#195): Label und Ziel des Sammeltickets der Art `art`. `harness` wie bisher (`sammelLabel`, `sammelZiel`);
+ * `langfuse` folgt `langfuseZiel` (im Bezieher das eigene Repo, `label` darf dort `null` sein: kein Label beim Anlegen); `refactoring` (factory#594) folgt `refactoringEinstellung`:
+ * abgeschaltet (`labels.refactoring: false`, in der Fabrik ohne Schlüssel) `{ label: null, ziel: null, quelle }`, im Bezieher ohne Schlüssel das Produkt-Board ohne Label. Wirft wie `langfuseZiel`. Liefert `{ label, ziel }` (bei `refactoring` zusätzlich `quelle`).
  */
 export function zielFuerArt(config, art, { bezieher = false } = {}) {
   if (art === "langfuse") {
     const lz = langfuseZiel(config, { bezieher });
     return { label: lz.label, ziel: { rolle: lz.rolle, repo: lz.repo, owner: zerlegeRepo(lz.repo).owner } };
   }
+  if (artName(art) === "refactoring") {
+    const { an, label, quelle } = refactoringEinstellung(config, { bezieher });
+    if (!an) return { label: null, ziel: null, quelle };
+    if (label !== null) return { label, ziel: sammelZiel(config, label), quelle };
+    const repo = zielRepoFuer([], config);
+    return { label, ziel: { rolle: "produkt", repo, owner: zerlegeRepo(repo).owner }, quelle };
+  }
   const label = sammelLabel(config, art);
-  return { label, ziel: label === null ? null : sammelZiel(config, label) };
+  return { label, ziel: sammelZiel(config, label) };
 }
 
 /** `zielFuerArt`, aber ein Konfigurationsfehler endet mit `✖`-Zeile und Exit 2 statt mit einem Stacktrace. */
@@ -338,11 +351,11 @@ export async function setzeUndPruefe({ nr, position, dry = false, board, repo },
   return neuGesetzt === 0 ? "unbekannt" : "falsch";
 }
 
-/** Erste Position eines Nicht-Harness-Tickets `nr` (Item `itemId` im Board `board`): `langfuse --top` an die Spitze (wörtlich, ohne Klemmung), `codequalitaet` hinter den Kopf; `langfuse` ohne `--top` bleibt am Ende. */
+/** Erste Position eines Nicht-Harness-Tickets `nr` (Item `itemId` im Board `board`): `langfuse --top` an die Spitze (wörtlich, ohne Klemmung), `refactoring` hinter den Kopf; `langfuse` ohne `--top` bleibt am Ende. */
 function setzeErstePosition({ art, top, board, repo, itemId, nr, titel }, d) {
-  if (!top && art !== "codequalitaet") return;
+  if (!top && art !== "refactoring") return;
   const items = ergaenzeFehlende(d.loadItems(board, { repo }), [todoItem({ id: itemId, number: nr, title: titel })]);
-  const plan = art === "codequalitaet" ? codequalitaetPlan(items, nr) : planFuerArgs(items, { anchor: null, numbers: [nr] });
+  const plan = art === "refactoring" ? codequalitaetPlan(items, nr) : planFuerArgs(items, { anchor: null, numbers: [nr] });
   for (const { item, afterId } of plan.steps) d.setPosition(board, item.id, afterId);
 }
 
@@ -395,7 +408,7 @@ export async function main(argv = process.argv.slice(2), deps = {}) {
   d.bezieher = istBezieher(d);
   const args = parseArgs(argv);
   if (!args) {
-    console.error("Aufruf: sammelticket-anlegen.mjs harness [--vorgaenger <nr>] [--dry-run] | langfuse [--top] [--dry-run] | codequalitaet [--vorgaenger <nr>] [--dry-run]");
+    console.error("Aufruf: sammelticket-anlegen.mjs harness [--vorgaenger <nr>] [--dry-run] | langfuse [--top] [--dry-run] | refactoring [--vorgaenger <nr>] [--dry-run]");
     process.exit(2);
   }
   if (args.art === "harness" && d.bezieher) {
@@ -403,10 +416,11 @@ export async function main(argv = process.argv.slice(2), deps = {}) {
     return process.exit(2);
   }
   const config = d.ladeConfig();
-  // Zwei Boards (ADR 0022 F11): Harness-/Langfuse-Sammeltickets tragen das Harness-Label der Config und stehen laut Trennregel auf dem Factory-Board; Codequalität liegt auf dem Produkt-Board.
+  // Zwei Boards (ADR 0022 F11): Harness-/Langfuse-Sammeltickets tragen das Harness-Label der Config und stehen laut Trennregel auf dem Factory-Board; Refactoring liegt auf dem Produkt-Board.
   // Langfuse im Bezieher (factory#195): das eigene Repo, ohne Harness-Label auf dem Produkt-Board (`zielFuerArt`).
-  const { label, ziel } = zielOderAbbruch(config, args.art, d.bezieher);
-  if (ziel === null) return d.log(KEIN_LABEL_TEXT); // Opt-in: ohne labels.codequalitaet kein Ticket, kein gh-Aufruf
+  if (args.art === "refactoring") for (const h of projektConfigHinweise(config)) console.error(`Hinweis: ${h}`);
+  const { label, ziel, quelle } = zielOderAbbruch(config, args.art, d.bezieher);
+  if (ziel === null) return d.log(quelle === "aus" ? ABGESCHALTET_TEXT : FABRIK_TEXT); // abgeschaltet oder Fabrik ohne Schlüssel: kein Ticket, kein gh-Aufruf
   d.kontingent();
   const board = boardFuerRolle(ziel.rolle);
   const { repo } = ziel;

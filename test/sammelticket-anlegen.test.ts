@@ -37,8 +37,11 @@ describe("parseArgs", () => {
     expect(A.parseArgs(["--dry-run", "harness", "--vorgaenger", "7"])).toMatchObject({ vorgaenger: 7, dry: true });
     expect(A.parseArgs(["langfuse"])).toEqual({ art: "langfuse", vorgaenger: null, top: false, dry: false });
     expect(A.parseArgs(["langfuse", "--top", "--dry-run"])).toEqual({ art: "langfuse", vorgaenger: null, top: true, dry: true });
-    expect(A.parseArgs(["codequalitaet"])).toEqual({ art: "codequalitaet", vorgaenger: null, top: false, dry: false });
-    expect(A.parseArgs(["codequalitaet", "--vorgaenger", "5", "--dry-run"])).toEqual({ art: "codequalitaet", vorgaenger: 5, top: false, dry: true });
+    expect(A.parseArgs(["refactoring"])).toEqual({ art: "refactoring", vorgaenger: null, top: false, dry: false });
+    expect(A.parseArgs(["refactoring", "--vorgaenger", "5", "--dry-run"])).toEqual({ art: "refactoring", vorgaenger: 5, top: false, dry: true });
+    // Alias (factory#594): der alte Art-Name wird auf refactoring abgebildet
+    expect(A.parseArgs(["codequalitaet"])).toEqual({ art: "refactoring", vorgaenger: null, top: false, dry: false });
+    expect(A.parseArgs(["codequalitaet", "--vorgaenger", "5", "--dry-run"])).toEqual({ art: "refactoring", vorgaenger: 5, top: false, dry: true });
   });
 
   test("Inline-Wert --vorgaenger=7 wird angenommen (node:util)", () => {
@@ -46,7 +49,7 @@ describe("parseArgs", () => {
   });
 
   test("falsche Benutzung → null", () => {
-    for (const bad of [["harness", "--generation"], ["--dry-run", "harness", "--generation"], ["langfuse", "--generation"], ["harness", "--vorgaenger", "5", "--generation"], [], ["egal"], ["harness", "--vorgaenger"], ["harness", "--vorgaenger", "abc"], ["harness", "--vorgaenger", "0"], ["harness", "--vorgaenger", "1.5"], ["harness", "--top"], ["harness", "--vorgaenger", "5", "x"], ["langfuse", "--vorgaenger", "5"], ["langfuse", "--top", "x"], ["--dry-run"], ["toString"], ["harness", "--dry-run", "--dry-run"], ["harness", "--vorgaenger", "5", "--vorgaenger", "6"], ["--vorgaenger", "5", "harness"], ["harness", "--"], ["harness", "--vorgaenger", "--dry-run"], ["harness", "--vorgaenger="], ["codequalitaet", "--top"], ["codequalitaet", "--vorgaenger", "abc"], ["codequalitaet", "--vorgaenger", "5", "x"]]) {
+    for (const bad of [["harness", "--generation"], ["--dry-run", "harness", "--generation"], ["langfuse", "--generation"], ["harness", "--vorgaenger", "5", "--generation"], [], ["egal"], ["harness", "--vorgaenger"], ["harness", "--vorgaenger", "abc"], ["harness", "--vorgaenger", "0"], ["harness", "--vorgaenger", "1.5"], ["harness", "--top"], ["harness", "--vorgaenger", "5", "x"], ["langfuse", "--vorgaenger", "5"], ["langfuse", "--top", "x"], ["--dry-run"], ["toString"], ["harness", "--dry-run", "--dry-run"], ["harness", "--vorgaenger", "5", "--vorgaenger", "6"], ["--vorgaenger", "5", "harness"], ["harness", "--"], ["harness", "--vorgaenger", "--dry-run"], ["harness", "--vorgaenger="], ["codequalitaet", "--top"], ["codequalitaet", "--vorgaenger", "abc"], ["codequalitaet", "--vorgaenger", "5", "x"], ["refactoring", "--top"], ["refactoring", "--vorgaenger", "abc"], ["refactoring", "--vorgaenger", "5", "x"]]) {
       expect(A.parseArgs(bad), bad.join(" ")).toBeNull();
     }
   });
@@ -432,12 +435,28 @@ describe("sammelLabel, codequalitaetPlan und main (factory#156)", () => {
     const ohneKopf = [b(2, "Ding"), b(3, "Codequalität (gesammelt)")];
     expect(X.codequalitaetPlan(ohneKopf, 3).steps.map((s) => [s.item.number, s.afterId])).toEqual([[3, null]]);
   });
-  test("Negativfall: ohne labels.codequalitaet wird nichts angelegt, kein Kontingent-, kein gh-Aufruf, kein Wurf", async () => {
+  test("Fabrik ohne labels.refactoring (W1, ADR 0031): nichts angelegt, kein Kontingent-, kein gh-Aufruf, kein Wurf", async () => {
     const log: string[] = [];
-    await X.main(["codequalitaet"], { ladeConfig: () => FREMD, log: (z: string) => log.push(z), kontingent: () => { throw new Error("darf nicht laufen"); } });
-    expect(log.join("\n")).toMatch(/labels\.codequalitaet .*nicht gesetzt.*nichts angelegt/);
-    await X.main(["codequalitaet", "--dry-run"], { ladeConfig: () => mitCq(""), log: (z: string) => log.push(z), kontingent: () => { throw new Error("darf nicht laufen"); } });
+    const nein = { kontingent: () => { throw new Error("darf nicht laufen"); }, bezieher: false };
+    await X.main(["refactoring"], { ladeConfig: () => FREMD, log: (z: string) => log.push(z), ...nein });
+    expect(log.join("\n")).toMatch(/Fabrik: kein Refactoring-Sammelticket ohne labels\.refactoring.*nichts angelegt/);
+    await X.main(["codequalitaet", "--dry-run"], { ladeConfig: () => mitCq(""), log: (z: string) => log.push(z), ...nein });
     expect(log).toHaveLength(2);
+  });
+  const mitRef = (l: unknown) => ({ ...FREMD, labels: { ...FREMD.labels, refactoring: l } });
+  test("Negativfall (AK4): labels.refactoring: false → Exit 0, „abgeschaltet, nichts angelegt“, auch im Bezieher, mit --vorgaenger und --dry-run, ohne Kontingent- und gh-Aufruf", async () => {
+    const log: string[] = [];
+    const nein = { kontingent: () => { throw new Error("darf nicht laufen"); }, findeVorhandenes: () => { throw new Error("kein gh"); }, legeAn: () => { throw new Error("kein gh"); }, log: (z: string) => log.push(z) };
+    for (const bezieher of [true, false]) {
+      for (const argv of [["refactoring"], ["refactoring", "--vorgaenger", "5"], ["codequalitaet", "--dry-run"]]) {
+        await X.main(argv, { ladeConfig: () => mitRef(false), bezieher, ...nein });
+      }
+    }
+    expect(log).toHaveLength(6);
+    for (const z of log) expect(z).toMatch(/abgeschaltet, nichts angelegt/);
+    // false schlägt auch den Alias
+    await X.main(["refactoring"], { ladeConfig: () => ({ ...FREMD, labels: { ...FREMD.labels, refactoring: false, codequalitaet: "area:code" } }), bezieher: true, ...nein });
+    expect(log).toHaveLength(7);
   });
 });
 
@@ -838,6 +857,33 @@ describe("main mit injizierten gh-/Board-Nähten (factory#189 L7): Verzweigung j
     const { deps } = fakes({ schliesseWennDublette: (_nr: number, t: unknown) => (titel.push(t), false) });
     await M(["codequalitaet"], deps);
     expect(titel).toEqual([[NEU, ALT]]);
+  });
+
+  test("AK1: Bezieher ohne Schlüssel: refactoring wird angelegt, ohne Label, auf dem Produkt-Board, hinter den Kopf gesetzt", async () => {
+    const { deps, rufe } = fakes({ ladeConfig: () => FREMD, bezieher: true });
+    await M(["refactoring"], deps);
+    expect(rufe.find((r) => r[0] === "legeAn")![1]).toMatchObject({ repo: FREMD.repo, titel: "Refactoring (gesammelt)", harness: null });
+    expect(rufe.find((r) => r[0] === "addToBoardTodo")![1]).toEqual(BOARD("produkt"));
+    expect(rufe.filter((r) => r[0] === "setPosition")).toHaveLength(1);
+  });
+
+  test("labels.refactoring (Label) gilt vor dem Alias labels.codequalitaet; der Alias allein legt mit seinem Label an und gibt einen Hinweis auf stderr", async () => {
+    const both = { ...FREMD, labels: { ...FREMD.labels, refactoring: "area:neu", codequalitaet: "area:alt" } };
+    const a = fakes({ ladeConfig: () => both });
+    const err = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      await M(["refactoring"], a.deps);
+      expect(a.rufe.find((r) => r[0] === "legeAn")![1]).toMatchObject({ harness: "area:neu" });
+      expect(err.mock.calls.join("\n")).toMatch(/Hinweis: labels\.codequalitaet ist veraltet und wird ignoriert/);
+      err.mockClear();
+      await M(["codequalitaet"], fakes().deps); // cfg trägt nur den Alias
+      expect(err.mock.calls.join("\n")).toMatch(/Hinweis: labels\.codequalitaet ist veraltet \(gilt im Übergang als Alias\)/);
+      err.mockClear();
+      await M(["refactoring"], fakes({ ladeConfig: () => ({ ...FREMD, labels: { ...FREMD.labels, refactoring: "area:code" } }) }).deps);
+      expect(err).not.toHaveBeenCalled();
+    } finally {
+      err.mockRestore();
+    }
   });
 
   test("codequalitaet: Label aus labels.codequalitaet, Produkt-Board im eigenen Repo, immer hinter den Kopf gesetzt", async () => {

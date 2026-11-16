@@ -28,9 +28,10 @@ describe("zielFuerArt", () => {
     expect(X.zielFuerArt(FREMD, "langfuse", { bezieher: false }).ziel?.repo).toBe(FREMD.repo);
   });
 
-  test("harness und codequalitaet bleiben auch im Bezieher unverändert (Ziel der Fabrik bzw. kein Label, kein Ziel)", () => {
+  test("harness bleibt im Bezieher unverändert (Ziel der Fabrik); refactoring ist dort ohne Schlüssel an (Produkt-Board, kein Label, factory#594)", () => {
     expect(X.zielFuerArt(fremd, "harness", { bezieher: true }).ziel?.repo).toBe(FABRIK);
-    expect(X.zielFuerArt(FREMD, "codequalitaet", { bezieher: true })).toEqual({ label: null, ziel: null });
+    expect(X.zielFuerArt(FREMD, "refactoring", { bezieher: true })).toEqual({ label: null, ziel: { rolle: "produkt", repo: FREMD.repo, owner: FREMD.repo.split("/")[0] }, quelle: "standard" });
+    expect(X.zielFuerArt(FREMD, "codequalitaet", { bezieher: true }).ziel?.repo).toBe(FREMD.repo);
   });
 
   test("ein Bezieher, dessen Boards das eigene Repo nicht führen, wirft mit Fix-Zeile", () => {
