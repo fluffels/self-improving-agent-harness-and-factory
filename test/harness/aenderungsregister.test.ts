@@ -24,7 +24,6 @@ const lib = libModul as unknown as {
   VERFALL_PFLICHTFELDER: string[];
   FREIE_PARAMETER: string[];
   fangquote: (zeile: Zeile, zeilen: Zeile[], punkte: Zeile[]) => { wert?: number; laeufe?: number; faenge?: number; luecke?: string };
-  fangquoteExport: (punkte: { datei: string; einheitId: string; ts: number; wert: number }[], o?: { luecke?: string }) => Record<string, unknown>;
   leseMesspunkte: (json: unknown, pfad: string) => { quelle: string; punkte: Zeile[] };
   auswertung: (register: { zeilen: Zeile[] }, exporte: unknown[], o: Record<string, unknown>) => { zeilen: unknown[] };
 };
@@ -331,20 +330,24 @@ describe("Fangquote je Wächter und Regel (factory#607)", () => {
   });
 });
 
-describe("Messpunkte-Export der Fangquote (factory#607)", () => {
-  const p = [{ datei: "test/harness/a.test.ts", einheitId: "ci:1:5", ts: Date.parse("2026-11-20T10:00:00Z"), wert: 1 }];
-
-  it("der Export besteht leseMesspunkte (gleiches Format wie jede andere Quelle)", () => {
-    const e = lib.leseMesspunkte(lib.fangquoteExport(p), "x.json");
-    expect(e.quelle).toBe("gate-fundquote");
-    expect(e.punkte[0]).toMatchObject({ messgroesse: "fangquote", parameter: "test/harness/a.test.ts", zeitpunkt: "2026-11-20T10:00:00.000Z", wert: 1 });
+describe("Messpunkte-Export der Quelle gate-fundquote (factory#607)", () => {
+  const export_ = (extra: Record<string, unknown> = {}) => ({
+    art: "fangquote-messpunkte",
+    quelle: "gate-fundquote",
+    punkte: [{ messgroesse: "fangquote", parameter: "test/harness/a.test.ts", zeitpunkt: "2026-11-20T10:00:00.000Z", einheitId: "ci:1:5", wert: 1 }],
+    ...extra,
   });
 
-  it("ohne Punkte trägt der Export die Lücke mit Grund und keinen Punkt (nie eine 0)", () => {
-    const e = lib.fangquoteExport([], { luecke: "keine Logs im Fenster" });
-    expect(e).toMatchObject({ luecke: "keine Logs im Fenster", punkte: [] });
-    expect(lib.fangquoteExport([]).luecke).toMatch(/keine Messpunkte/);
-    expect(lib.fangquoteExport(p)).not.toHaveProperty("luecke");
-    expect(lib.leseMesspunkte(e, "x.json").punkte).toEqual([]);
+  it("der Export des Kern-Skripts besteht leseMesspunkte, auch mit luecke ohne Punkte", () => {
+    const e = lib.leseMesspunkte(export_(), "x.json");
+    expect(e.quelle).toBe("gate-fundquote");
+    expect(e.punkte[0]).toMatchObject({ messgroesse: "fangquote", parameter: "test/harness/a.test.ts", wert: 1 });
+    expect(lib.leseMesspunkte(export_({ punkte: [], luecke: "keine Logs im Fenster" }), "x.json").punkte).toEqual([]);
+  });
+
+  it("die Kennung der Register-Exporte bleibt gültig, jede andere art ist rot", () => {
+    expect(lib.leseMesspunkte(export_({ art: "aenderungsregister-messpunkte" }), "x.json").quelle).toBe("gate-fundquote");
+    expect(() => lib.leseMesspunkte(export_({ art: "irgendwas" }), "x.json")).toThrow(/art .* erwartet/);
+    expect(() => lib.leseMesspunkte(export_({ punkte: [{ messgroesse: "fangquote", parameter: "a", zeitpunkt: "2026-11-20", einheitId: "x", wert: "1" }] }), "x.json")).toThrow(/wert/);
   });
 });

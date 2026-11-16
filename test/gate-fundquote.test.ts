@@ -598,6 +598,8 @@ const wf = gfModule as {
   faengeAusText: (z: string[]) => { vitest: boolean; faenge: string[]; ausgeschlossen: { datei: string; grund: string }[] };
   waechterPunkte: (l: (Lauf & { ts: number; waechter?: Waechter })[], d: string[]) => { datei: string; einheitId: string; ts: number; wert: number }[];
   waechterLuecke: (l: Lauf[]) => string;
+  waechterExport: (p: { datei: string; einheitId: string; ts: number; wert: number }[], luecke: string) => Record<string, unknown>;
+  waechterDateien: (o: string, liste: (p: string) => string[]) => string[];
 };
 const A = "test/harness/a.test.ts";
 const B = "test/harness/b.test.ts";
@@ -671,5 +673,67 @@ describe("waechterPunkte und waechterLuecke", () => {
   test("die Einheit-Id ist je Lauf eindeutig, auch bei gleicher Session", () => {
     const l = [lauf("s", { faenge: [], ausgeschlossen: [] }, { ts: T0 }), lauf("s", { faenge: [], ausgeschlossen: [] }, { ts: T0 + 1 })];
     expect(new Set(wf.waechterPunkte(l, [A]).map((x) => x.einheitId)).size).toBe(2);
+  });
+});
+
+describe("Messpunkte-Export der Wächter-Fänge", () => {
+  const basis = (extra: Record<string, unknown> = {}) => {
+    const log = vi.fn<(t: string) => void>();
+    const err = vi.fn<(t: string) => void>();
+    return { log, err, deps: { pkg, findeSessions: () => [], ladeSession: () => ({ id: "s", main: [], subagents: [] }), gh: () => "[]", liesDatei: lies, log, err, jetzt: () => T0 + 86_400_000, ...extra } };
+  };
+  const z = (sek: number, text: string) => `Tests\tVerify\t2026-11-01T10:00:${String(sek).padStart(2, "0")}.1Z ${text}`;
+  const log = (block: string[]) =>
+    [z(0, "##[group]Run npm test"), z(1, "> beispiel@1.0.0 test"), ...block.map((t, i) => z(2 + i, t)), z(30, " Test Files  1 failed | 1 passed (2)"), z(31, "##[error]Process completed with exit code 1.")].join("\n");
+  const argv = ["--von", "2026-11-01", "--bis", "2026-11-02", "--ci-log", "x.txt", "--waechter-dir", "test/harness"];
+  const lauf = (text: string, dateien: string[] = [A, B]) => {
+    const b = basis({ liesDatei: () => text, waechterDateien: () => dateien });
+    return { exit: gf.main(argv, b.deps), out: b.log.mock.calls.map((c) => c[0] as string) };
+  };
+  type Export = { art: string; quelle: string; luecke?: string; punkte: { parameter: string; wert: number; einheitId: string; zeitpunkt: string }[] };
+
+  test("ein roter Wächter ergibt 1, der grüne daneben 0, je Lauf eine Einheit-Id", () => {
+    const r = lauf(log([` FAIL  ${A} > t`, "AssertionError: x"]));
+    const e = JSON.parse(r.out[0]) as Export;
+    expect(r.exit).toBe(0);
+    expect([e.art, e.quelle]).toEqual(["fangquote-messpunkte", "gate-fundquote"]);
+    expect(e.punkte.map((p) => [p.parameter, p.wert])).toEqual([[A, 1], [B, 0]]);
+    expect(new Set(e.punkte.map((p) => p.einheitId)).size).toBe(1);
+    expect(e).not.toHaveProperty("luecke");
+  });
+
+  test("Negativfall: ein Zeitlimit ist kein Fang, die Datei bekommt in diesem Lauf keinen Punkt", () => {
+    const e = JSON.parse(lauf(log([` FAIL  ${A} > t`, "Error: Test timed out in 5000ms."])).out[0]) as Export;
+    expect(e.punkte.map((p) => [p.parameter, p.wert])).toEqual([[B, 0]]);
+  });
+
+  test("Negativfall: ohne Logs keine Punkte, die Lücke nennt den Grund (nie eine 0)", () => {
+    const e = JSON.parse(lauf("").out[0]) as Export;
+    expect(e.punkte).toEqual([]);
+    expect(e.luecke).toMatch(/keine Logs im Fenster/);
+  });
+
+  test("Läufe ohne Vitest-Ausgabe liefern ebenfalls eine Lücke, keine Nullen", () => {
+    const e = JSON.parse(lauf([z(0, "##[group]Run npm run lint"), z(1, "> beispiel@1.0.0 lint"), z(2, "fertig")].join("\n")).out[0]) as Export;
+    expect(e.punkte).toEqual([]);
+    expect(e.luecke).toMatch(/keine gezählten Läufe mit Vitest-Ausgabe/);
+  });
+
+  test("ohne Testdateien unter dem Ordner ist es eine Lücke mit dem Ordnernamen", () => {
+    const e = JSON.parse(lauf(log([]), []).out[0]) as Export;
+    expect(e).toMatchObject({ punkte: [], luecke: "keine Testdateien unter test/harness" });
+  });
+
+  test("ohne --waechter-dir bleibt es beim Bericht; --waechter-dir ohne Wert ist Exit 2", () => {
+    const b = basis({ liesDatei: () => log([]) });
+    expect(gf.main(["--von", "2026-11-01", "--bis", "2026-11-02", "--ci-log", "x.txt"], b.deps)).toBe(0);
+    expect(b.log.mock.calls[0][0]).toMatch(/^Gate-Fundquote/);
+    expect(gf.main(["--waechter-dir"], basis().deps)).toBe(2);
+  });
+
+  test("waechterDateien: nur Testdateien, mit / und relativ, sortiert; waechterExport trägt luecke nur ohne Punkte", () => {
+    expect(wf.waechterDateien("test/harness", () => ["b.test.ts", "sub\\a.spec.mts", "hilfe.ts", "README.md"])).toEqual(["test/harness/b.test.ts", "test/harness/sub/a.spec.mts"]);
+    expect(wf.waechterExport([], "g")).toMatchObject({ luecke: "g", punkte: [] });
+    expect(wf.waechterExport([{ datei: A, einheitId: "e", ts: 0, wert: 1 }], "g")).not.toHaveProperty("luecke");
   });
 });

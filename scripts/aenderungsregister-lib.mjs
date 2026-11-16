@@ -277,12 +277,15 @@ const tageZu = (datum, n) => {
 /** Pur: Marker im Ticket-Body, über den die Anlage dedupliziert (alle Zustände). */
 export const markerFuer = (id) => `<!-- aenderungsregister:${id} -->`;
 
+/** Erlaubte `art` eines Messpunkte-Exports; `fangquote-messpunkte` ist die Kennung des Kern-Skripts `gate-fundquote.mjs` (Quelle `gate-fundquote`). */
+export const EXPORT_ARTEN = ["aenderungsregister-messpunkte", "fangquote-messpunkte"];
+
 /** Pur: ein Messpunkte-Export `{ art: "aenderungsregister-messpunkte", quelle, punkte[] }` → `{ quelle, punkte }`; wirft bei jeder Formabweichung (nie ein Teilwert). */
 export const leseMesspunkte = (json, pfad) => {
   const wirf = (text) => {
     throw new Error(`${pfad}: ${text}`);
   };
-  if (!istObjekt(json) || json.art !== "aenderungsregister-messpunkte") wirf('art "aenderungsregister-messpunkte" erwartet');
+  if (!istObjekt(json) || !EXPORT_ARTEN.includes(json.art)) wirf(`art "${EXPORT_ARTEN[0]}" erwartet (Quelle gate-fundquote auch "${EXPORT_ARTEN[1]}")`);
   if (!QUELLEN.includes(json.quelle)) wirf(`quelle: ${QUELLEN.join(" | ")} erwartet`);
   if (!Array.isArray(json.punkte)) wirf("punkte: Liste erwartet");
   json.punkte.forEach((p, i) => {
@@ -527,19 +530,8 @@ export function renderMarkdown(ergebnis, tickets = []) {
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
-// Fangquote (factory#607, Teil 1/4 von factory#517): Messpunkte-Export und Quote je Wächter und Regel.
+// Fangquote (factory#607, Teil 1/4 von factory#517): Quote je Wächter und Regel aus den Messpunkten der Quelle gate-fundquote.
 // ---------------------------------------------------------------------------------------------------------------------
-
-/**
- * Pur: der Messpunkte-Export der Quelle `gate-fundquote` aus den Wächter-Punkten `[{ datei, einheitId, ts, wert }]` (wert 1 = gefangen, 0 = Lauf ohne Fang).
- * Der Mittelwert je Datei ist die Fangquote. Ohne Punkte trägt der Export `luecke` mit Grund (nie eine 0).
- */
-export const fangquoteExport = (punkte, { luecke = null } = {}) => ({
-  art: "aenderungsregister-messpunkte",
-  quelle: "gate-fundquote",
-  ...(punkte.length === 0 ? { luecke: luecke ?? "keine Messpunkte im Fenster" } : {}),
-  punkte: punkte.map((p) => ({ messgroesse: "fangquote", parameter: p.datei, zeitpunkt: new Date(p.ts).toISOString(), einheitId: p.einheitId, wert: p.wert })),
-});
 
 /**
  * Pur: Fangquote einer Verfall-Zeile aus Messpunkten (`leseMesspunkte`-Form) im Fenster aufgenommen bis ablauf: `{ wert, laeufe, faenge }` oder `{ luecke: grund }`.

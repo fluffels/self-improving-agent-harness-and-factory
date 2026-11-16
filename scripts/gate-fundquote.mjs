@@ -29,6 +29,7 @@
  *  7. Wächter-Fänge (`faengeAusText`, `waechterPunkte`): je gezähltem Lauf mit Vitest-Summe (`Test Files …`) zählt jede Testdatei mit einer Zeile
  *     `FAIL <datei>` als gefangen; ein Rot durch Zeitlimit, Signal-Abbruch oder Infrastruktur (Block bis zur nächsten FAIL-Zeile) zählt nie als Fang
  *     und nimmt die Datei aus diesem Lauf heraus (ADR 0027). Ohne Logs im Fenster gibt es keine Punkte, nie eine 0 (`waechterLuecke` nennt den Grund).
+ *     `--waechter-dir <ordner>` gibt statt des Berichts den Messpunkte-Export (`waechterExport`: je Lauf und Testdatei unter dem Ordner 1 oder 0, Quelle `gate-fundquote`) aus.
  *
  * Grenzen: nur Claude-Transkripte (Codex-Sitzungen werden nicht gelesen; die CI-Quelle gilt für beide Laufzeiten); Hintergrund- und
  * pre-push-Läufe fehlen; ein fremdes npm-Skript, das selbst Gate-Skripte ruft, kann Rot vortäuschen; das PowerShell-Tool zählt nur
@@ -368,6 +369,9 @@ export function faengeAusText(zeilen) {
   return { vitest, faenge: [...faenge], ausgeschlossen };
 }
 
+/** Kennung des Messpunkte-Exports von `waechterExport` (die Auswertung liest sie als gültige `art`). */
+export const EXPORT_ART = "fangquote-messpunkte";
+
 /** Der Teil `waechter` eines Laufs, nur wenn die Ausgabe eine Vitest-Summe trägt (sonst ist der Lauf für die Quote unsichtbar). */
 const waechterTeil = (zeilen) => {
   const f = faengeAusText(zeilen);
@@ -447,10 +451,26 @@ export function bericht(daten, { json = false } = {}) {
 // ── Lauf ─────────────────────────────────────────────────────────────────────
 
 const OPTIONEN = {
-  von: { type: "string" }, bis: { type: "string" }, ci: { type: "string" }, json: { type: "boolean" },
+  von: { type: "string" }, bis: { type: "string" }, ci: { type: "string" }, json: { type: "boolean" }, "waechter-dir": { type: "string" },
   transkript: { type: "string", multiple: true }, "ci-log": { type: "string", multiple: true },
 };
-const AUFRUF = "Aufruf: node scripts/gate-fundquote.mjs [--von <ISO>] [--bis <ISO>] [--ci <workflow>] [--transkript <datei>]… [--ci-log <datei>]… [--json]";
+const AUFRUF = "Aufruf: node scripts/gate-fundquote.mjs [--von <ISO>] [--bis <ISO>] [--ci <workflow>] [--transkript <datei>]… [--ci-log <datei>]… [--json] [--waechter-dir <ordner>]";
+const TESTDATEI = /\.(?:test|spec)\.[cm]?[jt]sx?$/;
+
+/** Testdateien unter `ordner` (rekursiv) als `/`-Pfade relativ zum Arbeitsverzeichnis, sortiert; `liste` ist injizierbar. */
+export const waechterDateien = (ordner, liste = (p) => readdirSync(p, { recursive: true })) =>
+  liste(ordner).map((p) => join(ordner, String(p)).replace(/\\/g, "/")).filter((p) => TESTDATEI.test(p)).sort();
+
+/**
+ * Regel 7: der Messpunkte-Export `{ art, quelle: "gate-fundquote", punkte }` aus den Wächter-Punkten (`waechterPunkte`): je Lauf und Datei 1 (gefangen)
+ * oder 0, der Mittelwert je Datei ist die Fangquote. Ohne Punkte steht `luecke` mit Grund statt einer 0. Pur.
+ */
+export const waechterExport = (punkte, luecke) => ({
+  art: EXPORT_ART,
+  quelle: "gate-fundquote",
+  ...(punkte.length === 0 ? { luecke } : {}),
+  punkte: punkte.map((p) => ({ messgroesse: "fangquote", parameter: p.datei, zeitpunkt: new Date(p.ts).toISOString(), einheitId: p.einheitId, wert: p.wert })),
+});
 const TAG = 86_400_000;
 
 function* echteSessions(vonMs) {
@@ -507,7 +527,7 @@ function fensterAus(werte, jetzt) {
 /** Standard-Zugriffe von `sammle` und `main` (Tests und Aufrufer überschreiben einzelne). */
 export const standardZugriffe = () => ({
   pkg: () => JSON.parse(readFileSync("package.json", "utf8")), findeSessions: echteSessions, ladeSession: ladeSessionDatei,
-  gh: (args) => ghText(args), liesDatei: (p) => readFileSync(p, "utf8"), log: console.log, err: console.error, jetzt: () => Date.now(),
+  gh: (args) => ghText(args), liesDatei: (p) => readFileSync(p, "utf8"), waechterDateien, log: console.log, err: console.error, jetzt: () => Date.now(),
 });
 
 /**
@@ -548,6 +568,13 @@ export function main(argv = process.argv.slice(2), deps = {}) {
   const s = sammle(argv, d);
   if (s.exit !== undefined) return s.exit;
   const { werte, fenster, satz, transkript, ci } = s;
+  if (werte["waechter-dir"] !== undefined) {
+    const dateien = d.waechterDateien(werte["waechter-dir"]);
+    const laeufe = [...transkript, ...ci.laeufe];
+    const punkte = dateien.length === 0 ? [] : waechterPunkte(laeufe, dateien);
+    d.log(JSON.stringify(waechterExport(punkte, dateien.length === 0 ? `keine Testdateien unter ${werte["waechter-dir"]}` : waechterLuecke(laeufe)), null, 2));
+    return 0;
+  }
   const quellen = { transkript: zaehle(transkript, satz.gates), ci: zaehle(ci.laeufe, satz.gates) };
   const gesamt = zaehle([...transkript, ...ci.laeufe], satz.gates);
   const kopf = `Fenster ${new Date(fenster.von).toISOString()} bis ${new Date(fenster.bis).toISOString()}`;
