@@ -63,13 +63,13 @@ describe("Fabrik-eigene Analyse-Dateien (factory#518)", () => {
     expect(nennungen({ "docs/x.md": "nichts dergleichen" }, FABRIK_EIGEN)).toHaveLength(0);
   });
 
-  it("(c) jedes Einstiegsskript der Liste sperrt im Bezieher (statisch: importiert und ruft istBezieher)", () => {
+  it("(c) jedes Einstiegsskript der Liste sperrt den Lauf im Bezieher", () => {
     const einstiege = FABRIK_EIGEN.filter((x) => x.art === "skript" || x.art === "skript-wurzel");
     expect(einstiege.length).toBeGreaterThan(1);
     for (const f of einstiege) expect([f.pfad, /istBezieher\(/.test(readFileSync(join(WURZEL, f.pfad), "utf8"))]).toEqual([f.pfad, true]);
   });
 
-  describe("(c) jedes Skript der Liste mit Arbeitsverzeichnis-Sperre bricht im Bezieher ab", () => {
+  describe("(c) jedes Skript der Liste bricht im Bezieher ab", () => {
     for (const f of FABRIK_EIGEN.filter((x) => x.art === "skript")) {
       it(f.pfad, () => {
         const cwd = fixture({ ".factory/sync-stand.json": "{}\n" });
