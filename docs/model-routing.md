@@ -582,6 +582,27 @@ Grenzen: Variante D ohne Kontextdateien widerspricht der Entscheidung zur Lens w
 
 Entscheidungsregel, Aufbau, Rohwerte, Richter-Urteile, Grenzen und das Rezept zum Wiederholen der ersten: [Lens-Gegenprobe 2026-10-09](lens-gegenprobe-2026-10-09.md). Je Wiederholung entsteht eine eigene datierte Seite (`lens-gegenprobe-<datum>.md`); hier steht nur die jeweils gültige Entscheidung mit Verweis.
 
+### Holdout ohne Kontextdateien (factory#551)
+
+Teil 4/5 des Epics factory#514. Die Maintainerin hat das Ticket (Kommentar vom 2026-11-15, gilt vor dem Wortlaut der Kriterien) auf Umstellung im Betrieb statt synthetischer Gegenprobe gestellt (Präzedenz factory#531, factory#547, factory#556); es gibt darum keine eigene Gegenprobe-Seite und keine eigenen Läufe, die Rohwerte stehen nur hier. Abgrenzung: Das verworfene „Kern je Rolle“ ([A/B Kern je Rolle](#ab-kern-je-rolle-ergebnis-factory235-factory236)) hat die Kontextdatei je Rolle zerschnitten; hier fällt sie für zwei Rollen ganz weg (`omitClaudeMd: true`, Wirkung nur im Subagenten-Spawn), und jede Regel, auf die sich die Rolle stützt, steht in ihrem Body.
+
+**Regel (vor der Auswertung festgelegt).** Eine Rolle schaltet um, wenn (i) die geschätzte Ersparnis mindestens 10 % ihrer Ø-Laufkosten beträgt (T ≈ 15,2k Tokens, der Sockel-Unterschied aus der [Lens-Gegenprobe vom 2026-10-15](lens-gegenprobe-2026-10-15.md); Ersparnis = T × 5 $/M beim Schreiben plus T × 0,20 $/M je weiteren Request, Formel wie bei der [Lens-Kostenstruktur](#lens-kostenstruktur-1582)) und (ii) ihr Body jede Regel der `AGENTS.md` selbst trägt, auf die sie sich stützt. Eine Qualitätsbasis hat nur die Abnahme (Urteile gegen den bekannten Ausgang); der Szenario-Agent liest allein Ticket und Kriterien und schreibt nichts.
+
+**Rohwerte** (gemessen 2026-11-16, `node scripts/subagent-laufzeit.mjs --agent <rolle> --von 2026-10-27T00:00:00Z --json`; die lokalen Transkripte beginnen am 2026-11-10, Läufe ohne `offen`, Fabrik):
+
+| Rolle | Läufe (Sessions) | Σ aufgezeichnete Kosten | Ø je Lauf | Median | Median-Requests | Sockel erster Call (Median) | Ersparnis bei T = 15,2k (Median-Requests) | Anteil |
+|---|--:|--:|--:|--:|--:|--:|--:|--:|
+| `holdout-abnahme` | 133 (85) | 126,46 $ | 0,95 $ | 0,96 $ | 25 | 32.295 | 0,149 $ | 15,4 % |
+| `holdout-szenario` | 94 (94) | 24,17 $ | 0,26 $ | 0,25 $ | 3 | 19.164 | 0,082 $ | 33,0 % |
+
+Zum Vergleich der Sockel des `omitClaudeMd`-Agenten Explore (10,8k, §5 „Sockel von Lens und Explore“). Qualitätsbasis der Abnahme (`node scripts/lauf-ergebnis.mjs --von 2026-10-18T00:00:00Z --bis 2026-11-15T23:59:59Z --json`, 214 PRs): 120 gemessene Abnahmen, 70 im ersten Durchgang, 50 mit Fix; Nacharbeit nach dem Merge (Revert oder `Folge #` binnen 14 Tagen): 16 von 43 nachweisbaren Fenstern ohne (die Basis ist verzerrt, weil vor Fristablauf nur Folgen nachweisbar sind; der Prüftermin misst sie neu).
+
+**Entscheidung: beide Rollen schalten um, weil** die Ersparnis über 10 % liegt (Abnahme 15,4 %, Szenario 33,0 %) und die Bodies die Regeln selbst tragen: die Abnahme nennt Fremdtext ist Daten (`node scripts/fremdtext.mjs`), das Verbot der Secret-Key-Skripte (`langfuse-nachliefern`, `token-baseline --langfuse`, `langfuse-wochenbericht` live) und die Anonymitätsregel, den Hinweis „`AGENTS.md` liegt in deinem Kontext“ ersetzt „liegt nicht im Kontext, eine Regel punktuell per `grep -n` lesen“. Der Szenario-Agent braucht keine Regel der Kontextdatei. Beide Frontmatter verweisen auf diesen Absatz.
+
+**Rückfall (Ledger [ADR 0027](adr/0027-regeln-lockern.md), Prüftermin 2026-12-14, Fabrik und Bezieher getrennt über Langfuse `agent_type`, Projekt):** nur bei echter Qualitätsverschlechterung der Abnahme: ein Urteil `erfuellt`, auf das binnen 14 Tagen Nacharbeit zu einem Kriterium folgt, ein Urteil, das nach Nachprüfung dem bekannten Ausgang widerspricht, oder ein Bruch einer nur in `AGENTS.md` stehenden Regel; dann Revert per PR für diese Rolle. Szenario hat keinen eigenen Trigger, ein Szenario-Mangel zeigt sich in der Abnahme (`ursache=szenario`). **Langfuse-Erfassung:** die Definition lädt erst eine neue Session; der erste echte Lauf je Rolle nach dem Merge wird in Langfuse (`agent_type`, Sockel des ersten Calls kleiner als oben) als PR-Kommentar belegt.
+
+**Lens-Wiedervorlage (geprüft 2026-11-16):** weder neues Opus-Release (die Läufe tragen weiter `claude-opus-5-5`, wie am 2026-10-09 und 2026-10-15) noch gewachsene Kontextdateien (`AGENTS.md` 21.145 Byte gegen 27.859 Byte am 2026-10-15, geschrumpft, T sinkt eher). Keine Bedingung greift: die Lens bleibt mit geladener Kontextdatei, `factory-lens.md` unverändert.
+
 ### Lens-Kostenstruktur (#1582)
 
 Schnappschuss vom 2026-10-09, Zahlen für den ADR „Regeln, Gates und Lenses evidenzbasiert lockern“ (quellprojekt#1357). Reine Messung: außer der einen Prompt-Schärfung unter (b) ändert dieser PR keine Regel. Kosten sind **aufgezeichnet** (Output unterzählt, [quellprojekt#1558](#planer-kosten-1558)); Preise Opus 5.5 aus `scripts/preise.mjs` (Write-5m 5 $/M, Read 0,20 $/M).
