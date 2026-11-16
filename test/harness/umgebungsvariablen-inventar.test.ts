@@ -6,7 +6,7 @@
  * Grenze: Scan nur `umgebungsWert`-Aufrufe in `scripts/**\/*.mjs`; direkte `process.env.FACTORY_…`-Zugriffe und Workflows liegen außerhalb.
  */
 import { describe, expect, test } from "vitest";
-import { readFileSync, readdirSync, statSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
@@ -59,22 +59,9 @@ export function pruefeRing(funde: Record<string, Set<string>>, besitzPfade: Set<
   return fehler;
 }
 
-/** Skripte (`scripts/**\/*.mjs`) mit `umgebungsWert`-Literalen je Datei, relativ zur Wurzel. */
+/** Skripte (`scripts/**\/*.mjs`) mit `umgebungsWert`-Literalen je Datei, relativ zur Wurzel (derselbe Lauf wie beim Doctor, `sammleKernEnvIn`). */
 function sammleJeDatei(ordner: string): Record<string, Set<string>> {
-  const funde: Record<string, Set<string>> = {};
-  const gehe = (dir: string) => {
-    for (const e of readdirSync(dir)) {
-      const p = join(dir, e);
-      if (statSync(p).isDirectory()) gehe(p);
-      else if (e.endsWith(".mjs")) {
-        const rel = p.slice(WURZEL.length).split("\\").join("/");
-        const f = sammleCode(rel, readFileSync(p, "utf8"));
-        if (f.literale.size > 0) funde[rel] = f.literale;
-      }
-    }
-  };
-  gehe(ordner);
-  return funde;
+  return (rawSammleIn as (o: string, bezug: string) => { jeDatei: Record<string, Set<string>> })(ordner, WURZEL).jeDatei;
 }
 
 /** Pur: Abweichungen zwischen Code und Inventar; leer = gleich. */

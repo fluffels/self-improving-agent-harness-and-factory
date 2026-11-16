@@ -564,12 +564,13 @@ export function sammleKernEnv(datei, text) {
 }
 
 /**
- * Sammelt über alle `*.mjs` unter `ordner` (rekursiv) die `FACTORY_…`-Literale der `umgebungsWert`-Aufrufe und die Aufrufe ohne Literal: `{ literale, ohneLiteral }` wie `sammleKernEnv`.
+ * Sammelt über alle `*.mjs` unter `ordner` (rekursiv) die `FACTORY_…`-Literale der `umgebungsWert`-Aufrufe und die Aufrufe ohne Literal: `{ literale, ohneLiteral }` wie `sammleKernEnv`, dazu `jeDatei` (Dateiname wie in `ohneLiteral` → Literale dieser Datei, nur Dateien mit Literal).
  * `bezug` bestimmt die Dateinamen in `ohneLiteral` (`datei:zeile`, relativ zu `bezug`, Schrägstrich); ohne `bezug` steht der Pfad, wie er unter `ordner` gebildet wurde.
  */
 export function sammleKernEnvIn(ordner, bezug = null) {
   const literale = new Set();
   const ohneLiteral = [];
+  const jeDatei = {};
   const gehe = (dir) => {
     for (const e of readdirSync(dir)) {
       const p = join(dir, e);
@@ -580,12 +581,13 @@ export function sammleKernEnvIn(ordner, bezug = null) {
         const name = rel === null || rel.startsWith("../") || isAbsolute(rel) ? fest : rel; // liegt die Datei nicht unter dem Bezug, bleibt der volle Pfad
         const f = sammleKernEnv(name, readFileSync(p, "utf8"));
         f.literale.forEach((n) => literale.add(n));
+        if (f.literale.size > 0) jeDatei[name] = f.literale;
         ohneLiteral.push(...f.ohneLiteral);
       }
     }
   };
   gehe(ordner);
-  return { literale, ohneLiteral };
+  return { literale, ohneLiteral, jeDatei };
 }
 
 /** Die sortierten `FACTORY_…`-Namen, die die `*.mjs` unter `ordner` (rekursiv) über `umgebungsWert` lesen. */
