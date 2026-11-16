@@ -103,6 +103,18 @@ describe("ticketFuer: Zustandsautomat über Claim, Freigabe, Merge", () => {
     expect(f).toHaveLength(1);
     expect(f[0]).toMatchObject({ art: "claim", nr: 9 });
   });
+  test("ein gewöhnlicher Befehl im offenen Fenster beendet es nicht; gh pr merge --disable-auto auch nicht", () => {
+    expect(tickets(sitzung([call(1, claim(7)), call(2, bash("ls")), call(3, bash("gh pr merge 9 --disable-auto")), call(4)]))).toEqual(["vor-claim", `${WT}7`, `${WT}7`, `${WT}7`]);
+  });
+  test("Claim und Merge in einer Zeile: nur der Claim zählt; ein Claim ohne Zeitstempel entfällt", () => {
+    const f = fenster([call(1, bash("gh issue edit 7 --add-assignee @me && gh pr merge 9 --auto"))]);
+    expect(f.map((e) => e.art)).toEqual(["claim"]);
+    expect(fenster([call(null, claim(7))])).toEqual([]);
+  });
+  test("die Ereignisse sind nach Zeit sortiert, auch über Haupttranskript und Top-Level-Subagent hinweg", () => {
+    const f = F.fensterAus(sitzung([call(1, claim(7)), call(5, claim(9))], [sub("a", [call(3, claim(8))])]));
+    expect(f.map((e) => e.nr)).toEqual([7, 8, 9]);
+  });
   test("claimsAus liefert Nummer, Zeit und Turn der Claim-Events (geteilt mit der Hauptchat-Zerlegung)", () => {
     const ev = (tool: string, command: string, ts: string) => ({ tool, ts, input: { command } });
     expect(F.claimsAus([ev("Bash", "gh issue edit 5 --add-assignee @me", t(1)), ev("Read", "gh issue edit 6 --add-assignee @me", t(2)), ev("Bash", "ls", t(3))], () => 4)).toEqual([{ nr: 5, ts: t(1), turn: 4 }]);
@@ -153,7 +165,8 @@ describe("sollEintraege: Ticket und Trace je Call", () => {
     expect(K.sollEintraege(s, { worktree: WT }).filter((x) => x.rolle).map((x) => [x.ticket, x.ticketGrund])).toEqual([[null, "vor-claim"], [null, "vor-claim"]]);
   });
   test("ein verschachtelter Agent erbt über die Kette das Ticket der Startzeit des Wurzel-Agenten", () => {
-    const s = sitzung([call(1, claim(7))], [sub("a", [call(3)]), sub("b", [call(50)], "a")]);
+    // das Fenster endet vor dem Start von b: ohne die Kette zum Wurzel-Agenten a wäre b `nachlauf`
+    const s = sitzung([call(1, claim(7)), call(10, merge)], [sub("a", [call(3)]), sub("b", [call(50)], "a")]);
     expect(K.sollEintraege(s, { worktree: WT }).filter((x) => x.rolle).map((x) => x.ticket)).toEqual([`${WT}7`, `${WT}7`]);
   });
   test("Call ohne Zeitstempel: ohne-zeit", () => {
@@ -212,6 +225,22 @@ describe("bauePayloads: ein Trace je Ticket", () => {
     expect(kind?.parentSpanId).toBeDefined();
     const calls = sp.filter((x) => x.name === "Call" && x.parentSpanId);
     expect(calls.every((x) => x.traceId === O.traceIdJeTicket("s1", `${WT}7`))).toBe(true);
+  });
+  test("Call ohne Modell und ohne Grund: kosten=ohne-preis mit modell unbekannt, ticket_grund fällt auf ohne-zeit", () => {
+    const soll = K.sollEintraege(sitzung([call(1)]), { worktree: WT }).map((e) => ({ ...e, model: null, ticketGrund: null }));
+    const { chunks } = O.bauePayloads("s1", soll, { soll, project: "p", repoName: REPO });
+    const g = chunks.flatMap((c) => c.payload.resourceSpans.flatMap((r) => r.scopeSpans.flatMap((x) => x.spans)))[0];
+    expect(wert(g, "langfuse.observation.metadata.modell")).toBe("unbekannt");
+    expect(wert(g, "langfuse.observation.metadata.kosten")).toBe("ohne-preis");
+    expect(wert(g, "langfuse.observation.metadata.ticket_grund")).toBe("ohne-zeit");
+  });
+  test("ein Call in anderem Trace als sein Agent-Span trägt keinen parentSpanId", () => {
+    const soll = K.sollEintraege(sitzung([call(1, claim(7))], [sub("a", [call(3), call(4)])]), { worktree: WT });
+    const [erster, zweiter] = soll.filter((e) => e.rolle);
+    const verbogen = [erster, { ...zweiter, ticket: `${WT}9`, ticketGrund: null }];
+    const { chunks } = O.bauePayloads("s1", verbogen, { soll: verbogen, project: "p", repoName: REPO });
+    const calls = chunks.flatMap((c) => c.payload.resourceSpans.flatMap((r) => r.scopeSpans.flatMap((x) => x.spans))).filter((x) => x.name === "Call");
+    expect(calls.map((x) => x.parentSpanId !== undefined)).toEqual([true, false]);
   });
   test("liegt der Eltern-Agent in einem anderen Trace, ist parentSpanId null", () => {
     const soll = K.sollEintraege(sitzung([call(1, claim(7))], [sub("a", [call(3)]), sub("b", [call(4)], "a")]), { worktree: WT });

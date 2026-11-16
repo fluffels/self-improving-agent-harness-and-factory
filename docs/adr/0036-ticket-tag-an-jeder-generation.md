@@ -33,8 +33,7 @@ Option C. Im Projekt-Scope sendet das Plugin keine Generations mehr, der Nachlie
 
 ## Konsequenzen
 
-- Entschieden in factory#524: Im Projekt-Scope ist das ganze Plugin aus (`enabledPlugins` in `.claude/settings.json`, nur dieser Schlüssel; ein Plugin-Schalter je Generations oder Spans gibt es nicht). Damit entfallen im Fabrik-Repo auch die TOOL-Spans: `token-baseline.mjs --langfuse` hat für neue Sessions keine Tool-Events, Tool-Kennzahlen kommen dort nur aus dem Transkript. `enabledPlugins` steht nicht im Besitz-Manifest, die Änderung gilt nur für die Fabrik; Bezieher behalten das Plugin als Sender (keine Doppelzählung, aber kein Ticket-Tag).
-- Ticket je Call aus dem Claim-Fenster (`scripts/claim-fenster.mjs`): Fensterende ist Freigabe, Merge oder der nächste Claim, ohne `closedAt` aus GitHub; ein Subagent zählt ganz zum Ticket seines Starts; ein Call außerhalb jedes Fensters trägt `ohne-ticket` mit Grund. Ein Trace je Session und Ticket-Schlüssel, damit der Ticket-Tag nie an einem fremden Ticket hängt. Stichtag: 2026-11-16.
+- Offene Umsetzungsfrage für factory#524: Mit den Plugin-Generations entfallen womöglich auch die Plugin-Spans (TOOL-Events, die `token-baseline.mjs --langfuse` nutzt). Ob das ganze Plugin oder nur die Generations im Projekt-Scope wegfallen, entscheidet factory#524.
 - Alte Generations bleiben ohne Ticket-Tag; Kosten je Ticket gelten erst ab dem Stichtag aus Langfuse, davor aus dem Transkript.
 - Nachlieferer und Transkript bleiben die Quelle der Wahrheit (ADR 0023).
 
@@ -45,3 +44,7 @@ Das Plugin im Projekt-Scope wieder einschalten und den Nachlieferer auf reines L
 ## Re-Evaluierung
 
 Wenn Langfuse Updates an Generations erlaubt oder das Plugin Tags je Turn anbietet.
+
+## Weitere Fortschreibungen (als Dateien)
+
+Neue Fortschreibungen dieses ADR stehen als Datei unter [`fortschreibungen/`](fortschreibungen/0036-524-umsetzung-claim-fenster.md) (Konvention: [README](README.md#format)); dort die erste: Umsetzung in factory#524 (Plugin im Projekt-Scope aus, Claim-Fenster, ein Trace je Ticket).

@@ -10,6 +10,8 @@
  *   Claim N      → Ticket N (ein Re-Claim desselben N ändert nichts, ein Claim M wechselt)
  *   Freigabe N   → `nach-freigabe`, wenn N das offene Ticket ist (sonst ohne Wirkung)
  *   Merge        → `nachlauf`, wenn ein Fenster offen ist
+ * Quellen: Haupttranskript und Top-Level-Subagenten, weil Claim, Freigabe und der Merge im dokumentierten Ablauf auch vom Umsetzer (Top-Level-Subagent) abgesetzt werden; ein verschachtelter Agent (Lens, Gruppe) zählt nicht.
+ * Bekannte Grenze: der Claim-Erkenner (`claimNummer`) ist nicht am Befehlsanfang verankert (geteilt mit der Hauptchat-Zerlegung); Freigabe und Merge sind es.
  * Gründe ohne Ticket: `vor-claim`, `nach-freigabe`, `nachlauf`, `ohne-zeit` (Call ohne gültigen Zeitstempel).
  */
 import { toolPaare } from "./transkript.mjs";

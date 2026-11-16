@@ -10,7 +10,7 @@ import { join } from "node:path";
 import { istProjektOrdner } from "./transkript.mjs";
 import { callsDerSitzung } from "./transkript-calls.mjs";
 import { queryMetrics, usageAusObservation } from "./langfuse-api.mjs";
-import { beobachtungsId, traceIdJeTicket } from "./langfuse-otlp.mjs";
+import { beobachtungsId, normAgent, traceIdJeTicket } from "./langfuse-otlp.mjs";
 import { fensterAus, ticketFuer } from "./claim-fenster.mjs";
 
 /** Eine Session, deren Dateien jünger sind, läuft noch: ihre Calls sind noch nicht (vollständig) in Langfuse. */
@@ -84,7 +84,6 @@ export function ledgerLesen(datei) {
 // ── Soll (pur) ───────────────────────────────────────────────────────────────
 
 const agentIdVon = (c) => (c.subagent ? c.subagent.id.replace(/\.jsonl$/, "").replace(/^agent-/, "") : null);
-const normAgent = (id) => (id ? String(id).replace(/^agent-/, "") : null);
 
 /**
  * Das Ticket je Call aus dem Claim-Fenster der Session (factory#524, `claim-fenster.mjs`): `{ nr, grund }` je Call (gleiche Reihenfolge wie `calls`). Ein Subagent-Call erbt das Ticket
@@ -145,7 +144,7 @@ export function sollEintraege(sitzung, { session = sitzung.id, worktree } = {}) 
       ts: c.ts,
       usage: { input: c.input, output: c.output, cacheRead: c.cacheRead, cacheWrite5m: c.cacheWrite - write1h, cacheWrite1h: write1h },
       rolle: c.subagent
-        ? { agentId: c.subagent.id.replace(/\.jsonl$/, "").replace(/^agent-/, ""), agentType: c.subagent.agentType, description: c.subagent.description, parentAgentId: c.subagent.parentAgentId }
+        ? { agentId: agentIdVon(c), agentType: c.subagent.agentType, description: c.subagent.description, parentAgentId: c.subagent.parentAgentId }
         : null,
       ticket,
       ticketGrund: ticket ? null : z.grund,

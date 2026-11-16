@@ -152,8 +152,9 @@ export function claimNummer(command) {
   return nr ? Number(nr) : null;
 }
 
-const FREIGABE = /\bgh\s+issue\s+edit\s+(\d+)\b(?=[^\n]*--remove-assignee)/;
-const MERGE = /\bgh\s+pr\s+merge\b/;
+const BEFEHLSANFANG = String.raw`(?:^|[;&|(\n])\s*`; // `gh` steht am Anfang eines Befehls, nicht als Text in einem Argument (`echo "gh pr merge"`, `grep …`)
+const FREIGABE = new RegExp(BEFEHLSANFANG + String.raw`gh\s+issue\s+edit\s+(\d+)\b(?=[^\n]*--remove-assignee)`);
+const MERGE = new RegExp(BEFEHLSANFANG + String.raw`gh\s+pr\s+merge\b(?![^\n]*--disable-auto)`); // `--disable-auto` nimmt nur den Auto-Merge zurück (neue Abnahme), das Ticket läuft weiter
 
 /** Ticketnummer einer Freigabe-Zeile (`gh issue edit <nr> … --remove-assignee`), sonst `null` (factory#524: beendet das Claim-Fenster). */
 export function freigabeNummer(command) {
@@ -161,7 +162,7 @@ export function freigabeNummer(command) {
   return nr ? Number(nr) : null;
 }
 
-/** Ist die Zeile ein `gh pr merge` (factory#524: beendet das Claim-Fenster, danach beginnt der Nachlauf)? */
+/** Ist die Zeile ein `gh pr merge` (außer `--disable-auto`; factory#524: beendet das Claim-Fenster, danach beginnt der Nachlauf)? */
 export const istMerge = (command) => MERGE.test(String(command ?? ""));
 
 /** Ein echter Modellname: nicht leer und nicht der Client-Platzhalter `<synthetic>`. */

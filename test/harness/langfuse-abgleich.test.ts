@@ -12,7 +12,7 @@ import { readdirSync, readFileSync, statSync, utimesSync } from "node:fs";
 import { join, posix } from "node:path";
 import { fixture } from "../support/tmp-fixture";
 import { lokaleImporteTransitiv } from "./hook-importe";
-import { FREMD } from "../support/fremd-config";
+import { FREMD, projektConfig } from "../support/fremd-config";
 
 // @ts-expect-error: kein .d.ts für das .mjs-Tooling-Skript.
 import * as rawAbgleichEinstieg from "../../scripts/langfuse-abgleich.mjs";
@@ -1045,6 +1045,26 @@ describe("pruefen (Ablauf)", () => {
     expect(r.text).toMatch(/\*\*Summe:\*\*/);
     expect(r.text).toMatch(/Fehlende Calls s1/);
     expect(r.text).toMatch(/\| s1 \| – \|/); // ohne Claim im Transkript: kein Ticket (Fenster statt Branch)
+  });
+
+  test("ohne injizierte Config gilt die echte Projekt-Config (Standard von pruefen): das Ticket aus dem Claim-Fenster trägt ihr Worktree-Präfix", async () => {
+    const echt = projektConfig();
+    const claim = zeile({
+      type: "assistant",
+      sessionId: "s1",
+      timestamp: new Date(Date.UTC(2026, 9, 9, 9, 0, 0)).toISOString(),
+      uuid: "u-claim",
+      message: { id: "claim", role: "assistant", model: "claude-opus-5-5", usage: { input_tokens: 1, output_tokens: 1, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 }, content: [{ type: "tool_use", id: "tc", name: "Bash", input: { command: "gh issue edit 1562 --add-assignee @me" } }] },
+    });
+    const root = mitSession([claim, msg("a")]);
+    const m = mock({ zaehlung: [{ sessionId: "s1", count_count: 2 }], observations: [] });
+    const r = await einstiegRoh.pruefen(args(), { env: ZUGANG, now: SPAET(), projectsRoot: root, repoRoot: REPO, fetchImpl: m.fetchImpl }) as { text: string };
+    expect(r.text).toContain(`${echt.praefixe.worktree}1562`);
+    // Gegenprobe: ein anderes Worktree-Präfix der Config ändert das Ticket
+    const anders = { ...FREMD, praefixe: { ...FREMD.praefixe, worktree: `${echt.praefixe.worktree}x-` } };
+    const r2 = await einstiegRoh.pruefen(args(), { env: ZUGANG, now: SPAET(), projectsRoot: root, repoRoot: REPO, fetchImpl: m.fetchImpl, config: anders }) as { text: string };
+    expect(r2.text).not.toContain(`| ${echt.praefixe.worktree}1562`);
+    expect(r2.text).toContain(`${echt.praefixe.worktree}x-1562`);
   });
 
   test("Bericht: vollständig, Score ausstehend; Ledger (nur gelesen) mit Ende hebt es auf; kaputtes Ledger bleibt unberührt; Hinweis nennt den Stichtag aus dem Kern", async () => {

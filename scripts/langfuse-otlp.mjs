@@ -134,7 +134,7 @@ export function subagentSpan(rolle, { traceAttrs, traceId, spanId, parentSpanId 
   return span({ traceId, spanId, parentSpanId, name: `Subagent: ${rolle.description || rolle.agentType || "unbekannt"}`, start: nanos(von), ende: nanos(bis), attributes });
 }
 
-const normAgent = (id) => (id ? String(id).replace(/^agent-/, "") : null);
+export const normAgent = (id) => (id ? String(id).replace(/^agent-/, "") : null);
 
 /** Agenten der Session (`agentId` → Rolle, früheste und späteste Call-Zeit) aus dem vollständigen Soll. */
 function agentenVon(soll) {
