@@ -109,6 +109,12 @@ describe("pruefe: Entfernte Exporte in Tag-Tickets (factory#604 L12)", () => {
   test("dieselbe Zeile in einem Issue ohne Tag-Titel bleibt Befund", () => {
     expect(klassen(L.pruefe([issue(1, { title: "Anderes", body: zeile })], ctx(weg)))).toEqual(["1:pfad-entfernt"]);
   });
+  test("der Präfix mitten in einer Zeile nimmt sie nicht aus", () => {
+    expect(klassen(L.pruefe([issue(1, { title: tagTitel, body: `Siehe ${L.ENTFERNTE_EXPORTE_PRAEFIX} \`scripts/weg.mjs\`.` })], ctx(weg)))).toEqual(["1:pfad-entfernt"]);
+  });
+  test("Aufzählung mit Stern oder Einrückung zählt wie ein Strich", () => {
+    for (const k of ["* ", "  - ", ""]) expect(klassen(L.pruefe([issue(1, { title: tagTitel, body: `${k}${L.ENTFERNTE_EXPORTE_PRAEFIX} \`scripts/weg.mjs\`: a` })], ctx(weg))), k).toEqual([]);
+  });
   test("der Titel zählt nur am Anfang", () => {
     expect(klassen(L.pruefe([issue(1, { title: `x ${tagTitel}`, body: zeile })], ctx(weg)))).toEqual(["1:pfad-entfernt"]);
   });
